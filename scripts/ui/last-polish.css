@@ -1,0 +1,60 @@
+/* Final review: all selectors are confined to the affected panel surfaces. */
+.settings-final .tariff-secondary-controls{display:flex;align-items:center;gap:8px;min-width:0}
+.settings-final .tariff-secondary-controls .tariff-connection-field{flex:0 0 185px}
+.settings-final .tariff-secondary-controls .partner-access-badge1{display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;height:30px;border-radius:8px;white-space:nowrap}
+.settings-final .tariff-secondary-controls .tariff-connection-field .form-input{height:30px;text-align:center;font-size:12px}
+.settings-final .tariff-group-head{align-items:flex-end}
+.settings-final .tariff-group-head>.tariff-order-controls{align-self:flex-end;height:30px}
+.create-modal.partner-access-modal[data-v-f4269ded]{width:min(520px,calc(100vw - 32px));min-width:0;max-width:520px;box-sizing:border-box;padding:18px}
+.create-modal.partner-access-modal[data-v-f4269ded] .partner-modal-box{width:100%;max-width:100%;padding:14px;box-sizing:border-box}
+
+/* The tutorial form is the spacing reference: one action margin, no stacked gaps. */
+.create-modal[data-v-92274f2b] .final-result2{row-gap:0}
+.create-modal[data-v-92274f2b] .modal-actions{display:flex;justify-content:center}
+.create-modal[data-v-92274f2b] .modal-actions .btn-create-user1{margin:15px}
+.create-modal.ticket-modal .final-result1>.modal-actions-row{margin-top:0}
+.create-modal.ticket-modal .modal-actions-row .btn-create-user1{margin:15px}
+
+/* Scoped Panel CSS has higher specificity than a bare .announce-head override. */
+.announce-list .announce-head[data-v-5daea513]{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"title date";direction:rtl;align-items:start;gap:12px}
+.announce-list .announce-head .announce-title{grid-area:title;margin:0;min-width:0;display:flex;align-items:flex-start;gap:8px;text-align:right;overflow-wrap:anywhere;white-space:normal;line-height:1.8}
+.announce-list .announce-head .announce-title>i{flex:none;margin-top:5px}
+.announce-list .announce-head .announce-date{grid-area:date;justify-self:end;white-space:nowrap;line-height:1.8;direction:ltr}
+.announce-list .announce-meta[data-v-f387832b]{direction:rtl}
+.announce-list .announce-meta .announce-time{direction:ltr;white-space:nowrap}
+
+.create-modal.tariff-view-modal{width:min(540px,calc(100vw - 32px));min-width:0;max-width:540px;box-sizing:border-box}
+.tariff-view-modal>div:first-child{width:100%;min-width:0;box-sizing:border-box}
+.create-modal.tariff-view-modal .final-result1{width:100%;max-width:100%;min-width:0;box-sizing:border-box}
+.tariff-view-modal .tariff-section-wrap{width:100%;max-width:100%;min-width:0;overflow-x:auto;overflow-y:hidden;direction:ltr;scrollbar-width:thin}
+.create-modal.tariff-view-modal .tariff-tabs-view{display:flex;flex-wrap:nowrap;width:max-content;min-width:0;max-width:none;margin:0 auto 20px!important;left:auto;transform:none;direction:rtl}
+.tariff-view-modal .tariff-tabs-view>.seg-btn{flex:0 0 auto;white-space:nowrap}
+.tariff-view-modal .final-username{min-width:0;gap:12px!important}
+.tariff-view-modal .final-username .label{min-width:0;overflow-wrap:anywhere}
+.tariff-view-modal .final-username .value{flex-shrink:0}
+
+.account-operation-modal .operation-delete-confirm{display:inline-flex;align-items:center;justify-content:center;padding:8px 20px;margin:0;background:#835d16b3!important;color:#fff;border:1px solid rgba(255,255,255,.35);border-radius:12px;font:inherit;cursor:pointer;backdrop-filter:blur(6px);box-shadow:none}
+.account-operation-modal .operation-delete-confirm:hover:not(:disabled){background:#b17913!important;border-color:#fff}
+.account-operation-modal .operation-delete-confirm:focus-visible{outline:2px solid #e9bf64;outline-offset:3px}
+.account-operation-modal .operation-delete-confirm:disabled{opacity:.5;cursor:wait}
+
+@media(max-width:900px){
+ .settings-final .tariff-group-head{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:end}
+ .settings-final .tariff-group-head>.tariff-group-title{grid-column:1;grid-row:1;width:100%;min-width:0}
+ .settings-final .tariff-group-title .form-input{height:34px;box-sizing:border-box}
+ .settings-final .tariff-group-head>.tariff-order-controls{grid-column:2;grid-row:1;align-self:end;height:34px}
+ .settings-final .tariff-group-head>.tariff-order-controls button{height:34px}
+ .settings-final .tariff-group-head>.tariff-secondary-controls{grid-column:1/-1;grid-row:2;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px;width:100%;min-width:0}
+ .settings-final .tariff-secondary-controls .partner-access-badge1,
+ .settings-final .tariff-secondary-controls .tariff-connection-field,
+ .settings-final .tariff-secondary-controls .tariff-connection-field .form-input{width:100%;min-width:0;height:34px;box-sizing:border-box}
+ .settings-final .tariff-group-head>.tariff-group-actions{grid-column:1/-1;grid-row:3;justify-content:flex-start;gap:8px;width:100%}
+ .settings-final .tariff-sort-mode .tariff-group-head{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center}
+ .settings-final .tariff-sort-mode .tariff-group-head>.tariff-sort-name{grid-column:1;grid-row:1;min-width:0;overflow-wrap:anywhere}
+ .settings-final .tariff-sort-mode .tariff-group-head>.tariff-order-controls{grid-column:2;grid-row:1;align-self:center}
+ .settings-final .tariff-sort-mode .tariff-group-actions{display:none}
+}
+@media(max-width:767px){
+ .announce-list .announce-head[data-v-5daea513]{grid-template-columns:minmax(0,1fr);grid-template-areas:"title" "date";gap:7px}
+ .announce-list .announce-head .announce-date{justify-self:end;text-align:left}
+}

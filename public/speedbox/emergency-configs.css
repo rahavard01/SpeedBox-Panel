@@ -1,0 +1,54 @@
+.speedbox-infrastructure .emergency-page{display:grid;gap:20px}
+.speedbox-infrastructure .emergency-placement{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:20px 24px}
+.speedbox-infrastructure .emergency-placement-info{display:flex;align-items:center;gap:12px;min-width:0}
+.speedbox-infrastructure .emergency-placement-info h2{font-size:13px;font-weight:600;margin:0 0 5px}
+.speedbox-infrastructure .emergency-placement-info p,.speedbox-infrastructure .emergency-note{font-size:11px;color:var(--muted);margin:0;line-height:1.9}
+.speedbox-infrastructure .emergency-placement-icon,.speedbox-infrastructure .emergency-card-icon{display:grid;place-items:center;flex:none;width:38px;height:38px;border-radius:12px;background:rgba(255,255,255,.065);color:rgba(255,255,255,.8);font-size:16px}
+.speedbox-infrastructure .emergency-position-control{display:flex;flex:none;padding:4px;gap:4px;border:1px solid rgba(255,255,255,.1);border-radius:12px;background:rgba(0,0,0,.12)}
+.speedbox-infrastructure .emergency-position-button{display:flex;align-items:center;justify-content:center;gap:8px;min-height:35px;padding:7px 14px;border:1px solid transparent;border-radius:9px;background:transparent;color:var(--muted);font:inherit;font-size:11px;cursor:pointer;transition:background .18s,color .18s,border-color .18s}
+.speedbox-infrastructure .emergency-position-button:hover{color:#fff;background:rgba(255,255,255,.05)}
+.speedbox-infrastructure .emergency-position-button.is-selected{background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.15);color:#fff;box-shadow:0 2px 8px rgba(0,0,0,.1)}
+.speedbox-infrastructure .emergency-list-head{align-items:center;gap:18px;padding-bottom:18px;border-bottom:1px dashed rgba(255,255,255,.12);margin-bottom:18px}
+.speedbox-infrastructure .emergency-list-head h2{display:flex;align-items:center;gap:8px;margin-bottom:5px}
+.speedbox-infrastructure .emergency-total{display:grid;place-items:center;min-width:24px;height:24px;padding:0 6px;border-radius:8px;background:rgba(255,255,255,.06);color:var(--muted);font-size:11px;font-weight:500}
+.speedbox-infrastructure .emergency-list-head .button{display:flex;align-items:center;justify-content:center;gap:8px}
+.speedbox-infrastructure .emergency-list{display:grid;gap:12px}
+.speedbox-infrastructure .emergency-card{border:1px solid rgba(255,255,255,.1);border-radius:15px;background:rgba(255,255,255,.025);overflow:hidden;transition:border-color .18s,background .18s}
+.speedbox-infrastructure .emergency-card:hover{border-color:rgba(255,255,255,.2);background:rgba(255,255,255,.035)}
+.speedbox-infrastructure .emergency-card.is-hidden .emergency-card-icon{color:var(--muted);background:rgba(255,255,255,.035)}
+.speedbox-infrastructure .emergency-card.is-dragging{opacity:.45}
+.speedbox-infrastructure .emergency-card-main{display:flex;direction:ltr;align-items:center;justify-content:space-between;gap:14px;padding:17px 18px}
+.speedbox-infrastructure .emergency-card-identity{display:flex;align-items:center;gap:12px;min-width:0;text-align:left}
+.speedbox-infrastructure .emergency-card-name{min-width:0}
+.speedbox-infrastructure .emergency-card-name h3{font-size:12px;font-weight:500;line-height:1.8;margin:0 0 3px;overflow-wrap:anywhere}
+.speedbox-infrastructure .emergency-endpoint{display:block;color:var(--muted);font-size:10px;text-align:left;overflow-wrap:anywhere;unicode-bidi:isolate}
+.speedbox-infrastructure .emergency-display-group{display:flex;direction:rtl;align-items:center;gap:16px;min-width:0}
+.speedbox-infrastructure .emergency-display-group>.protocol-badge{flex:none}
+.speedbox-infrastructure .emergency-card-footer{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px 18px;border-top:1px solid rgba(255,255,255,.065);background:rgba(0,0,0,.08)}
+.speedbox-infrastructure .emergency-display{display:flex;align-items:center;gap:12px;font-size:10px;color:var(--muted);white-space:nowrap}
+.speedbox-infrastructure .emergency-order,.speedbox-infrastructure .emergency-actions{display:flex;align-items:center;gap:7px;flex:none}
+.speedbox-infrastructure .emergency-order{direction:rtl}
+.speedbox-infrastructure .emergency-order-number{min-width:20px;font-size:11px;color:var(--muted);text-align:center}
+.speedbox-infrastructure .emergency-icon-button{display:grid;place-items:center;width:29px;height:29px;padding:0;border:1px solid rgba(255,255,255,.12);border-radius:8px;background:rgba(255,255,255,.025);color:rgba(255,255,255,.7);cursor:pointer;transition:background .18s,color .18s}
+.speedbox-infrastructure .emergency-icon-button:hover:not(:disabled){background:rgba(255,255,255,.1);color:#fff}
+.speedbox-infrastructure .emergency-icon-button:disabled{opacity:.25;cursor:default}
+.speedbox-infrastructure .emergency-drag{cursor:grab}
+.speedbox-infrastructure .emergency-actions .button{display:flex;align-items:center;justify-content:center;gap:7px;padding:6px 12px;min-height:29px;margin:0;font-size:10px;line-height:1.5;border-radius:8px}
+.speedbox-infrastructure .emergency-empty{display:flex;flex-direction:column;align-items:center;text-align:center;gap:9px;padding:42px 16px;color:var(--muted);font-size:11px;line-height:1.8}
+.speedbox-infrastructure .emergency-empty strong{font-size:12px;font-weight:500;color:rgba(255,255,255,.8)}
+.speedbox-infrastructure .emergency-empty-icon{display:grid;place-items:center;width:54px;height:54px;border-radius:17px;background:rgba(255,255,255,.04);font-size:25px;margin-bottom:5px}
+.speedbox-infrastructure :is(.emergency-position-button,.emergency-icon-button):focus-visible{outline:2px solid rgba(255,255,255,.6);outline-offset:3px}
+.speedbox-infrastructure-overlay .infrastructure-modal.emergency-modal{max-width:660px}
+.speedbox-infrastructure-overlay .emergency-link-field textarea{min-height:126px;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:11px;line-height:1.9;resize:vertical;overflow-wrap:anywhere}
+.speedbox-infrastructure-overlay .emergency-modal-display .switch-line{justify-self:start}
+.speedbox-infrastructure-overlay .emergency-form-error{padding:10px 12px;margin-top:14px;border:1px solid rgba(248,113,113,.25);border-radius:10px;background:rgba(239,68,68,.07);color:#fca5a5;font-size:11px;line-height:1.8;text-align:center}
+.speedbox-infrastructure-overlay .emergency-form-error[hidden]{display:none}
+.speedbox-infrastructure-overlay .infrastructure-modal.emergency-delete-modal{max-width:460px}
+.speedbox-infrastructure-overlay .emergency-delete-content{text-align:center;display:flex;flex-direction:column;align-items:center;gap:12px;padding:8px 0}
+.speedbox-infrastructure-overlay .emergency-delete-icon{display:grid;place-items:center;width:46px;height:46px;border-radius:14px;background:rgba(239,68,68,.08);color:#f87171;font-size:18px}
+.speedbox-infrastructure-overlay .emergency-delete-content p{margin:0;font-size:13px;line-height:1.9;overflow-wrap:anywhere}
+.speedbox-infrastructure-overlay .emergency-delete-content small{font-size:11px;line-height:1.8;color:var(--muted)}
+@media(max-width:767px){.speedbox-infrastructure .emergency-placement{align-items:stretch;flex-direction:column;padding:18px;gap:16px}.speedbox-infrastructure .emergency-position-control{align-self:stretch}.speedbox-infrastructure .emergency-position-button{flex:1}.speedbox-infrastructure .emergency-list-head{align-items:stretch;flex-direction:column;gap:13px}.speedbox-infrastructure .emergency-list-head .button{width:100%}.speedbox-infrastructure .emergency-card-main{padding:15px 13px;gap:8px}.speedbox-infrastructure .emergency-card-icon{width:33px;height:33px;border-radius:10px;font-size:14px}.speedbox-infrastructure .emergency-card-identity{gap:9px}.speedbox-infrastructure .emergency-card-footer{padding:12px 10px;gap:8px}.speedbox-infrastructure .emergency-display-group{justify-content:flex-start;gap:8px}.speedbox-infrastructure .emergency-actions{justify-content:flex-end;flex-wrap:nowrap}.speedbox-infrastructure .emergency-actions .button{padding:6px 8px;white-space:nowrap}.speedbox-infrastructure .emergency-drag{display:none}}
+@media(prefers-reduced-motion:reduce){.speedbox-infrastructure :is(.emergency-card,.emergency-position-button,.emergency-icon-button){transition:none}}
+
+@media(max-width:359px){.speedbox-infrastructure .emergency-actions .button{width:29px;height:29px;padding:0}.speedbox-infrastructure .emergency-actions .button>span{display:none}.speedbox-infrastructure .emergency-display-group>.protocol-badge{font-size:10px;padding:0 7px}}

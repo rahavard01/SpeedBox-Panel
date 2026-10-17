@@ -1,0 +1,43 @@
+/* Only the transaction amount colours match Billing; other modal styling stays. */
+.transaction-records-modal .amount--pos{color:#cdffdc!important}
+.transaction-records-modal .amount--neg{color:#ffcece!important}
+
+/* Requests use the same complete pricing-card layout as create/edit partner. */
+.create-modal[data-v-1caf48dc] .price-box{margin:0!important;width:100%;box-sizing:border-box}
+.create-modal[data-v-1caf48dc] .price-note{line-height:20px}
+.create-modal[data-v-1caf48dc] .price-box>.price-row,
+.create-modal[data-v-1caf48dc] .price-box>.edit-row{box-sizing:border-box;height:38px;min-height:0;line-height:20px}
+.create-modal[data-v-1caf48dc] .price-box>.edit-row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 10px;border:1px dashed rgba(255,255,255,.12);border-radius:8px}
+.create-modal[data-v-1caf48dc] .price-box>.edit-row>.edit-label{padding:0;font-size:12px;font-weight:700;line-height:20px;color:#cfd8dc;min-width:0}
+.create-modal[data-v-1caf48dc] .price-box>.edit-row>.edit-input{width:120px!important;min-width:0!important;max-width:45%;flex:0 1 120px;height:20px!important;min-height:0;padding:0 8px!important;border:1px solid transparent!important;border-radius:6px!important;background:#fff!important;color:#5f5f5f!important;line-height:18px;font-size:12px!important;font-weight:700}
+.create-modal[data-v-1caf48dc] .edit-form:has(.price-box){row-gap:18px}
+.create-modal[data-v-1caf48dc] .edit-form>.strategy-row+.price-box{margin-top:25px!important}
+
+/* Make the inner glass surfaces fit the available modal width. */
+.create-modal[data-v-dfe9139a] .final-result2{width:100%;max-width:100%;box-sizing:border-box;margin-inline:auto}
+.create-modal.partner-access-modal[data-v-f4269ded] .partner-modal-box{width:100%;max-width:100%;box-sizing:border-box}
+.create-modal.ticket-modal .modal-actions-row{margin-top:12px;display:flex;justify-content:center}
+
+/* Long titles keep the status marker and publish date in their own places. */
+.announce-head{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"title date";align-items:start;gap:12px;direction:rtl}
+.announce-head .announce-title{grid-area:title;display:flex;align-items:flex-start;gap:8px;min-width:0;white-space:normal;overflow-wrap:anywhere;text-align:right;line-height:1.8}
+.announce-head .announce-title>i{flex:0 0 auto;margin-top:5px}
+.announce-head .announce-date{grid-area:date;white-space:nowrap;line-height:1.8;align-self:start}
+
+@media(max-width:900px){
+ .settings-final .tariff-group-head{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:12px;width:100%;margin:0 0 12px}
+ .settings-final .tariff-group-head>.tariff-group-title{grid-column:1/-1;grid-row:1;min-width:0;width:100%}
+ .settings-final .tariff-group-head>.tariff-connection-field{grid-column:1/-1;grid-row:2;min-width:0;width:100%;max-width:none;flex:none}
+ .settings-final .tariff-group-head>.tariff-connection-field .form-input{width:100%;height:34px}
+ .settings-final .tariff-group-head>.tariff-group-actions{grid-column:1;grid-row:3;width:auto;min-width:0;display:flex;flex-wrap:wrap;justify-content:flex-start;gap:8px}
+ .settings-final .tariff-group-head>.tariff-order-controls{grid-column:2;grid-row:3;align-self:center}
+ .settings-final .tariff-sort-mode .tariff-group-head{display:flex;flex-direction:row;width:100%}
+ .create-modal[data-v-dfe9139a]{min-width:0;width:min(720px,94vw);box-sizing:border-box;padding:18px}
+ .create-modal.partner-access-modal[data-v-f4269ded]{width:min(720px,94vw);box-sizing:border-box;padding:18px}
+ .create-modal[data-v-dfe9139a] .final-result2,
+ .create-modal.partner-access-modal[data-v-f4269ded] .partner-modal-box{padding:14px}
+}
+@media(max-width:767px){
+ .announce-head{grid-template-columns:minmax(0,1fr);grid-template-areas:"title" "date";gap:7px}
+ .announce-head .announce-date{justify-self:start}
+}

@@ -1,0 +1,73 @@
+/* These rules also win when Vite loads the scoped Settings CSS afterwards. */
+.settings-final .tariff-group-card .tariff-group-head{display:flex;flex-direction:row;flex-wrap:nowrap;align-items:flex-end;gap:10px;width:100%;margin:0 0 12px}
+.settings-final .tariff-group-card .tariff-group-title{flex:1 1 160px;min-width:100px}
+.settings-final .tariff-group-card .tariff-group-title .form-input{height:34px;min-height:34px;max-height:34px;box-sizing:border-box;margin:0}
+.settings-final .tariff-group-card .tariff-group-head>.tariff-order-controls{height:34px;min-height:34px;max-height:34px;align-self:flex-end;align-items:center;margin:0;padding:0;transform:none}
+.settings-final .tariff-group-card .tariff-group-head>.tariff-order-controls button{height:34px;min-height:34px;max-height:34px;margin:0;box-sizing:border-box;transform:none}
+.settings-final .tariff-group-card .tariff-secondary-controls{display:flex;align-items:center;gap:8px;flex:none;min-width:0}
+.settings-final .tariff-group-card .tariff-secondary-controls .tariff-connection-field{flex:0 1 132px;width:132px;max-width:132px;min-width:0;display:block}
+.settings-final .tariff-group-card .tariff-secondary-controls .partner-access-badge1,
+.settings-final .tariff-group-card .tariff-secondary-controls .tariff-limit-input{box-sizing:border-box;height:34px;min-height:34px;max-height:34px;border:1px solid rgba(238,224,34,.45);border-radius:8px;background:#ee9c2214;color:#fceca5;padding:0 10px;font-family:inherit;font-size:.78rem;line-height:normal;font-weight:400;white-space:nowrap;text-align:center;margin:0;box-shadow:none}
+.settings-final .tariff-group-card .tariff-secondary-controls .tariff-limit-input{width:100%;min-width:0;outline:none}
+.settings-final .tariff-group-card .tariff-secondary-controls .tariff-limit-input:hover,
+.settings-final .tariff-group-card .tariff-secondary-controls .tariff-limit-input:focus{background:#ee9c2229;border-color:rgba(238,224,34,.7)}
+.settings-final .tariff-group-card .tariff-group-actions{flex:none;width:auto;display:flex;align-items:center;gap:8px}
+.settings-final .tariff-group-card .tariff-group-actions>.default-badge,
+.settings-final .tariff-group-card .tariff-group-actions>.btn-mini-danger{height:34px;min-height:34px;box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;border-radius:8px;line-height:normal;margin:0}
+.settings-final .tariff-group-card .tariff-sort-name{flex:1;min-width:0}
+.settings-final .tariff-group-card.tariff-sort-mode .tariff-group-actions{display:none}
+
+.create-modal.partner-access-modal[data-v-f4269ded]{width:min(400px,calc(100vw - 32px));max-width:400px;min-width:0;padding:16px;box-sizing:border-box}
+.create-modal.partner-access-modal[data-v-f4269ded] .partner-modal-box{width:100%;max-width:100%;padding:12px;box-sizing:border-box}
+.partner-access-modal .partner-check-row>div{min-width:0;overflow-wrap:anywhere}
+
+/* Publication is a third glass-box child, unlike the tutorial's last form row.
+   Its inherited 30px bottom margin added extra space before the action. */
+.create-modal[data-v-92274f2b] .final-result2[data-v-92274f2b]{row-gap:18px}
+.create-modal[data-v-92274f2b] .final-result2>.form-row[data-v-92274f2b]{margin-bottom:8px}
+.create-modal[data-v-92274f2b] .final-result2>.modal-actions[data-v-92274f2b]{margin:0;padding:0;display:flex;justify-content:center}
+.create-modal[data-v-92274f2b] .final-result2>.modal-actions .btn-create-user1[data-v-92274f2b]{margin:15px}
+
+.announce-list .announce-head[data-v-5daea513]{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"title date";direction:rtl;align-items:start;gap:10px}
+.announce-list .announce-head[data-v-5daea513] .announce-title{direction:rtl;align-items:flex-start;min-width:0}
+.announce-list .announce-head[data-v-5daea513] .announce-date{grid-area:date;justify-self:end;align-self:start;white-space:nowrap;direction:ltr}
+.announce-list .announce-meta[data-v-f387832b]{display:flex;flex-direction:row;direction:rtl;align-items:center;justify-content:space-between;gap:8px}
+.announce-list .announce-meta[data-v-f387832b] .chip-right{margin:0;flex-shrink:0}
+.announce-list .announce-meta[data-v-f387832b] .announce-time{margin:0;direction:ltr;white-space:nowrap;text-align:left}
+
+@media(max-width:900px){
+ .settings-final .tariff-group-card .tariff-group-head{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:end;gap:10px}
+ .settings-final .tariff-group-card .tariff-group-head>.tariff-group-title{grid-column:1;grid-row:1;width:100%;min-width:0}
+ .settings-final .tariff-group-card .tariff-group-head>.tariff-order-controls{grid-column:2;grid-row:1;align-self:end}
+ .settings-final .tariff-group-card .tariff-group-head>.tariff-secondary-controls{grid-column:1/-1;grid-row:2;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);width:100%;min-width:0}
+ .settings-final .tariff-group-card .tariff-secondary-controls .tariff-connection-field{width:100%;max-width:none;min-width:0}
+ .settings-final .tariff-group-card .tariff-secondary-controls .partner-access-badge1{width:100%;min-width:0}
+ .settings-final .tariff-group-card .tariff-group-head>.tariff-group-actions{grid-column:1/-1;grid-row:3;display:grid;grid-template-columns:minmax(0,1fr);width:100%;min-width:0}
+ .settings-final .tariff-group-card .tariff-group-actions>.default-badge,
+ .settings-final .tariff-group-card .tariff-group-actions>.btn-mini-danger{width:100%;min-width:0}
+ .settings-final .tariff-group-card.tariff-sort-mode .tariff-group-head>.tariff-sort-name{grid-column:1;grid-row:1;min-width:0}
+ .settings-final .tariff-group-card.tariff-sort-mode .tariff-group-head>.tariff-order-controls{grid-column:2;grid-row:1;align-self:end}
+ .settings-final .tariff-group-card.tariff-sort-mode .tariff-group-actions{display:none}
+}
+
+/* Final tariff review: the sort handle is the first item on the RTL baseline. */
+.settings-final .tariff-group-card .tariff-group-head{direction:rtl}
+.settings-final .tariff-group-card.tariff-sort-mode .tariff-group-head>.tariff-secondary-controls,
+.settings-final .tariff-group-card.tariff-sort-mode .tariff-group-head>.tariff-group-actions{display:none}
+.settings-final .tariff-group-card .tariff-secondary-controls .tariff-limit-input{border-color:rgba(128,183,255,.45);background:#5b9bff14;color:#d5e6ff}
+.settings-final .tariff-group-card .tariff-secondary-controls .tariff-limit-input:hover,
+.settings-final .tariff-group-card .tariff-secondary-controls .tariff-limit-input:focus{border-color:rgba(128,183,255,.7);background:#5b9bff29}
+.create-modal.partner-access-modal[data-v-f4269ded] .partner-modal-box{width:94%;max-width:94%;margin-inline:auto}
+
+@media(max-width:900px){
+ .settings-final .tariff-group-card{box-sizing:border-box}
+ .settings-final .tariff-groups-toolbar[data-v-f4269ded]{display:grid;grid-template-columns:minmax(0,1fr);width:100%;box-sizing:border-box}
+ .settings-final .tariff-groups-toolbar>.btn-create-user1{width:100%;min-width:0;box-sizing:border-box;margin:0;justify-content:center}
+ .settings-final .tariff-group-card .tariff-group-head{width:92%;margin:0 auto 12px;grid-template-columns:auto minmax(0,1fr)}
+ .settings-final .tariff-group-card .tariff-group-head>.tariff-order-controls,
+ .settings-final .tariff-group-card.tariff-sort-mode .tariff-group-head>.tariff-order-controls{grid-column:1;grid-row:1}
+ .settings-final .tariff-group-card .tariff-group-head>.tariff-group-title,
+ .settings-final .tariff-group-card.tariff-sort-mode .tariff-group-head>.tariff-sort-name{grid-column:2;grid-row:1}
+ .settings-final .tariff-group-card.tariff-sort-mode .tariff-group-head>.tariff-secondary-controls,
+ .settings-final .tariff-group-card.tariff-sort-mode .tariff-group-head>.tariff-group-actions{display:none}
+}

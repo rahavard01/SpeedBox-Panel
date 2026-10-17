@@ -1,0 +1,501 @@
+/* Layout only. Colors and control appearance come from the original Panel. */
+.speedbox-infrastructure,.speedbox-infrastructure-overlay{--muted:rgba(255,255,255,.65);font-family:"Vazirmatn Variable",Vazirmatn,ui-sans-serif,system-ui,sans-serif;color:#d0d0d0;direction:rtl;font-size:12px}
+.speedbox-infrastructure{padding:0 22px 12px}
+:where(.speedbox-infrastructure,.speedbox-infrastructure-overlay) *{box-sizing:border-box}
+/* Native billing-root/topup-title supply the heading layout and 10px title margin. */
+.speedbox-infrastructure .content{margin-top:10px}
+.speedbox-infrastructure .loading{min-height:220px;display:flex;align-items:center;justify-content:center;gap:8px;font-size:12px}
+.speedbox-infrastructure .stats-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:22px}
+.speedbox-infrastructure .stat-label{display:block;direction:rtl}
+.speedbox-infrastructure .stat-label>i{font-size:14px;margin-left:5px}
+.speedbox-infrastructure .stat-value{direction:ltr;margin:8px 0 4px}
+.speedbox-infrastructure .dashboard-grid{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:18px}
+:where(.speedbox-infrastructure,.speedbox-infrastructure-overlay) .panel-card{width:100%;padding:16px;text-align:right}
+:where(.speedbox-infrastructure,.speedbox-infrastructure-overlay) .panel-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px}
+:where(.speedbox-infrastructure,.speedbox-infrastructure-overlay) .panel-head h2{font-size:14px;font-weight:600;margin:0}
+:where(.speedbox-infrastructure,.speedbox-infrastructure-overlay) .button{padding:9px 14px;margin:0;justify-content:center;font-size:12px;border-radius:10px}
+:where(.speedbox-infrastructure,.speedbox-infrastructure-overlay) .button.small{padding:6px 10px;font-size:11px}
+:where(.speedbox-infrastructure,.speedbox-infrastructure-overlay) .button.danger{color:#ff686b;border-color:rgba(221,64,67,.55)}
+:where(.speedbox-infrastructure,.speedbox-infrastructure-overlay) .button.success{color:#7cffa8;border-color:rgba(61,221,101,.35)}
+:where(.speedbox-infrastructure,.speedbox-infrastructure-overlay) .button:disabled{opacity:.4;cursor:not-allowed}
+:where(.speedbox-infrastructure,.speedbox-infrastructure-overlay) .button:hover:not(:disabled){background-color:rgba(255,255,255,.08)}
+.speedbox-infrastructure .toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:18px}
+.speedbox-infrastructure .toolbar .search{margin-inline-start:auto;width:min(260px,100%);height:38px}
+:where(.speedbox-infrastructure,.speedbox-infrastructure-overlay) .table-wrap{overflow:auto;max-width:100%;border:1px solid rgba(255,255,255,.18);border-radius:12px;scrollbar-width:thin}
+.speedbox-infrastructure table{width:100%;border-collapse:separate;border-spacing:0;min-width:650px;color:#fff;text-align:center;font-size:12px}
+.speedbox-infrastructure th,.speedbox-infrastructure td{height:46px;padding:8px!important;text-align:center;border-bottom:1px solid rgba(255,255,255,.1);vertical-align:middle}
+.speedbox-infrastructure thead{background:rgba(255,255,255,.1)}
+.speedbox-infrastructure tbody tr:nth-child(odd) td{background:rgba(255,255,255,.02)}
+.speedbox-infrastructure tbody tr:last-child td{border-bottom:0}
+:where(.speedbox-infrastructure,.speedbox-infrastructure-overlay) .entity{display:flex;align-items:center;gap:10px;text-align:right}
+:where(.speedbox-infrastructure,.speedbox-infrastructure-overlay) .entity-icon{font-size:16px;color:#fff}
+:where(.speedbox-infrastructure,.speedbox-infrastructure-overlay) .entity b{font-size:12px;display:block}
+:where(.speedbox-infrastructure,.speedbox-infrastructure-overlay) .entity small{font-size:10px;color:var(--muted);display:block;margin-top:5px;direction:ltr;text-align:right}
+.speedbox-infrastructure .entity.server-identity{justify-content:center;text-align:center}
+.speedbox-infrastructure .server-identity small{text-align:center}
+:where(.speedbox-infrastructure,.speedbox-infrastructure-overlay) .badge{display:inline-flex;align-items:center;justify-content:center;gap:5px;font-size:10px;font-weight:700;padding:4px 8px;border-radius:8px;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.06);color:#dce2eb;white-space:nowrap}
+:where(.speedbox-infrastructure,.speedbox-infrastructure-overlay) .badge.online,:where(.speedbox-infrastructure,.speedbox-infrastructure-overlay) .badge.succeeded{color:#99ddbf;background:rgba(80,169,129,.1);border-color:rgba(125,203,166,.24)}
+:where(.speedbox-infrastructure,.speedbox-infrastructure-overlay) .badge.failed,:where(.speedbox-infrastructure,.speedbox-infrastructure-overlay) .badge.offline{color:#f2abab;background:rgba(203,105,105,.1);border-color:rgba(227,151,151,.25)}
+:where(.speedbox-infrastructure,.speedbox-infrastructure-overlay) .badge.running,:where(.speedbox-infrastructure,.speedbox-infrastructure-overlay) .badge.deploying,:where(.speedbox-infrastructure,.speedbox-infrastructure-overlay) .badge.queued{color:#b5cee9;background:rgba(131,164,206,.1);border-color:rgba(151,181,220,.25)}
+:where(.speedbox-infrastructure,.speedbox-infrastructure-overlay) .badge.not_seen,:where(.speedbox-infrastructure,.speedbox-infrastructure-overlay) .badge.draft,:where(.speedbox-infrastructure,.speedbox-infrastructure-overlay) .badge.released{color:#dce2eb;background:rgba(197,207,223,.08);border-color:rgba(197,207,223,.22)}
+:where(.speedbox-infrastructure,.speedbox-infrastructure-overlay) .badge.degraded{color:#e3cea8;background:rgba(193,159,99,.1);border-color:rgba(211,183,132,.25)}
+:where(.speedbox-infrastructure,.speedbox-infrastructure-overlay) .actions{display:flex;gap:6px;align-items:center;justify-content:center;flex-wrap:wrap}
+:where(.speedbox-infrastructure,.speedbox-infrastructure-overlay) .machine-list{display:grid;gap:10px}
+:where(.speedbox-infrastructure,.speedbox-infrastructure-overlay) .machine-item{padding:12px;border:1px dashed rgba(255,255,255,.12);border-radius:10px;background:rgba(255,255,255,.03)}
+:where(.speedbox-infrastructure,.speedbox-infrastructure-overlay) .machine-item .entity small{direction:rtl}
+:where(.speedbox-infrastructure,.speedbox-infrastructure-overlay) .machine-top{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}
+:where(.speedbox-infrastructure,.speedbox-infrastructure-overlay) .machine-meta{display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:10px;color:var(--muted);margin-bottom:10px}
+:where(.speedbox-infrastructure,.speedbox-infrastructure-overlay) .machine-meta b{display:block;color:#fff;font-size:12px;margin-top:5px}
+:where(.speedbox-infrastructure,.speedbox-infrastructure-overlay) .meter,:where(.speedbox-infrastructure,.speedbox-infrastructure-overlay) .progress{height:6px;background:rgba(255,255,255,.12);border-radius:8px;overflow:hidden;margin-top:7px}
+:where(.speedbox-infrastructure,.speedbox-infrastructure-overlay) .meter span,:where(.speedbox-infrastructure,.speedbox-infrastructure-overlay) .progress span{height:100%;display:block;background:#34c759;border-radius:8px}
+:where(.speedbox-infrastructure,.speedbox-infrastructure-overlay) .deployment-progress .progress-value{display:block;text-align:center;font-size:10px;color:var(--muted);margin-top:6px}
+:where(.speedbox-infrastructure,.speedbox-infrastructure-overlay) .deployment-progress .progress{direction:ltr}
+:where(.speedbox-infrastructure,.speedbox-infrastructure-overlay) .deployment-progress.failed .progress span{background:#d97676}
+:where(.speedbox-infrastructure,.speedbox-infrastructure-overlay) .empty{text-align:center;padding:36px 12px;font-size:12px;color:var(--muted);line-height:1.9}
+:where(.speedbox-infrastructure,.speedbox-infrastructure-overlay) .empty strong{display:block;color:#fff;margin-bottom:7px}
+.speedbox-infrastructure .two-columns{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.speedbox-infrastructure-overlay .modal-backdrop{position:fixed;inset:0;z-index:12000;background:rgba(0,0,0,.75);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);overflow:auto;padding:24px 16px;direction:rtl}
+.speedbox-infrastructure-overlay .modal-backdrop[hidden]{display:none!important}
+.speedbox-infrastructure-overlay .modal-outer{min-height:calc(100dvh - 48px)}
+.speedbox-infrastructure-overlay .infrastructure-modal{width:min(760px,92vw);max-width:760px;max-height:none;overflow:visible;text-align:right}
+.speedbox-infrastructure-overlay .close-button{margin-inline-start:auto;background:transparent;color:#d0d0d0;border:0;font-size:14px;padding:4px;cursor:pointer}
+:where(.speedbox-infrastructure,.speedbox-infrastructure-overlay) .form-grid{width:100%;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+:where(.speedbox-infrastructure,.speedbox-infrastructure-overlay) .field{min-width:0;display:grid;gap:8px;align-content:start}
+:where(.speedbox-infrastructure,.speedbox-infrastructure-overlay) .field.full,:where(.speedbox-infrastructure,.speedbox-infrastructure-overlay) .switch-field.full{grid-column:1/-1}
+:where(.speedbox-infrastructure,.speedbox-infrastructure-overlay) .field label{font-size:12px;font-weight:600;margin:0;color:#d0d0d0}
+:where(.speedbox-infrastructure,.speedbox-infrastructure-overlay) .form-input{width:100%;color:#d0d0d0;min-width:0;font-family:inherit}
+:where(.speedbox-infrastructure,.speedbox-infrastructure-overlay) textarea.form-input{min-height:110px;line-height:1.8;padding:10px;text-align:left;direction:ltr;font-family:ui-monospace,monospace;resize:vertical}
+:where(.speedbox-infrastructure,.speedbox-infrastructure-overlay) .switch-field{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 12px;border:1px dashed rgba(255,255,255,.12);border-radius:10px;background:rgba(255,255,255,.03)}
+:where(.speedbox-infrastructure,.speedbox-infrastructure-overlay) .switch-line.ios{display:inline-flex;align-items:center;justify-content:center;margin:0;direction:ltr}
+:where(.speedbox-infrastructure,.speedbox-infrastructure-overlay) .switch-line.ios input{margin:0;flex-shrink:0}
+:where(.speedbox-infrastructure,.speedbox-infrastructure-overlay) .form-actions{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:10px;margin-top:22px;padding-top:18px;border-top:1px dashed rgba(255,255,255,.15)}
+:where(.speedbox-infrastructure,.speedbox-infrastructure-overlay) .log-box{text-align:start;unicode-bidi:plaintext;white-space:pre-wrap;overflow-wrap:anywhere;background:rgba(0,0,0,.38);border:1px dashed rgba(255,255,255,.12);border-radius:10px;padding:12px;color:#d0d0d0;font:11px/1.8 ui-monospace,monospace;max-height:none;overflow:visible}
+:where(.speedbox-infrastructure,.speedbox-infrastructure-overlay) .infrastructure-native-select{position:absolute;opacity:0;width:1px;height:1px;min-height:0!important;padding:0!important;pointer-events:none}
+:where(.speedbox-infrastructure,.speedbox-infrastructure-overlay) .invoice-custom-select__menu[hidden]{display:none}
+:where(.speedbox-infrastructure,.speedbox-infrastructure-overlay) .invoice-custom-select.is-invalid .invoice-custom-select__trigger{border-color:#ff686b}
+:where(.speedbox-infrastructure,.speedbox-infrastructure-overlay) .invoice-custom-select__option:disabled{opacity:.4;cursor:not-allowed}
+:where(.speedbox-infrastructure,.speedbox-infrastructure-overlay) .invoice-custom-select__option:focus-visible{outline:1px solid #fff;background:rgba(255,255,255,.11)}
+@media(max-width:1050px){.speedbox-infrastructure .stats-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.speedbox-infrastructure .dashboard-grid{grid-template-columns:1fr}}
+@media(max-width:760px){.speedbox-infrastructure{padding:0 10px 8px}.speedbox-infrastructure .two-columns{grid-template-columns:1fr}.speedbox-infrastructure .toolbar .search{margin-inline-start:0;width:100%}:where(.speedbox-infrastructure,.speedbox-infrastructure-overlay) .form-grid{grid-template-columns:1fr}.speedbox-infrastructure-overlay .modal-backdrop{padding:12px}.speedbox-infrastructure-overlay .modal-outer{min-height:calc(100dvh - 24px)}.speedbox-infrastructure-overlay .infrastructure-modal{min-width:0;padding:20px}.speedbox-infrastructure th,.speedbox-infrastructure td{font-size:11px}}
+
+/* Keep the original bar height; the selector sits visually left of the hamburger. */
+.top-bar .speedbox-navigation-actions{display:contents}
+.top-bar .speedbox-navigation-actions .hamburger-menu{margin-left:20px;flex-shrink:0}
+.speedbox-panel-switch{position:relative;display:flex;align-items:center;align-self:center;direction:rtl;font-family:inherit;color:inherit;line-height:1}
+.speedbox-panel-switch .speedbox-panel-switch__trigger{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:28px;padding:0 10px;margin:0;font-size:11px;line-height:1.5}
+.speedbox-panel-switch__trigger span{overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.speedbox-panel-switch.speedbox-panel-switch--above{position:absolute;z-index:9901;align-self:auto}
+.speedbox-panel-switch.speedbox-panel-switch--above .speedbox-panel-switch__trigger{max-width:calc(100vw - 32px)}
+.speedbox-panel-switch__trigger>i{font-size:9px;flex-shrink:0;transition:transform .18s ease}
+.speedbox-panel-switch__trigger[aria-expanded=true]>i{transform:rotate(180deg)}
+.speedbox-panel-switch .speedbox-panel-switch__menu{top:calc(100% + 12px);left:auto;right:0;width:220px;max-height:none;overflow:visible;z-index:100;border:1px solid rgba(255,255,255,.2);border-radius:10px;animation:slideDown .25s ease-out}
+.speedbox-panel-switch .speedbox-panel-switch__option{display:flex;align-items:center;gap:10px;min-height:38px;font-size:11px;transition:background .2s ease,border-color .2s ease,color .2s ease}
+.speedbox-panel-switch__option span{flex:1}
+.speedbox-panel-switch__option.is-selected{font-weight:700}
+.speedbox-panel-switch__option .fa-check{color:#fff}
+.speedbox-panel-switch__option:hover .fa-check{color:#fff}
+@media(max-width:760px){.speedbox-panel-switch .speedbox-panel-switch__trigger{max-width:max(40px,calc(50vw - 130px));padding:0 6px;gap:4px;font-size:10px}.speedbox-panel-switch .speedbox-panel-switch__menu{width:min(220px,calc(100vw - 32px))}}
+
+/* Neutral glass and white shine match the center circle; selection is distinct from hover. */
+.speedbox-panel-switch .speedbox-panel-switch__trigger{color:#fff;background:radial-gradient(120% 160% at 50% -20%,rgba(255,255,255,.16),transparent 65%),linear-gradient(180deg,rgba(255,255,255,.1),rgba(255,255,255,.04));border-color:rgba(255,255,255,.28);box-shadow:0 0 15px rgba(255,255,255,.08),inset 0 1px rgba(255,255,255,.12);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);transition:background .2s ease,border-color .2s ease,box-shadow .2s ease,color .2s ease}
+.speedbox-panel-switch .speedbox-panel-switch__trigger:hover,.speedbox-panel-switch .speedbox-panel-switch__trigger:focus-visible,.speedbox-panel-switch .speedbox-panel-switch__trigger[aria-expanded=true]{color:#fff;background:radial-gradient(120% 160% at 50% -20%,rgba(255,255,255,.24),transparent 65%),linear-gradient(180deg,rgba(255,255,255,.16),rgba(255,255,255,.08));border-color:rgba(255,255,255,.55);box-shadow:0 0 16px rgba(255,255,255,.24),inset 0 1px rgba(255,255,255,.18)}
+.speedbox-panel-switch .speedbox-panel-switch__menu{box-shadow:0 8px 24px rgba(0,0,0,.4),0 0 12px rgba(255,255,255,.06)}
+.speedbox-panel-switch .speedbox-panel-switch__option:hover,.speedbox-panel-switch .speedbox-panel-switch__option:focus-visible{color:#fff;background:rgba(255,255,255,.07);box-shadow:inset 0 0 0 1px rgba(255,255,255,.14)}
+.speedbox-panel-switch .speedbox-panel-switch__option.is-selected,.speedbox-panel-switch .speedbox-panel-switch__option.is-selected:hover{color:#fff;background:rgba(255,255,255,.16);box-shadow:inset -3px 0 #fff,inset 0 0 0 1px rgba(255,255,255,.24)}
+.speedbox-panel-switch__option.is-selected .fa-check{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:50%;background:rgba(255,255,255,.2);font-size:9px}
+.speedbox-panel-switch .speedbox-panel-switch__trigger:focus-visible,.speedbox-panel-switch .speedbox-panel-switch__option:focus-visible{outline:2px solid rgba(255,255,255,.8);outline-offset:2px}
+
+/* Tariff plan selection shares the continuous invoice-dropdown surface. */
+.tariff-plan-select{position:relative;width:100%;min-width:0;font-family:inherit}
+.tariff-plan-select.is-open{z-index:110}
+.settings-final .settings-card:has(.tariff-plan-select.is-open){position:relative;z-index:100;overflow:visible}
+.tariff-plan-select .invoice-custom-select__trigger{display:grid;grid-template-columns:1fr auto;align-items:center;gap:8px;width:100%;height:30px;box-sizing:border-box;padding:0 10px;border:1px solid rgba(255,255,255,.2);border-radius:8px;background:linear-gradient(180deg,#4c4f56 0%,#484b50 25%,#484745 55%,#49413e 100%);color:#d0d0d0;font:inherit;font-size:11px;cursor:pointer;text-align:center;box-shadow:0 3px 10px #3b82f640}
+.tariff-plan-select .invoice-custom-select__trigger span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tariff-plan-select .invoice-custom-select__trigger i{font-size:9px;transition:transform .18s}
+.tariff-plan-select.is-open .invoice-custom-select__trigger{border-radius:8px 8px 0 0;border-bottom-color:transparent}
+.tariff-plan-select.is-open .invoice-custom-select__trigger i{transform:rotate(180deg)}
+.tariff-plan-select .invoice-custom-select__menu{position:absolute;z-index:110;top:calc(100% - 1px);left:0;right:0;max-height:260px;overflow:auto;padding:5px;box-sizing:border-box;background:linear-gradient(180deg,#303030,#2c2c2c);border:1px solid rgba(255,255,255,.2);border-top:0;border-radius:0 0 8px 8px;box-shadow:0 3px 10px #3b82f640;scrollbar-width:thin}
+.tariff-plan-select .invoice-custom-select__option{display:block;width:100%;padding:9px 10px;background:transparent;border:0;border-radius:7px;color:#d8deeb;font:inherit;font-size:11px;text-align:right;cursor:pointer}
+.tariff-plan-select .invoice-custom-select__option:hover,.tariff-plan-select .invoice-custom-select__option.is-selected{background:#434343;color:#fff}
+.tariff-plan-select button:focus-visible{outline:1px solid #fff;outline-offset:-1px}
+.speedbox-infrastructure .traffic-rank-grid,.speedbox-infrastructure .queue-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;margin-top:18px}
+.speedbox-infrastructure .dashboard-card-title{display:flex;align-items:center;gap:8px;min-width:0}
+.speedbox-infrastructure .dashboard-icon,.speedbox-infrastructure-overlay .dashboard-icon{display:inline-block;vertical-align:middle;flex-shrink:0}
+.speedbox-infrastructure .traffic-rank-card>.panel-head{flex-wrap:wrap;gap:10px;margin-bottom:12px}
+.speedbox-infrastructure .rank-range{display:flex;align-items:center;gap:7px}
+.speedbox-infrastructure .rank-range .invoice-custom-select{width:125px}
+.speedbox-infrastructure .rank-dates{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-items:start;gap:12px;margin:20px 0;padding:0}
+.speedbox-infrastructure .rank-dates[hidden]{display:none}
+.speedbox-infrastructure .rank-date-control{display:grid;gap:8px;min-width:0;font-size:11px}
+.speedbox-infrastructure .rank-date-control>span{color:var(--muted);white-space:nowrap}
+.speedbox-infrastructure .rank-date-picker{position:relative;width:100%;min-width:0}
+.speedbox-infrastructure .rank-date-trigger{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;height:38px;padding:0 12px;margin:0;color:#e1e5ee;background:radial-gradient(120% 120% at 50% -10%,#00a0ff24,#0000 60%),linear-gradient(180deg,#ffffff12,#ffffff0a);border:1px solid rgba(255,255,255,.2);border-radius:10px;box-shadow:0 3px 10px #3b82f640;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);cursor:pointer;font:inherit;text-align:center;transition:border-color .2s ease,background .2s ease}
+.speedbox-infrastructure .rank-date-trigger b{font-weight:600;white-space:nowrap;flex:1}
+.speedbox-infrastructure .rank-date-caret{font-size:9px;transition:transform .18s ease}
+.speedbox-infrastructure .rank-date-picker.is-calendar-open .rank-date-trigger{border-radius:10px 10px 0 0;border-color:rgba(255,255,255,.3);border-bottom-color:transparent}
+.speedbox-infrastructure .rank-date-picker.is-calendar-open .rank-date-caret{transform:rotate(180deg)}
+.speedbox-infrastructure .traffic-rank-card{position:relative;overflow:visible}
+.speedbox-infrastructure .traffic-rank-card.is-calendar-open{z-index:110}
+.speedbox-infrastructure .rank-calendar-menu{position:absolute;z-index:120;top:calc(100% - 1px);right:0;width:100%;padding:10px;background:radial-gradient(120% 120% at 50% -10%,#20202024,#0000 60%),linear-gradient(180deg,#ffffff12,#ffffff0a),#1d1d1df5;border:1px solid rgba(255,255,255,.3);border-radius:0 0 10px 10px;box-shadow:0 8px 24px #00000060,0 3px 10px #3b82f640;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
+.speedbox-infrastructure .rank-date-trigger:hover{border-color:rgba(255,255,255,.45);background:rgba(255,255,255,.08)}
+.speedbox-infrastructure .jalali-calendar{max-width:340px;margin:auto}
+.speedbox-infrastructure .jalali-calendar-head{display:flex;align-items:center;gap:5px;margin-bottom:10px}
+.speedbox-infrastructure .jalali-calendar-head .invoice-custom-select{flex:1;min-width:0}
+.speedbox-infrastructure .jalali-calendar-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:3px;text-align:center}
+.speedbox-infrastructure .jalali-weekday{padding:4px 0;font-size:10px;color:var(--muted)}
+.speedbox-infrastructure .jalali-day{aspect-ratio:1;border:1px solid transparent;border-radius:9px;background:rgba(255,255,255,.04);color:#fff;font:inherit;cursor:pointer}
+.speedbox-infrastructure .jalali-day:hover,.speedbox-infrastructure .jalali-day:focus-visible{background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.35);outline:none}
+.speedbox-infrastructure .jalali-day.is-today{border-color:rgba(255,255,255,.3)}
+.speedbox-infrastructure .jalali-day.is-selected{background:rgba(255,255,255,.2);border-color:rgba(255,255,255,.6)}
+.speedbox-infrastructure .jalali-calendar-footer{display:flex;justify-content:center;margin-top:10px}
+.speedbox-infrastructure .rank-list{height:400px;overflow:auto;display:flex;flex-direction:column;gap:12px;scrollbar-width:thin;padding:2px}
+.speedbox-infrastructure .rank-list .empty{margin:auto 0}
+.speedbox-infrastructure .loading.compact{min-height:340px}
+.speedbox-infrastructure .rank-row{border-radius:9px;background:rgba(255,255,255,.05);padding:10px;transition:background .2s ease}
+.speedbox-infrastructure .rank-row:hover,.speedbox-infrastructure .rank-row:focus-visible{background:rgba(255,255,255,.09)}
+.speedbox-infrastructure .rank-row-top,.speedbox-infrastructure .rank-row-bottom{display:flex;direction:ltr;align-items:center;justify-content:space-between;gap:10px}
+.speedbox-infrastructure .rank-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;font-size:12px;color:#fff}
+.speedbox-infrastructure .rank-change{display:inline-flex;align-items:center;gap:4px;white-space:nowrap;font-size:11px}
+.speedbox-infrastructure .rank-change .dashboard-icon{width:12px;height:12px}
+.speedbox-infrastructure .rank-row-bottom{margin-top:7px}
+.speedbox-infrastructure .rank-traffic{color:var(--muted);font-size:11px;white-space:nowrap}
+.speedbox-infrastructure .rank-bar{flex:1;height:7px;overflow:hidden;border-radius:10px;background:rgba(255,255,255,.1)}
+.speedbox-infrastructure .rank-bar span{display:block;height:100%;background:#4ea1ff;transition:width .25s ease}
+.speedbox-infrastructure .traffic-up,.speedbox-rank-tooltip .traffic-up{color:#22c55e}
+.speedbox-infrastructure .traffic-down,.speedbox-rank-tooltip .traffic-down{color:#ef4444}
+.speedbox-rank-tooltip{position:fixed;z-index:12500;pointer-events:none;direction:rtl;min-width:230px;padding:12px;border-radius:10px;background:#202020fa;border:1px solid rgba(255,255,255,.2);box-shadow:0 6px 20px rgba(0,0,0,.4);color:#fff;font:11px/1.8 "Vazirmatn Variable",Vazirmatn,ui-sans-serif,system-ui,sans-serif}
+.speedbox-rank-tooltip[hidden]{display:none}
+.speedbox-rank-tooltip>div{display:flex;justify-content:space-between;gap:14px}
+.speedbox-rank-tooltip .rank-tooltip-period{direction:ltr;display:block;color:rgba(255,255,255,.6);margin-top:8px;text-align:center}
+.speedbox-infrastructure .queue-running,.speedbox-infrastructure .queue-metric{padding:12px;border-radius:9px;background:rgba(255,255,255,.05)}
+.speedbox-infrastructure .queue-running{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px}
+.speedbox-infrastructure .queue-running>span{display:inline-flex;align-items:center;gap:8px}
+.speedbox-infrastructure .queue-running>div{width:100%;color:var(--muted);font-size:11px}
+.speedbox-infrastructure .queue-running b{float:left;font-weight:500}
+.speedbox-infrastructure .queue-metrics{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.speedbox-infrastructure .queue-metric{display:flex;flex-direction:column;align-items:flex-start;gap:8px;color:inherit;font:inherit;text-align:right;border:1px solid transparent;min-width:0}
+.speedbox-infrastructure button.queue-metric{cursor:pointer}
+.speedbox-infrastructure button.queue-metric:hover{border-color:rgba(255,255,255,.2)}
+.speedbox-infrastructure .queue-metric>span{font-size:11px;color:var(--muted)}
+.speedbox-infrastructure .queue-metric>b{font-size:22px;color:#fff}
+.speedbox-infrastructure .queue-metric[data-queue-action=failed]>b{color:#ef4444}
+.speedbox-infrastructure .queue-metric .queue-metric-meta{font-size:10px;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.speedbox-infrastructure .queue-workload{margin-top:14px;display:grid;gap:10px;font-size:10px;color:var(--muted)}
+.speedbox-infrastructure .queue-workload>div{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.speedbox-infrastructure .queue-processes{display:flex;justify-content:space-between;align-items:center;background:rgba(255,255,255,.05);padding:12px;border-radius:9px;margin-top:14px}
+.speedbox-infrastructure .queue-active-names{margin-top:10px;font-size:10px;color:var(--muted)}
+.speedbox-infrastructure .queue-lanes{display:grid;gap:10px;margin-top:16px;padding-top:14px;border-top:1px solid rgba(255,255,255,.1)}
+.speedbox-infrastructure .queue-lanes>h3{font-size:12px;font-weight:500;margin:0 0 2px;color:var(--muted)}
+.speedbox-infrastructure .queue-lane{min-width:0;padding:11px 12px;border:1px solid rgba(255,255,255,.09);border-radius:9px;background:rgba(255,255,255,.03)}
+.speedbox-infrastructure .queue-lane-heading{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.speedbox-infrastructure .queue-lane-identity{display:flex;align-items:center;gap:9px;min-width:0}
+.speedbox-infrastructure .queue-lane-identity b{display:block;font-size:11px;font-weight:500;line-height:1.6}
+.speedbox-infrastructure .queue-lane-identity code{display:block;width:max-content;font-family:inherit;font-size:10px;color:var(--muted);line-height:1.6;unicode-bidi:isolate}
+.speedbox-infrastructure .queue-lane-icon{display:grid;place-items:center;flex:none;width:31px;height:31px;border-radius:8px;background:rgba(255,255,255,.06)}
+.speedbox-infrastructure .queue-lane-icon svg{width:16px;height:16px}
+.speedbox-infrastructure .queue-lane-counts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:10px;font-size:10px;color:var(--muted)}
+.speedbox-infrastructure .queue-lane-counts>span{display:flex;align-items:center;justify-content:flex-start;gap:5px;min-width:0}
+.speedbox-infrastructure .queue-lane-counts bdi{color:#fff;font-size:12px;font-weight:500}
+@media(max-width:400px){.speedbox-infrastructure .queue-lane-counts>span{flex-direction:column;align-items:flex-start;gap:2px}}
+.speedbox-infrastructure .queue-duration{display:inline-flex;align-items:baseline;gap:4px;direction:rtl;unicode-bidi:isolate}
+.speedbox-infrastructure .queue-metric>b{direction:rtl;unicode-bidi:isolate}
+.speedbox-infrastructure-overlay .queue-job-list{display:grid;gap:10px}
+.speedbox-infrastructure-overlay .queue-job{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;text-align:right;direction:rtl;font:inherit;color:inherit;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.15);border-radius:10px;padding:12px;cursor:pointer}
+.speedbox-infrastructure-overlay .queue-job small{display:block;margin-top:6px;opacity:.6}
+.speedbox-infrastructure-overlay .job-detail-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px 20px}
+.speedbox-infrastructure-overlay .job-detail-grid>div{display:grid;align-content:start;gap:5px;min-width:0;padding:9px 0;border-bottom:1px solid rgba(255,255,255,.08)}
+.speedbox-infrastructure-overlay .job-detail-grid span{opacity:.65}
+.speedbox-infrastructure-overlay .job-detail-grid b{overflow-wrap:anywhere}
+@media(max-width:760px){.speedbox-infrastructure .traffic-rank-grid,.speedbox-infrastructure .queue-grid{grid-template-columns:1fr}.speedbox-infrastructure .rank-list{height:350px}.speedbox-infrastructure-overlay .job-detail-grid{grid-template-columns:1fr}}
+
+.speedbox-infrastructure .queue-mini-progress{display:block;width:100%;height:4px;background:rgba(255,255,255,.1);border-radius:6px;overflow:hidden}
+.speedbox-infrastructure .queue-mini-progress i{display:block;height:100%;background:#4ea1ff}
+
+
+/* Each calendar follows its own date field, without extending under its neighbour. */
+.speedbox-infrastructure .jalali-calendar-head .button.small{padding:4px 5px;font-size:10px;min-width:22px;flex-shrink:0}
+.speedbox-infrastructure .jalali-day{min-height:24px;font-size:11px;border-radius:6px}
+.speedbox-infrastructure .rank-date-trigger:focus-visible{outline:2px solid rgba(255,255,255,.65);outline-offset:2px}
+@media(max-width:480px){.speedbox-infrastructure .rank-dates{grid-template-columns:1fr}}
+
+
+.speedbox-infrastructure .configuration-shell{width:100%;margin-inline:auto}
+.speedbox-infrastructure .configuration-card{width:100%;max-width:none;margin-inline:auto;padding:12px 14px 14px}
+.speedbox-infrastructure .configuration-card .form-grid{gap:16px 24px}
+.speedbox-infrastructure .configuration-tabs{display:flex;width:max-content;max-width:100%;margin:0 auto 25px;overflow-x:auto}
+.speedbox-infrastructure .template-tabs{display:flex;width:100%;margin:0 0 20px;overflow-x:auto}
+.speedbox-infrastructure .configuration-tabs .seg-btn,.speedbox-infrastructure .template-tabs .seg-btn{flex:1;white-space:nowrap;padding:10px 12px}
+.speedbox-infrastructure .configuration-secret{position:relative;min-width:0;height:38px}
+.speedbox-infrastructure .configuration-secret input{width:100%;height:38px;padding:0 76px 0 12px;text-align:left;box-sizing:border-box}
+.speedbox-infrastructure .configuration-secret button{position:absolute;top:0;color:#fff;cursor:pointer}
+.speedbox-infrastructure .token-eye{right:0;height:38px;width:38px;background:transparent;border:0;border-left:1px solid #ffffff26;border-radius:0 8px 8px 0}
+.speedbox-infrastructure .token-generate{right:44px;top:6px!important;width:26px;height:26px;border-radius:50%;background:#ffffff12;border:1px solid #ffffff33;font-size:11px}
+.speedbox-infrastructure .template-card{max-width:none}
+.speedbox-infrastructure .template-card textarea{min-height:440px;resize:vertical;font-family:Consolas,monospace;font-size:13px;line-height:1.8;tab-size:2;text-align:left;white-space:pre;overflow:auto}
+:where(.speedbox-infrastructure,.speedbox-infrastructure-overlay) .panel-card{padding:12px 14px 14px}
+@media(max-width:760px){.speedbox-infrastructure .template-card textarea{min-height:360px}.speedbox-infrastructure .configuration-tabs .seg-btn{flex:0 0 auto}}
+
+/* Original Panel modal structure: outer shell, inner field card, then actions. */
+.speedbox-infrastructure-overlay .infrastructure-modal .modal-fields{width:100%;min-width:0;margin:0 auto;justify-content:stretch;text-align:center}
+.speedbox-infrastructure-overlay .infrastructure-modal .form-grid{grid-template-columns:minmax(0,1fr);gap:18px}
+.speedbox-infrastructure-overlay .infrastructure-modal .field{grid-template-columns:120px minmax(0,1fr);align-items:center;gap:10px}
+.speedbox-infrastructure-overlay .infrastructure-modal .field>label{text-align:right;white-space:normal;line-height:1.5;padding:0 6px}
+.speedbox-infrastructure-overlay .infrastructure-modal .field>textarea,.speedbox-infrastructure-overlay .infrastructure-modal .field>.button{grid-column:2}
+.speedbox-infrastructure-overlay .infrastructure-modal .form-actions{border:0;margin:25px 0 0;padding:0;gap:12px}
+.speedbox-infrastructure-overlay .infrastructure-modal textarea.form-input{height:auto;min-height:110px;line-height:1.8;padding:10px;text-align:left;resize:vertical}
+@media(max-width:540px){.speedbox-infrastructure-overlay .infrastructure-modal .field{grid-template-columns:1fr}.speedbox-infrastructure-overlay .infrastructure-modal .field>textarea,.speedbox-infrastructure-overlay .infrastructure-modal .field>.button{grid-column:1}.speedbox-infrastructure .configuration-tabs .seg-btn{padding:10px 12px}}
+
+/* Save overlays use the original Panel's creating-overlay/creating-box. */
+.speedbox-infrastructure .content{position:relative}
+.speedbox-infrastructure .creating-overlay{position:fixed;inset:0;border-radius:0;z-index:13000}
+.speedbox-infrastructure-overlay .creating-overlay{border-radius:24px}
+.speedbox-infrastructure .configuration-secret .token-generate{top:50%!important;transform:translateY(-50%);width:28px;height:28px;display:grid;place-items:center;background:transparent;border:0;border-radius:0;font-size:16px;padding:0;line-height:1}
+.speedbox-infrastructure .machine-top{min-height:38px;margin-bottom:0;align-items:center}
+.speedbox-infrastructure .machine-top>div:first-child{min-width:0}
+.speedbox-infrastructure .entity{align-items:center;min-height:38px}
+.speedbox-infrastructure .entity small,.speedbox-infrastructure .machine-top small{overflow-wrap:anywhere}
+.speedbox-infrastructure td{vertical-align:middle}
+:where(.speedbox-infrastructure,.speedbox-infrastructure-overlay) [data-configuration-panel][hidden],.speedbox-infrastructure-overlay #routeActionValue[hidden]{display:none!important}
+
+:is(.speedbox-infrastructure,.speedbox-infrastructure-overlay) .infrastructure-modal textarea.form-input{height:auto;min-height:110px;line-height:1.8;padding:8px 10px}
+
+/* Announcements uses this heading wrapper and the original global topup-title. */
+.speedbox-infrastructure-overlay .announcement-modal-heading{display:flex;align-items:center;justify-content:center;margin-bottom:18px;font-size:18px;color:#fff;text-shadow:0 0 15px rgba(255,153,0,1)}
+:is(.speedbox-infrastructure,.speedbox-infrastructure-overlay) input.form-input:not([type=checkbox]):not(.search),:is(.speedbox-infrastructure,.speedbox-infrastructure-overlay) textarea.form-input{direction:ltr;text-align:left!important}
+:is(.speedbox-infrastructure,.speedbox-infrastructure-overlay) input[type=number]{appearance:textfield;-moz-appearance:textfield}
+:is(.speedbox-infrastructure,.speedbox-infrastructure-overlay) input[type=number]::-webkit-inner-spin-button,:is(.speedbox-infrastructure,.speedbox-infrastructure-overlay) input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+
+/* User-management toolbar proportions, scoped to server and node lists. */
+.speedbox-infrastructure .entity-toolbar{display:flex;align-items:center;gap:12px;flex-wrap:nowrap;width:100%;margin:10px 0 18px}
+:is(.speedbox-infrastructure,.speedbox-infrastructure-overlay) .entity-toolbar .button.primary{flex:0 0 auto;height:38px;margin:0;padding:0 54px;line-height:1.5}
+.speedbox-infrastructure .entity-toolbar .search{flex:1 1 0;min-width:0;width:auto;height:38px;margin:0}
+@media(max-width:540px){.speedbox-infrastructure .entity-toolbar{flex-wrap:wrap}.speedbox-infrastructure .entity-toolbar .button.primary{width:100%}.speedbox-infrastructure .entity-toolbar .search{flex-basis:100%;width:100%}}
+
+/* Search follows Users: centred text with automatic direction for typed values.
+   The Persian hint has its own bidi paragraph, keeping its ellipsis at the end. */
+.speedbox-infrastructure .entity-toolbar input.search.form-input{text-align:center!important}
+.speedbox-infrastructure .entity-toolbar input.search.form-input::placeholder{direction:rtl;unicode-bidi:plaintext;text-align:center!important}
+
+/* Date controls share the same fixed invoice palette, including hover/open. */
+.speedbox-infrastructure .rank-date-trigger,.speedbox-infrastructure .rank-date-trigger:hover{background:var(--speedbox-select-closed);color:#d0d0d0}
+.speedbox-infrastructure .rank-calendar-menu{background:var(--speedbox-select-open);border-color:rgba(255,255,255,.2);box-shadow:0 3px 10px #3b82f640}
+.speedbox-infrastructure .jalali-day:hover,.speedbox-infrastructure .jalali-day:focus-visible,.speedbox-infrastructure .jalali-day.is-selected{background:#434343}
+
+/* Dashboard action follows the approved invoice surface. */
+.speedbox-infrastructure .invoice-surface-button,.speedbox-infrastructure .invoice-surface-button:hover:not(:disabled){background:var(--speedbox-select-closed);color:#d0d0d0;border:1px solid rgba(255,255,255,.2);box-shadow:0 3px 10px #3b82f640}
+/* Match the space above template tabs to their 20px gap before the editor label. */
+.speedbox-infrastructure .template-card{padding-top:20px}
+
+/* Keep row actions together and give the visibility switch only its own space. */
+.speedbox-infrastructure .node-table th,.speedbox-infrastructure .node-table td{padding:8px 6px!important}
+.speedbox-infrastructure .node-table th:nth-child(1),.speedbox-infrastructure .node-table td:nth-child(1){width:48px}
+.speedbox-infrastructure .node-table th:nth-child(4),.speedbox-infrastructure .node-table td:nth-child(4){width:62px}
+.speedbox-infrastructure .node-table th:nth-child(8),.speedbox-infrastructure .node-table td:nth-child(8),.speedbox-infrastructure .node-table th:nth-child(9),.speedbox-infrastructure .node-table td:nth-child(9){width:70px}
+.speedbox-infrastructure .node-table th:last-child,.speedbox-infrastructure .node-table td:last-child{width:186px;min-width:186px}
+.speedbox-infrastructure .node-table .actions,.speedbox-infrastructure .plan-table .actions{flex-wrap:nowrap;white-space:nowrap}
+.speedbox-infrastructure .node-table .actions .button,.speedbox-infrastructure .plan-table .actions .button{flex-shrink:0}
+.speedbox-infrastructure .plan-table th{white-space:nowrap}
+.speedbox-infrastructure .plan-table [dir=ltr]{display:inline-block;white-space:nowrap}
+
+/* Compact editors retain Panel's outer modal and inner field-card surfaces. */
+.speedbox-infrastructure-overlay .infrastructure-modal.group-modal{width:min(460px,94vw);max-width:460px}
+.speedbox-infrastructure-overlay .infrastructure-modal.server-modal{width:min(576px,94vw);max-width:576px}
+.speedbox-infrastructure-overlay .infrastructure-modal.routing-modal,.speedbox-infrastructure-overlay .infrastructure-modal.plan-modal,.speedbox-infrastructure-overlay .infrastructure-modal.server-delete-modal{width:min(576px,94vw);max-width:576px}
+.speedbox-infrastructure-overlay .routing-modal .field{grid-template-columns:110px minmax(0,1fr)}
+.speedbox-infrastructure-overlay .plan-modal .form-grid{gap:20px}
+.speedbox-infrastructure-overlay .plan-modal .field{grid-template-columns:minmax(0,1fr);gap:9px;text-align:right}
+.speedbox-infrastructure-overlay .plan-modal .field>label{padding:0}
+:where(.speedbox-infrastructure,.speedbox-infrastructure-overlay) .plan-form-hint{display:block;grid-column:1/-1;line-height:1.9;font-size:11px;color:var(--muted);margin:0;text-align:right}
+.speedbox-infrastructure-overlay .server-delete-modal .form-actions>.button{display:inline-flex;align-items:center;justify-content:center;height:38px;padding:8px 20px;line-height:20px;font-size:12px;border-radius:12px;margin:0;box-shadow:none}
+.speedbox-infrastructure-overlay .button.server-delete-confirm{background:rgba(214,135,33,.45);border:1px solid rgba(255,255,255,.4);color:#fff;font-weight:700;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+.speedbox-infrastructure-overlay .button.server-delete-confirm:hover:not(:disabled){background:rgba(214,135,33,.7);border-color:#fff;color:#fff;box-shadow:none}
+.speedbox-infrastructure .panel-head .button.primary{height:38px;padding:0 24px;flex-shrink:0;line-height:1.5}
+@media(max-width:540px){.speedbox-infrastructure-overlay .routing-modal .field{grid-template-columns:minmax(0,1fr)}}
+
+/* Resource values are reported by the machine agent, never guessed by the UI. */
+.speedbox-infrastructure .server-resources{display:grid;gap:8px;min-width:155px;max-width:230px;margin:auto}
+.speedbox-infrastructure .resource-row{display:grid;grid-template-columns:auto 1fr;gap:4px 10px;align-items:center;font-size:10px}
+.speedbox-infrastructure .resource-label{display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
+.speedbox-infrastructure .resource-value{text-align:left;font-size:10px;color:var(--muted);white-space:nowrap}
+.speedbox-infrastructure .resource-meter{grid-column:1/-1;height:4px;background:#ffffff1f;border-radius:6px;overflow:hidden;direction:ltr}
+.speedbox-infrastructure .resource-meter i{display:block;height:100%;background:#22c55e;border-radius:inherit}
+.speedbox-infrastructure .resource-meter.medium i{background:#f59e0b}
+.speedbox-infrastructure .resource-meter.high i{background:#ef4444}
+.speedbox-infrastructure .resource-unseen,.speedbox-infrastructure .server-last-seen,.speedbox-infrastructure .server-system{display:block;font-size:10px;color:var(--muted);margin-top:5px}
+.speedbox-infrastructure .server-operation-label{display:block;font-size:10px;margin-top:5px}
+.speedbox-infrastructure .server-node-count{font-size:16px}
+.speedbox-infrastructure .server-operation-progress .deployment-progress{display:flex;align-items:center;direction:ltr;gap:8px;margin-top:8px;min-width:110px}
+.speedbox-infrastructure .server-operation-progress .deployment-progress .progress-value{flex:0 0 auto;margin:0;min-width:28px}
+.speedbox-infrastructure .server-operation-progress .deployment-progress .progress{flex:1;margin:0}
+.speedbox-infrastructure .server-operation-progress .deployment-progress:not(.failed) .progress span{background:#5bba96}
+.speedbox-infrastructure .server-operation-progress .deployment-progress.failed .progress span{background:#c98282}
+.speedbox-infrastructure-overlay .server-delete-description{line-height:2;margin:0;text-align:right}
+
+.speedbox-infrastructure .entity.node-identity{justify-content:center;text-align:center}
+.speedbox-infrastructure .node-identity small{text-align:center}
+:is(.speedbox-infrastructure,.speedbox-infrastructure-overlay) .protocol-dot{display:inline-block;flex:0 0 10px;width:10px;height:10px;border-radius:50%;border:1px solid #ffffff5c;margin-inline-end:6px;vertical-align:middle}
+.speedbox-infrastructure .node-number{display:inline-flex;align-items:center;justify-content:center;direction:ltr;gap:10px;white-space:nowrap}
+.speedbox-infrastructure .node-number .protocol-badge{margin:0}
+.speedbox-infrastructure .node-order-controls{display:flex;align-items:center;justify-content:center;gap:5px}
+.speedbox-infrastructure .node-order-controls>span{display:flex;flex-direction:column;gap:2px}
+.speedbox-infrastructure .node-order-controls button{display:grid;place-items:center;background:transparent;color:inherit;border:0;padding:0 4px;font:inherit;line-height:1.2;cursor:pointer}
+.speedbox-infrastructure .node-order-controls button:disabled{opacity:.3;cursor:default}
+.speedbox-infrastructure .node-order-controls .node-drag{cursor:grab;padding:8px}
+.speedbox-infrastructure .node-table .is-dragging{opacity:.45}
+.speedbox-infrastructure .node-table .node-drop-target td{box-shadow:inset 0 2px #ffffff80}
+:is(.speedbox-infrastructure,.speedbox-infrastructure-overlay) .button.entity-copy{appearance:none;cursor:pointer;background:linear-gradient(180deg,#4e386c,#8763a291)!important;color:#e9eef5;border:1px solid #ffffff5e;border-radius:10px;padding:5px 10px;font-size:11px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;height:29px;line-height:17px;margin:0;box-shadow:none;white-space:nowrap}
+:is(.speedbox-infrastructure,.speedbox-infrastructure-overlay) .button.entity-copy:hover:not(:disabled){filter:brightness(1.08)}
+
+/* XBoard field contract with the spacing and modal surfaces of Panel. */
+.speedbox-infrastructure-overlay .infrastructure-modal.node-modal{width:min(576px,94vw);max-width:576px;padding:18px;overflow:visible}
+.speedbox-infrastructure-overlay .node-modal .announcement-modal-heading{margin-bottom:22px}
+.speedbox-infrastructure-overlay .node-modal .node-protocol-head{display:flex;justify-content:center;align-items:center;margin-bottom:22px}
+.speedbox-infrastructure-overlay .node-modal .node-protocol-head>.field{display:block;width:180px;max-width:100%;margin:0}
+:is(.speedbox-infrastructure,.speedbox-infrastructure-overlay) .protocol-badge{display:inline-flex;align-items:center;justify-content:center;background:var(--protocol-color);color:var(--protocol-ink);border:1px solid #ffffff40;border-radius:7px;box-sizing:border-box;height:28px;padding:0 9px;font-size:11px;font-weight:600;line-height:1;vertical-align:middle;white-space:nowrap;direction:ltr}
+.speedbox-infrastructure-overlay .node-protocol-head .invoice-custom-select__trigger>span{display:flex;align-items:center}
+.speedbox-infrastructure-overlay .node-modal .node-editor-scroll{max-height:none;overflow:visible;padding:18px;text-align:right}
+.speedbox-infrastructure-overlay .node-modal .form-grid,.speedbox-infrastructure-overlay .node-sub-modal .form-grid{display:grid;grid-template-columns:minmax(0,1fr);gap:20px}
+.speedbox-infrastructure-overlay .node-modal .field,.speedbox-infrastructure-overlay .node-sub-modal .field{display:grid;grid-template-columns:minmax(0,1fr);gap:9px;min-width:0;text-align:right}
+.speedbox-infrastructure-overlay .node-modal .field>label,.speedbox-infrastructure-overlay .node-sub-modal .field>label{font-size:12px;padding:0;text-align:right;line-height:1.5}
+.speedbox-infrastructure-overlay .node-modal .field>textarea,.speedbox-infrastructure-overlay .node-sub-modal .field>textarea,.speedbox-infrastructure-overlay .node-modal .field>.button{grid-column:1}
+.speedbox-infrastructure-overlay .node-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;align-items:end;width:100%}
+.speedbox-infrastructure-overlay .node-row.name-rate{grid-template-columns:minmax(0,2fr) minmax(0,1fr)}
+.speedbox-infrastructure-overlay .node-protocol-fields:not(:empty),.speedbox-infrastructure-overlay .node-assignment{margin-top:26px}
+.speedbox-infrastructure-overlay .node-modal .switch-field,.speedbox-infrastructure-overlay .node-sub-modal .switch-field{display:flex;align-items:center;justify-content:space-between;min-height:38px;gap:10px;font-size:11px}
+.speedbox-infrastructure-overlay .node-row .switch-field{flex-direction:column;justify-content:center;gap:10px}
+.speedbox-infrastructure-overlay .node-modal textarea.form-input{min-height:70px;font-size:11px}
+.speedbox-infrastructure-overlay .node-modal .node-editor-footer{display:flex;align-items:center;flex-wrap:wrap;margin:16px 0 0;gap:8px}
+.speedbox-infrastructure-overlay .node-footer-spacer{flex:1}
+.speedbox-infrastructure-overlay .node-modal .node-editor-footer .button{font-size:11px;padding:8px 10px}
+.speedbox-infrastructure-overlay .node-rate-ranges{display:grid;gap:9px}
+.speedbox-infrastructure-overlay .node-rate-ranges[hidden]{display:none!important}
+.speedbox-infrastructure-overlay .node-rate-row{display:grid;grid-template-columns:1fr 1fr .7fr auto;gap:7px;align-items:center;min-width:0}
+.speedbox-infrastructure-overlay .node-rate-row input{width:100%;min-width:0;font-size:11px}
+.speedbox-infrastructure-overlay .node-ech-fields{display:grid;gap:12px}
+.speedbox-infrastructure-overlay .node-sub-backdrop{z-index:12500}
+.speedbox-infrastructure-overlay .node-sub-modal{width:min(var(--node-sub-width),94vw);max-width:var(--node-sub-width);min-width:0;padding:18px}
+.speedbox-infrastructure-overlay .node-sub-body{max-height:none;overflow:visible;padding:18px}
+.speedbox-infrastructure-overlay .node-sub-modal .node-json{min-height:260px;font-family:Consolas,monospace}
+.speedbox-infrastructure-overlay .node-network-presets,.speedbox-infrastructure-overlay .node-advanced-tabs{display:flex;gap:2px;overflow-x:auto;margin-bottom:18px;width:100%}
+.speedbox-infrastructure-overlay .node-network-presets .seg-btn,.speedbox-infrastructure-overlay .node-advanced-tabs .seg-btn{white-space:nowrap;flex:1;padding:8px 10px;font-size:11px}
+.speedbox-infrastructure-overlay .node-sub-modal .form-actions{margin-top:16px}
+@media(max-width:480px){.speedbox-infrastructure-overlay .node-rate-row{grid-template-columns:1fr 1fr}.speedbox-infrastructure-overlay .node-modal .node-editor-scroll{padding:12px}.speedbox-infrastructure-overlay .node-modal .node-editor-footer{gap:6px}.speedbox-infrastructure-overlay .node-row{gap:8px}.speedbox-infrastructure-overlay .node-sub-modal .node-json{min-height:200px}}
+
+.speedbox-infrastructure-overlay .node-row.node-tls-row{grid-template-columns:minmax(0,1fr) auto;align-items:end}
+.speedbox-infrastructure-overlay .node-row.node-tls-row .switch-field{flex-direction:row;align-items:center;justify-content:space-between;gap:10px;min-height:36px}
+.speedbox-infrastructure-overlay .node-tls-row .switch-field>span{white-space:nowrap}
+.speedbox-infrastructure-overlay .node-remote-field{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:end}
+.speedbox-infrastructure-overlay .node-remote-field>.button{white-space:nowrap}
+.speedbox-infrastructure-overlay .node-network-presets{flex-wrap:wrap;overflow:visible;gap:8px}
+@media(max-width:400px){.speedbox-infrastructure-overlay .node-row.node-tls-row,.speedbox-infrastructure-overlay .node-remote-field{grid-template-columns:minmax(0,1fr)}.speedbox-infrastructure-overlay .node-tls-row .switch-field{justify-content:space-between}}
+
+.speedbox-infrastructure .node-number .node-id-badge{display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;min-width:28px;height:28px;margin:0;padding:0 8px;border:1px solid #ffffff40;border-radius:7px;background:#ffffff0d;color:#d0d0d0;font-size:11px;font-weight:600;line-height:1;vertical-align:middle}
+/* The protocol itself is the picker surface; there is no inner badge. */
+.speedbox-infrastructure-overlay .node-protocol-head .protocol-select{width:100%;direction:ltr}
+.speedbox-infrastructure-overlay .node-protocol-head .protocol-select .invoice-custom-select__trigger,
+.speedbox-infrastructure-overlay .node-protocol-head .protocol-select .invoice-custom-select__option{display:flex!important;align-items:center;justify-content:space-between;box-sizing:border-box;width:100%;height:32px;min-height:32px;margin:0;padding:0 10px!important;border:1px solid #ffffff40!important;border-radius:7px!important;background:var(--protocol-color)!important;color:var(--protocol-ink)!important;font-size:11px;font-weight:600;line-height:1;direction:ltr;text-align:left;box-shadow:none!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
+.speedbox-infrastructure-overlay .node-protocol-head .protocol-select .invoice-custom-select__trigger>span{display:block;flex:1;margin:0;padding:0;line-height:1;text-align:left;color:inherit}
+.speedbox-infrastructure-overlay .node-protocol-head .protocol-select .invoice-custom-select__trigger>i{color:inherit;font-size:9px}
+.speedbox-infrastructure-overlay .node-protocol-head .protocol-select .invoice-custom-select__menu{display:grid;gap:6px;left:0;right:auto;width:100%;margin-top:6px;padding:0!important;background:transparent!important;border:0!important;border-radius:0!important;box-shadow:none!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important;direction:ltr}
+.speedbox-infrastructure-overlay .node-protocol-head .protocol-select .invoice-custom-select__menu[hidden]{display:none!important}
+.speedbox-infrastructure-overlay .node-protocol-head .protocol-select .invoice-custom-select__option{justify-content:flex-start}
+.speedbox-infrastructure-overlay .node-protocol-head .protocol-select .invoice-custom-select__option:focus-visible{outline:1px solid #fff;outline-offset:-3px}
+
+.speedbox-infrastructure-overlay .plan-modal .form-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+@media(max-width:600px){.speedbox-infrastructure-overlay .plan-modal .form-grid{grid-template-columns:minmax(0,1fr)}}
+
+/* Routing create actions match the server/node toolbar create buttons. */
+/* Opaque reference colors from the server-create button screenshot prevent card tint. */
+.speedbox-infrastructure .panel-head .button.primary.routing-create{height:38px;padding:0 24px;line-height:1.5;margin:0;border-radius:10px;border:1px solid #6b6d73;background:linear-gradient(180deg,#494e55 0%,#494b50 25%,#49484a 55%,#494340 100%);backdrop-filter:none;-webkit-backdrop-filter:none;color:#fff;box-shadow:0 3px 10px #3b82f640}
+.speedbox-infrastructure .panel-head .button.primary.routing-create:hover:not(:disabled){background:#3a3a3a;color:#fff;border-color:#626262}
+@media(max-width:540px){.speedbox-infrastructure .panel-head .button.primary.routing-create{padding-inline:24px}}
+
+/* White representative fields keep their own surface when expanded. */
+.continuous-select-white .invoice-custom-select__trigger{height:30px;border:2px solid transparent;border-radius:12px;padding:0 14px;background:#fff;color:#000000bd;font-size:10px;box-shadow:none}
+.continuous-select-white.is-open .invoice-custom-select__trigger{border-radius:12px 12px 0 0}
+.continuous-select-white .invoice-custom-select__menu{background:#fff;color:#000000bd;border:2px solid transparent;border-top:0;border-radius:0 0 12px 12px;box-shadow:0 8px 16px rgba(0,0,0,.18);padding:4px}
+.continuous-select-white .invoice-custom-select__option{color:#000000bd;font-size:10px;border-radius:7px}
+.continuous-select-white .invoice-custom-select__option:hover,.continuous-select-white .invoice-custom-select__option:focus-visible,.continuous-select-white .invoice-custom-select__option.is-selected:hover{background:#aeb1b5;color:#171717}
+.continuous-select-white .invoice-custom-select__option.is-selected{background:#c7c9cc;color:#171717}
+.continuous-select-white button:focus-visible{outline-color:#888}
+.continuous-select-white .invoice-custom-select__trigger:disabled{opacity:.85;color:#fff;background:radial-gradient(120% 120% at 50% -10%,#67adb6,#80808045 60%),linear-gradient(180deg,#20404bc4,#60947c);font-size:12px;cursor:not-allowed}
+.tariff-plan-select:has(#admin-create-code-mode){width:180px;max-width:100%;margin-inline:auto}
+
+
+/* Align only the requested icons with their Persian labels. */
+.speedbox-infrastructure .stat-icon-server .stat-label>i,
+.speedbox-infrastructure .stat-icon-heartbeat .stat-label>i,
+.speedbox-infrastructure .stat-icon-project-diagram .stat-label>i,
+.speedbox-infrastructure #serverSummary .stat-label>i{position:relative;top:2px}
+.speedbox-infrastructure .node-traffic{min-width:125px;display:grid;gap:5px;text-align:center}
+.speedbox-infrastructure .node-traffic>span{font-variant-numeric:tabular-nums;white-space:nowrap;font-size:12px}
+.speedbox-infrastructure .node-traffic>small{font-size:10px;color:#a4afc0}
+.speedbox-infrastructure .node-traffic-bar{height:5px;background:#ffffff15;border-radius:8px;overflow:hidden;direction:ltr}
+.speedbox-infrastructure .node-traffic-bar>span{display:block;height:100%;background:#54b5df;border-radius:inherit}
+.speedbox-infrastructure .node-traffic-bar>span.danger{background:#e76b73}
+
+
+/* Compact dashboard overview; management keeps the full detail. */
+.speedbox-infrastructure .recent-server-list{display:grid;gap:10px}
+.speedbox-infrastructure .recent-server-item{padding:12px;border:1px solid rgba(255,255,255,.14);border-radius:12px;background:linear-gradient(145deg,rgba(255,255,255,.045),rgba(255,255,255,.025));min-width:0}
+.speedbox-infrastructure .recent-server-item>header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px}
+.speedbox-infrastructure .recent-server-name{min-width:0;display:grid;gap:4px}
+.speedbox-infrastructure .recent-server-name b{font-size:12px;line-height:1.7;overflow-wrap:anywhere}
+.speedbox-infrastructure .recent-server-name small{font-size:10px;color:var(--muted);text-align:right;overflow-wrap:anywhere}
+.speedbox-infrastructure .recent-server-item>footer{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:10px;color:var(--muted)}
+.speedbox-infrastructure .recent-server-item>footer b{font-weight:600;color:#dce2eb;margin-inline-start:4px}
+/* Single cards match mobile users; controls remain on their original elements. */
+@media(max-width:760px){
+.speedbox-infrastructure .configuration-tabs,.speedbox-infrastructure .template-tabs{display:flex;flex-wrap:nowrap;width:100%;max-width:100%;min-width:0;justify-content:center;align-items:stretch;direction:rtl;overflow:hidden;padding:0;gap:0;border-radius:12px}
+.speedbox-infrastructure .configuration-tabs .seg-btn,.speedbox-infrastructure .template-tabs .seg-btn{display:flex;align-items:center;justify-content:center;flex:1 1 0;min-width:0;width:auto;white-space:normal;padding:9px 4px;min-height:42px;font-size:11px;line-height:1.6;text-align:center;overflow-wrap:anywhere;border-radius:0}
+.speedbox-infrastructure .template-tabs .seg-btn{padding-inline:2px;font-size:clamp(9px,2.65vw,11px)}
+.speedbox-infrastructure .panel-card.entity-list-shell{padding:0;border:0;background:transparent;box-shadow:none;backdrop-filter:none;-webkit-backdrop-filter:none}
+.speedbox-infrastructure .mobile-entity-wrap{border:0;overflow:visible;border-radius:0;background:transparent}
+.speedbox-infrastructure .mobile-entity-table{display:block;width:100%;min-width:0;background:transparent}
+.speedbox-infrastructure .mobile-entity-table thead{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+.speedbox-infrastructure .mobile-entity-table tbody{display:grid;gap:12px}
+.speedbox-infrastructure .mobile-entity-table tbody tr{position:relative;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;padding:12px;border:1px solid rgba(0,180,255,.28);border-radius:12px;background:radial-gradient(120% 120% at 50% -10%,rgba(0,160,255,.14),transparent 60%),linear-gradient(180deg,rgba(255,255,255,.07),rgba(255,255,255,.04));box-shadow:0 6px 18px rgba(0,0,0,.28),inset 0 1px 0 rgba(255,255,255,.12);min-width:0}
+.speedbox-infrastructure .mobile-entity-table[data-mobile-layout] tbody tr td:not(.entity-actions-cell){display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;min-width:0;width:auto;max-width:none;height:auto;min-height:62px;padding:10px!important;border:1px dashed rgba(255,255,255,.12);border-radius:10px;background:#00000061;white-space:normal;overflow-wrap:anywhere;text-align:center;font-size:11px}
+.speedbox-infrastructure .mobile-entity-table td::before{content:attr(data-label);display:block;font-size:10px;font-weight:900;color:#f0b98d;line-height:1.6;white-space:normal}
+.speedbox-infrastructure .mobile-entity-table[data-mobile-layout] tbody tr .entity-actions-cell{display:block;grid-column:1/-1;min-width:0;width:auto;height:auto;min-height:0;background:transparent!important;border:0!important;border-radius:0;box-shadow:none;padding:4px 0 0!important}
+.speedbox-infrastructure .mobile-entity-table .entity-actions-cell::before{display:none}
+.speedbox-infrastructure .mobile-entity-table .actions{width:100%;min-width:0;gap:8px;flex-wrap:wrap;white-space:normal;background:transparent;border:0;box-shadow:none;padding:0}
+.speedbox-infrastructure .mobile-entity-table .actions .button{flex:1 1 auto;min-width:0;min-height:36px;margin:0;padding:8px 10px;font-size:11px;line-height:1.6;white-space:normal}
+.speedbox-infrastructure .mobile-entity-table .entity{width:100%;justify-content:center;text-align:center}
+.speedbox-infrastructure .mobile-entity-table .entity>div{min-width:0;max-width:100%}
+.speedbox-infrastructure .mobile-entity-table .entity b{font-size:13px;line-height:1.8;overflow-wrap:anywhere}
+.speedbox-infrastructure .mobile-entity-table .entity small{white-space:normal;overflow-wrap:anywhere;text-align:center;line-height:1.8}
+.speedbox-infrastructure .mobile-entity-table[data-mobile-layout=servers] tbody tr td:first-child,.speedbox-infrastructure .mobile-entity-table[data-mobile-layout=plans] tbody tr td:first-child,.speedbox-infrastructure .mobile-entity-table[data-mobile-layout=nodes] tbody tr td:nth-child(3){grid-column:1/-1;order:-1;min-height:76px;border:1px dashed rgba(255,255,255,.12);border-radius:10px;padding:12px!important;background:#00000061;font-size:13px;font-weight:700;justify-content:center}
+.speedbox-infrastructure .mobile-entity-table[data-mobile-layout=servers] tbody tr td:first-child::before,.speedbox-infrastructure .mobile-entity-table[data-mobile-layout=plans] tbody tr td:first-child::before,.speedbox-infrastructure .mobile-entity-table[data-mobile-layout=nodes] tbody tr td:nth-child(3)::before{display:none}
+.speedbox-infrastructure .mobile-entity-table[data-mobile-layout=servers] tbody tr td:nth-child(4),.speedbox-infrastructure .mobile-entity-table[data-mobile-layout=servers] tbody tr td:nth-child(5),.speedbox-infrastructure .mobile-entity-table[data-mobile-layout=plans] tbody tr td:nth-child(6){grid-column:1/-1}
+.speedbox-infrastructure .mobile-entity-table .server-resources{width:100%;min-width:0;max-width:none}
+.speedbox-infrastructure .mobile-entity-table .deployment-progress{width:100%;max-width:100%;min-width:0}
+.speedbox-infrastructure .mobile-entity-table[data-mobile-layout=nodes] tbody tr td:first-child{position:absolute;top:21px;right:19px;width:32px;min-height:0;padding:0!important;border:0;background:transparent;gap:0;z-index:1}
+.speedbox-infrastructure .mobile-entity-table[data-mobile-layout=nodes] tbody tr td:first-child::before{display:none}
+.speedbox-infrastructure .mobile-entity-table[data-mobile-layout=nodes] tbody tr td:nth-child(3){padding-inline:48px!important}
+.speedbox-infrastructure .mobile-entity-table[data-mobile-layout=nodes] tbody tr td:nth-child(7),.speedbox-infrastructure .mobile-entity-table[data-mobile-layout=nodes] tbody tr td:nth-child(10){grid-column:1/-1}
+.speedbox-infrastructure .mobile-entity-table .node-traffic{width:100%;min-width:0;max-width:none}
+.speedbox-infrastructure .mobile-entity-table .node-order-controls{justify-content:center;gap:0}
+.speedbox-infrastructure .mobile-entity-table .node-order-controls .node-drag{display:none}
+.speedbox-infrastructure .mobile-entity-table .node-order-controls>span{gap:4px}
+.speedbox-infrastructure .mobile-entity-table .node-order-controls button{min-width:30px;min-height:24px;border-radius:6px;background:rgba(255,255,255,.06)}
+.speedbox-infrastructure .mobile-entity-table .node-identity,.speedbox-infrastructure .mobile-entity-table .server-identity{min-width:0}
+}
+
+/* Token controls share the same hit area and icon size. */
+.speedbox-infrastructure .configuration-secret .token-eye,.speedbox-infrastructure .configuration-secret .token-generate{top:0!important;transform:none;width:38px;height:38px;padding:0;display:grid;place-items:center;font-size:13px;line-height:1}
+.speedbox-infrastructure .configuration-secret .token-generate{right:38px}
+.speedbox-infrastructure .configuration-secret .token-eye i,.speedbox-infrastructure .configuration-secret .token-generate i{font-size:13px;line-height:1}
+
+/* Focused review: job information and first mobile render. */
+.speedbox-infrastructure-overlay .infrastructure-modal.job-modal{width:min(580px,92vw);max-width:580px}
+.speedbox-infrastructure-overlay .job-detail-grid .job-error-detail{grid-column:1/-1;padding:12px 0 0;border-bottom:0;color:#f2b9b9}
+.speedbox-infrastructure .queue-run-status.is-running svg{color:#4ade80}
+.speedbox-infrastructure .queue-run-status.is-stopped svg{color:#f87171}
+@media(max-width:760px){
+ .speedbox-infrastructure .mobile-entity-table[data-mobile-layout] tbody tr .entity-loading-cell{grid-column:1/-1;min-height:82px;background:transparent;border:0}
+ .speedbox-infrastructure .entity-loading-cell::before{display:none}
+ .speedbox-infrastructure-overlay .job-detail-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:4px 14px;font-size:11px}
+ .speedbox-infrastructure-overlay .infrastructure-modal.job-modal{padding:16px}
+}
+

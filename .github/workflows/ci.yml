@@ -1,0 +1,91 @@
+name: Panel SpeedBox CI
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+
+jobs:
+  panel:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: speedbox-test
+          MYSQL_DATABASE: speedbox_ci
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="mysqladmin ping -pspeedbox-test"
+          --health-interval=10s --health-timeout=5s --health-retries=10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mbstring, bcmath, pdo_sqlite, pdo_mysql, gd, zip, dom
+          coverage: none
+      - run: composer install --prefer-dist --no-interaction --no-progress
+      - run: cp .env.example .env
+      - name: PHP syntax
+        run: find app config database routes -name '*.php' -print0 | xargs -0 -n1 php -l
+      - name: Unit tests
+        run: php artisan test --testsuite=Unit
+      - name: SpeedBox integration tests
+        run: php artisan test --filter=SpeedboxInfrastructureTest
+      - name: Preventive runtime regression
+        run: php scripts/tests/preventive-runtime.test.php
+      - name: Preventive MySQL renewals and concurrent admission
+        env:
+          SPEEDBOX_TEST_MYSQL_PORT: '3306'
+          SPEEDBOX_TEST_MYSQL_USER: root
+          SPEEDBOX_TEST_MYSQL_PASSWORD: speedbox-test
+        run: php scripts/tests/preventive-runtime.test.php --mysql --timed
+      - name: Fresh MySQL installation
+        env:
+          DB_CONNECTION: mysql
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_DATABASE: speedbox_ci
+          DB_USERNAME: root
+          DB_PASSWORD: speedbox-test
+        run: php artisan migrate --force
+
+  agent:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: agent
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: agent/go.mod
+          cache-dependency-path: agent/go.sum
+      - run: go test ./internal/...
+      - run: make build-all
+      - uses: actions/upload-artifact@v4
+        # Only release-agent consumes these archives, and it runs on version tags.
+        if: startsWith(github.ref, 'refs/tags/v')
+        with:
+          name: speedbox-agent-linux
+          path: |
+            agent/xboard-node-linux-*
+            agent/xbctl-linux-*
+
+  release-agent:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [panel, agent]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: speedbox-agent-linux
+          path: dist
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+

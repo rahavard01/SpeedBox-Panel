@@ -1,0 +1,22 @@
+/* The native control sits over the original trigger; its own skin is invisible. */
+@media(max-width:767px){
+ select.form-input:not(.speedbox-native-select):not(.infrastructure-native-select),select.edit-input,select.sel{padding-block:0;line-height:normal;font-family:inherit}
+ .speedbox-native-surface,.invoice-custom-select:has(>.infrastructure-native-select){position:relative;min-width:0}
+ .speedbox-native-surface>.speedbox-native-select,
+ .invoice-custom-select>.infrastructure-native-select,
+ .speedbox-panel-switch>.speedbox-panel-native{position:absolute!important;inset:0 auto auto 0!important;z-index:2;display:block!important;box-sizing:border-box;width:100%!important;height:38px!important;min-height:0!important;max-width:100%;margin:0!important;padding:0!important;border:0!important;border-radius:10px;opacity:0!important;pointer-events:auto!important;clip:auto!important;clip-path:none!important;font:inherit;font-size:16px!important;cursor:pointer;direction:rtl}
+ .speedbox-native-surface.invoice-custom-select>.invoice-custom-select__trigger,
+ .invoice-custom-select:has(>.infrastructure-native-select)>.invoice-custom-select__trigger{display:grid;align-items:center;box-sizing:border-box;line-height:1.6;padding-block:0}
+ .invoice-custom-select:has(>.infrastructure-native-select)>.invoice-custom-select__menu{display:none!important}
+ .speedbox-native-surface:focus-within>.invoice-custom-select__trigger,
+ .invoice-custom-select:has(>.infrastructure-native-select:focus-visible)>.invoice-custom-select__trigger{outline:2px solid #ffffff80;outline-offset:2px}
+ .speedbox-native-surface:has(>select:disabled){opacity:.5}
+ .speedbox-native-surface>select:disabled{pointer-events:none!important}
+ .tariff-plan-select>.speedbox-native-select{height:30px!important}
+ .protocol-select>.infrastructure-native-select{height:32px!important;direction:ltr}
+ .speedbox-panel-switch>.speedbox-panel-native{height:100%!important}
+ .speedbox-panel-switch.speedbox-panel-switch--above .speedbox-panel-switch__trigger{max-width:calc(100vw - 32px);height:30px;min-height:30px;padding:0 10px;gap:8px;font-size:11px;line-height:1.6}
+ .speedbox-panel-switch__trigger span{display:block;line-height:1.6;overflow:visible}
+ .speedbox-mobile-custom{display:block;margin-top:6px}
+}
+@media(min-width:768px){.speedbox-mobile-custom{display:none}}

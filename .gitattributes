@@ -1,0 +1,8 @@
+* text=auto
+*.sh text eol=lf
+
+# Generated bundles may contain significant spaces in multiline string literals.
+public/build/assets/* whitespace=-blank-at-eol
+
+# Compressed Linux executables must never undergo text conversion.
+agent-dist/*.tar.gz binary

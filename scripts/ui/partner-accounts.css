@@ -1,0 +1,74 @@
+.speedbox-online-count{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-width:70px;box-sizing:border-box;border:1px solid #67aee54a;background:#4c9dcc15;color:#9ac8ec;border-radius:8px;padding:5px 9px;font-size:11px;font-weight:700;white-space:nowrap;font-variant-numeric:tabular-nums;direction:ltr;font-family:"Vazirmatn Variable",Vazirmatn,ui-sans-serif,system-ui,sans-serif}.speedbox-online-count i{font-size:10px;flex-shrink:0}.speedbox-online-count bdi{display:inline-block;font:inherit;white-space:nowrap;line-height:1.4}.speedbox-online-count.is-offline{color:#9da7b8;border-color:#ffffff20;background:#ffffff07}.speedbox-online-count.is-at-limit{color:#ffadad;background:#dc5b5b18;border-color:#df73734f}.users-table .speedbox-online-column{white-space:nowrap}
+.speedbox-partner-history .speedbox-partner-history-menu{position:fixed;z-index:12000;max-height:calc(100dvh - 24px);overflow-y:auto;padding:4px;background:radial-gradient(120% 120% at 50% -10%,rgba(87,166,255,.10),transparent 60%),linear-gradient(180deg,rgba(87,166,255,.08),rgba(255,255,255,.05)),rgba(28,33,41,.45);border:1px solid rgba(255,255,255,.2);border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,.35),0 0 12px rgba(0,123,255,.2);backdrop-filter:blur(20px) saturate(150%);-webkit-backdrop-filter:blur(20px) saturate(150%)}
+.speedbox-partner-history .speedbox-partner-history-menu button{display:flex;align-items:center;gap:8px;width:100%;padding:8px 9px;color:#d8deeb;background:transparent;border:0;border-radius:7px;font:inherit;font-size:11px;font-weight:700;text-align:right;cursor:pointer}
+.speedbox-partner-history .speedbox-partner-history-menu button i{width:16px;font-size:11px;text-align:center;flex-shrink:0;color:#9ac8ec}
+.speedbox-partner-history .speedbox-partner-history-menu button:hover,.speedbox-partner-history .speedbox-partner-history-menu button:focus-visible{color:#fff;background:linear-gradient(180deg,rgba(87,166,255,.2),rgba(255,255,255,.07))}
+.speedbox-partner-history .speedbox-partner-history-menu button:focus-visible{outline:1px solid rgba(255,255,255,.5);outline-offset:-1px}
+.speedbox-partner-history .speedbox-partner-history-menu .is-danger,.speedbox-partner-history .speedbox-partner-history-menu .is-danger i{color:#ffadad}
+.speedbox-partner-history .account-operation-overlay *{box-sizing:border-box}
+.speedbox-partner-history .account-operation-overlay .account-operation-backdrop{z-index:13000}
+.speedbox-partner-history .account-operation-overlay .account-operation-modal{position:relative;inset:auto;transform:none;margin:0;width:min(576px,94vw);min-width:0;max-width:576px;padding:18px;font-family:inherit;line-height:1.6}
+.speedbox-partner-history .account-operation-header{position:relative;min-height:30px;margin-bottom:22px}
+.speedbox-partner-history .account-operation-header h3{margin:0;font:inherit;font-size:18px;font-weight:700}
+.speedbox-partner-history .operation-warning{line-height:2;background:rgba(217,139,51,.12);border:1px solid rgba(220,168,87,.25);border-radius:10px;padding:12px;margin:14px 0;color:#f2d6ae;font-weight:400}
+.speedbox-partner-history .operation-empty,.speedbox-partner-history .operation-loading{padding:20px;text-align:center;color:#ffffffa6}
+.speedbox-partner-history .operation-confirmation .operation-warning{margin:0}
+.speedbox-partner-history .reset-log-card{background:rgba(255,255,255,.03);border:1px dashed rgba(255,255,255,.12);border-radius:10px;padding:12px;margin-top:12px}
+.speedbox-partner-history .reset-log-card>div{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+.speedbox-partner-history .reset-log-card time{margin-right:auto;color:#ffffffa6;font-weight:400}
+.speedbox-partner-history .reset-log-card p{line-height:1.9;margin:8px 0 0;overflow-wrap:anywhere;font-weight:400}
+@media(max-width:600px){.speedbox-partner-history .account-operation-overlay .account-operation-modal{padding:18px}
+}
+.speedbox-partner-history .account-operation-overlay .account-operation-modal.account-reset-modal{width:min(760px,94vw);max-width:760px}
+.speedbox-partner-history .account-operation-modal.account-reset-modal .reset-panel{padding:18px;background:linear-gradient(145deg,rgba(255,255,255,.06),rgba(255,255,255,.02));border:1px solid rgba(255,255,255,.16);border-radius:16px;text-align:right}
+.speedbox-partner-history .account-operation-modal.account-reset-modal .reset-card-grid{direction:rtl;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;align-items:stretch}
+.speedbox-partner-history .account-operation-modal.account-reset-modal .reset-history-grid{direction:rtl;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,2fr);gap:16px;align-items:stretch}
+.speedbox-partner-history .account-operation-modal.account-reset-modal .reset-surface{direction:rtl;display:flex;flex-direction:column;min-width:0;gap:14px;padding:16px;margin:0;border:1px solid rgba(255,255,255,.15);border-radius:12px;background:linear-gradient(145deg,rgba(255,255,255,.055),rgba(255,255,255,.025));text-align:right;box-sizing:border-box}
+.speedbox-partner-history .account-operation-modal.account-reset-modal h4{display:flex;align-items:center;gap:9px;margin:0;font-size:12px;font-weight:700;line-height:1.8}
+.speedbox-partner-history .account-operation-modal.account-reset-modal h4 i{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:8px;background:rgba(87,166,255,.16);color:#91c4ff;font-size:13px;flex-shrink:0}
+.speedbox-partner-history .account-operation-modal.account-reset-modal .reset-info-card{background:linear-gradient(145deg,rgba(60,130,210,.14),rgba(60,130,210,.04));border-color:rgba(110,175,245,.25)}
+.speedbox-partner-history .account-operation-modal.account-reset-modal .reset-notice-card{background:linear-gradient(145deg,rgba(245,166,45,.15),rgba(245,166,45,.055));border-color:rgba(245,183,75,.3);color:#f5d49a}
+.speedbox-partner-history .account-operation-modal.account-reset-modal .reset-notice-card h4 i{background:rgba(245,166,45,.15);color:#f5bb58}
+.speedbox-partner-history .reset-notice-card ul{display:grid;gap:14px;list-style:disc;margin:9px 0 0;padding-inline-start:16px;font-size:11px;font-weight:400;line-height:1.8}
+.speedbox-partner-history .reset-information,.speedbox-partner-history .reset-summary,.speedbox-partner-history .reset-log-details{margin:0;min-width:0}
+.speedbox-partner-history .reset-information>div{display:flex;align-items:baseline;justify-content:space-between;gap:12px;padding:9px 0;border-bottom:1px solid rgba(255,255,255,.12)}
+.speedbox-partner-history .reset-information>div:last-child,.speedbox-partner-history .reset-summary>div:last-child{border-bottom:0;padding-bottom:0}
+.speedbox-partner-history .reset-information dt,.speedbox-partner-history .reset-summary dt,.speedbox-partner-history .reset-log-details dt{color:#ffffffa6;font-size:10px;font-weight:400}
+.speedbox-partner-history .reset-information dd{margin:0;font-size:11px;text-align:left;overflow-wrap:anywhere}
+.speedbox-partner-history .reset-summary>div{display:grid;gap:5px;padding:12px 0;border-bottom:1px solid rgba(255,255,255,.12)}
+.speedbox-partner-history .reset-summary dd{margin:0;text-align:right;font-size:11px;overflow-wrap:anywhere}
+.speedbox-partner-history .reset-summary>div:first-child dd{font-size:16px}
+.speedbox-partner-history .reset-records-card>header{display:grid;gap:5px}
+.speedbox-partner-history .reset-records-card>header small{font-size:10px;font-weight:400;color:#ffffffa6}
+.speedbox-partner-history .reset-records-scroll{height:300px;min-height:300px;overflow-y:auto;padding-inline-end:4px;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.2) transparent}
+.speedbox-partner-history .reset-records-scroll .reset-log-card{margin:0 0 10px;padding:12px;border-style:solid;background:rgba(255,255,255,.03)}
+.speedbox-partner-history .reset-log-tags{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+.speedbox-partner-history .reset-log-tags span{padding:2px 6px;border:1px solid rgba(255,255,255,.2);border-radius:5px;font-size:9px;font-weight:400}
+.speedbox-partner-history .reset-log-tags span+span{background:rgba(255,255,255,.07)}
+.speedbox-partner-history .reset-log-details{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.speedbox-partner-history .reset-log-details dt{display:flex;align-items:center;gap:5px;font-size:9px}
+.speedbox-partner-history .reset-log-details dd{margin:5px 0 0;font-size:10px}
+.speedbox-partner-history .reset-used{color:#ffadad}
+.speedbox-partner-history .reset-records-card .operation-empty i{font-size:28px;opacity:.3;margin:15px 0}
+@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){.speedbox-partner-history .speedbox-partner-history-menu{background:linear-gradient(180deg,#34567c,#253449)}
+}
+@media(max-width:600px){.speedbox-partner-history .account-operation-modal.account-reset-modal .reset-card-grid,.speedbox-partner-history .account-operation-modal.account-reset-modal .reset-history-grid{grid-template-columns:minmax(0,1fr)}
+.speedbox-partner-history .account-operation-modal.account-reset-modal .reset-panel{padding:12px}
+}
+
+.speedbox-partner-history{direction:rtl;font-family:"Vazirmatn Variable",Vazirmatn,ui-sans-serif,system-ui,sans-serif}
+.users-table .expiry-badge,.mobile-expiry-box .expiry-badge{font-family:"Vazirmatn Variable",Vazirmatn,ui-sans-serif,system-ui,sans-serif!important;line-height:1.6;font-variant-numeric:tabular-nums}
+.speedbox-partner-history .account-operation-modal .account-operation-header{margin-bottom:22px}
+.speedbox-partner-history .account-operation-modal .traffic-modal-subtitle{margin:-5px auto 17px}
+.speedbox-partner-history .speedbox-history-back{margin:20px 0 0;text-align:center}
+.speedbox-partner-history .speedbox-history-back button{display:inline-block;padding:8px 20px;background:#f006;color:#fff;border:1px solid rgba(255,255,255,.4);border-radius:12px;font:inherit;font-size:12px;font-weight:300;cursor:pointer;transition:all .3s ease;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+.speedbox-partner-history .speedbox-history-back button:hover{background:#ff0000b3;color:#fff;border-color:#fff}
+.speedbox-partner-history .speedbox-history-retry{padding:7px 12px;border:1px solid #ffffff40;border-radius:8px;background:#ffffff12;color:#fff;font:inherit;font-size:11px;cursor:pointer}
+.users-table.speedbox-partner-accounts-table th.account-plan-col,.users-table.speedbox-partner-accounts-table td.account-plan-cell{width:95px;min-width:90px;max-width:120px;padding-inline:7px}
+.users-table.speedbox-partner-accounts-table td.account-plan-cell .account-plan-badge{max-width:110px;padding-inline:7px}
+.users-table.speedbox-partner-accounts-table th:nth-child(4),.users-table.speedbox-partner-accounts-table td:nth-child(4){min-width:90px;width:95px;padding-inline:7px}
+.users-table.speedbox-partner-accounts-table th:nth-child(7),.users-table.speedbox-partner-accounts-table td:nth-child(7){min-width:190px;width:210px;padding-inline:12px}
+.users-table.speedbox-partner-accounts-table th:nth-child(8),.users-table.speedbox-partner-accounts-table td:nth-child(8){min-width:120px;width:130px;padding-inline:10px;white-space:nowrap}
+.users-table.speedbox-partner-accounts-table th:nth-child(9),.users-table.speedbox-partner-accounts-table td:nth-child(9){min-width:150px;width:160px;padding-inline:10px}
+.speedbox-code-lock-note{display:block;margin-top:6px;color:#64748b;font-size:11px}.edit-input[readonly]{background:#edf2f7;color:#64748b}
+
