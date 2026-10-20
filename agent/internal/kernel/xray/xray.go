@@ -816,3 +816,4 @@ func (x *Xray) SetConnectionAdmission(fn admission.AcquireFunc) {
  x.mu.Lock();defer x.mu.Unlock();x.admissionFunc=fn
  if x.limitDispatcher!=nil{x.limitDispatcher.SetConnectionAdmission(fn)}
 }
+

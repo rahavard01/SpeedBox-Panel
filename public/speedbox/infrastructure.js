@@ -17,6 +17,8 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
   let nodeFetchVersion = 0;
   let nodeEditorDispose = null;
   let emergencySession = null;
+  let tunnelSession = null;
+  let modalCloseHandler = null;
   let draggingNode = null;
   const later = (callback, delay) => { const id = setTimeout(() => { timers.delete(id); if (!disposed) callback(); }, delay); timers.add(id); return id; };
   const apiBase = '/api/admin/infrastructure';
@@ -32,7 +34,7 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
   const content = scope.getElementById('content');
   const modalBackdrop = scope.getElementById('modalBackdrop');
   const titles = {
-    configuration:'پیکربندی سیستم', overview:'داشبورد', servers:'مدیریت سرورها', nodes:'مدیریت نودها', 'emergency-configs':'کانفیگ‌های اضطراری',
+    tunnels:'مدیریت تونل‌ها', configuration:'پیکربندی سیستم', overview:'داشبورد', servers:'مدیریت سرورها', nodes:'مدیریت نودها', 'emergency-configs':'کانفیگ‌های اضطراری',
     plans:'مدیریت پلن‌ها', routing:'گروه‌های دسترسی و مسیریابی', settings:'تنظیمات سرورها',
     'site-settings':'تنظیمات سایت', 'security-settings':'تنظیمات امنیت',
     'subscription-settings':'تنظیمات سابسکرایب', 'server-settings':'تنظیمات سرورها',
@@ -84,9 +86,10 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
   function loadingTable(headers,kind=''){const markup=`<div class="table-wrap"><table><thead><tr>${headers.map(label=>`<th>${escape(label)}</th>`).join('')}</tr></thead><tbody><tr><td class="entity-loading-cell" colspan="${headers.length}">${loading()}</td></tr></tbody></table></div>`;return kind?entityCardLayout(markup,kind):markup;}
   function loading(){ return '<div class="loading" role="status" aria-live="polite"><i class="fas fa-spinner fa-spin" aria-hidden="true"></i><span>در حال دریافت اطلاعات…</span></div>'; }
   function openModal(title,body,options={}){
+    modalCloseHandler=options.onClose||null;
     nodeEditorDispose?.(); nodeEditorDispose=null;
     overlay.querySelector('.infrastructure-modal').classList.toggle('node-modal',!!options.node);
-    for(const kind of ['group','routing','plan','server','server-delete','job','emergency','emergency-delete']) overlay.querySelector('.infrastructure-modal').classList.toggle(`${kind}-modal`, options.kind===kind);
+    for(const kind of ['group','routing','plan','server','server-delete','job','emergency','emergency-delete','tunnel']) overlay.querySelector('.infrastructure-modal').classList.toggle(`${kind}-modal`, options.kind===kind);
     scope.getElementById('modalTitle').textContent=title;
     const modalBody=scope.getElementById('modalBody');
     modalBody.innerHTML=body;
@@ -101,7 +104,7 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
     modalBody.querySelectorAll('[data-close]').forEach(button=>{button.classList.add('cancel');button.onclick=closeModal;});
     modalBackdrop.hidden=false; modalBackdrop.scrollTop=0; document.body.style.overflow='hidden';
   }
-  function closeModal(force=false){ if(savingCount && force!==true)return; nodeEditorDispose?.();nodeEditorDispose=null;modalBackdrop.hidden=true; document.body.style.overflow=''; }
+  function closeModal(force=false){ if(savingCount && force!==true)return; nodeEditorDispose?.();nodeEditorDispose=null;modalBackdrop.hidden=true; document.body.style.overflow='';const handler=modalCloseHandler;modalCloseHandler=null;handler?.(); }
   modalBackdrop.addEventListener('click',e=>{if(e.target===modalBackdrop)closeModal()});
 
   async function loadView(){
@@ -116,6 +119,13 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
         emergencySession=window.SpeedboxEmergencyConfigs.mount(content,{api,toast,openModal,closeModal,modalBody:()=>scope.getElementById('modalBody')});
         await emergencySession.load();
       }
+      if(currentView==='tunnels') {
+        tunnelSession?.dispose();
+        tunnelSession=window.SpeedboxTunnels.mount(content,{api,toast,openModal,closeModal,modalBody:()=>scope.getElementById('modalBody'),navigate:switchView,enhanceControls,
+          openNode:async(node,prefill)=>{const [nodes,machines,groups,routes]=await Promise.all([api('/nodes'),api('/machines'),api('/groups'),api('/routes')]);state.nodes=nodes.data;state.kernelCapabilities=nodes.meta?.kernel_capabilities;state.machines=machines.data;state.groups=groups.data;state.routes=routes.data;nodeForm(node?.id?state.nodes.find(n=>n.id===node.id):null,prefill);}
+        });
+        await tunnelSession.load();
+      }
       if(currentView==='plans') await loadPlans();
       if(currentView==='routing') await loadRouting();
       if(currentView==='configuration' || configurationViews[currentView]) await loadSystemConfiguration();
@@ -125,9 +135,9 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
   function renderOverview(o,initial=false){
     content.innerHTML=`
       <div class="stats-grid">
-        ${stat('سرورهای مدیریت‌شده',o.managed_servers,'server')}
+        ${stat('سرورهای مدیریت‌شده',o.managed_servers,'server','servers')}
         ${stat('ماشین‌های آنلاین',`${o.online_machines} / ${o.machines}`,'heartbeat')}
-        ${stat('نودهای فعال',`${o.online_nodes} / ${o.nodes}`,'project-diagram')}
+        ${stat('نودهای فعال',`${o.online_nodes} / ${o.nodes}`,'project-diagram','nodes')}
         ${stat('کاربران فعال',o.active_users,'users')}
       </div>
       <div class="dashboard-grid">
@@ -139,6 +149,10 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
     bindRankControls();
     renderQueue({status:'not_seen',wait:0,recentJobs:0,jobsPerMinute:0,peakJobsPerMinute:0,failedJobs:0,processes:0,workload:[],active_queues:[],queueWithMaxRuntime:null});
     content.querySelector('[data-go="servers"]')?.addEventListener('click',()=>switchView('servers'));
+    content.querySelectorAll('[data-stat-go]').forEach(link=>link.addEventListener('click',event=>{
+      if(event.button!==0||event.ctrlKey||event.metaKey||event.shiftKey||event.altKey)return;
+      event.preventDefault();switchView(link.dataset.statGo);
+    }));
   }
   async function loadOverview(){
     if(!content.querySelector('.dashboard-grid')) renderOverview({managed_servers:0,online_machines:0,machines:0,online_nodes:0,nodes:0,active_users:0},true);
@@ -248,6 +262,21 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
     hideRankTooltip();render();
   }
   const trafficGB = value => `${(Number(value||0)/1024**3).toFixed(2)} GB`;
+  const entityTooltip=document.createElement('div');entityTooltip.className='custom-tooltip speedbox-entity-tooltip';entityTooltip.id='speedbox-entity-tooltip';entityTooltip.role='tooltip';entityTooltip.hidden=true;document.body.appendChild(entityTooltip);
+  let entityTooltipTarget=null;
+  function hideEntityTooltip(){entityTooltipTarget?.removeAttribute('aria-describedby');entityTooltipTarget=null;entityTooltip.hidden=true;}
+  function showEntityTooltip(target){
+    if(!target?.isConnected)return;
+    hideEntityTooltip();entityTooltipTarget=target;target.setAttribute('aria-describedby',entityTooltip.id);
+    entityTooltip.textContent=target.dataset.entityTooltip;entityTooltip.hidden=false;
+    const r=target.getBoundingClientRect(),w=entityTooltip.offsetWidth,h=entityTooltip.offsetHeight;
+    entityTooltip.style.left=Math.max(8,Math.min(innerWidth-w-8,r.left+r.width/2-w/2))+'px';
+    entityTooltip.style.top=Math.max(8,Math.min(innerHeight-h-8,r.top>h+12?r.top-h-10:r.bottom+10))+'px';
+  }
+  function entityTooltipEvent(event){const target=event.target.closest?.('[data-entity-tooltip]');if(target&&root.contains(target))showEntityTooltip(target);else if(event.type==='click')hideEntityTooltip();}
+  function leaveEntityTooltip(event){if(event.target.closest?.('[data-entity-tooltip]')&&!event.target.contains(event.relatedTarget))hideEntityTooltip();}
+  root.addEventListener('pointerover',entityTooltipEvent);root.addEventListener('focusin',entityTooltipEvent);root.addEventListener('pointerout',leaveEntityTooltip);root.addEventListener('focusout',leaveEntityTooltip);document.addEventListener('click',entityTooltipEvent);
+  window.addEventListener('scroll',hideEntityTooltip,true);window.addEventListener('resize',hideEntityTooltip);
   const rankTooltip=document.createElement('div');rankTooltip.className='custom-tooltip speedbox-rank-tooltip';rankTooltip.role='tooltip';rankTooltip.hidden=true;document.body.appendChild(rankTooltip);
   function hideRankTooltip(){rankTooltip.hidden=true;}
   function showRankTooltip(target,row,period) {
@@ -345,7 +374,7 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
   window.addEventListener('scroll',hideRankTooltip,true);
   window.addEventListener('resize',hideRankTooltip);
 
-  function stat(label,value,icon){return `<article class="stat-card stat-icon-${icon}"><div class="stat-label"><i class="fas fa-${icon}" aria-hidden="true"></i> ${escape(label)}</div><div class="stat-value">${escape(faDigits(value))}</div></article>`}
+  function stat(label,value,icon,view){const tag=view?'a':'article';return `<${tag} class="stat-card stat-icon-${icon}${view?' stat-link':''}"${view?` href="/admin/infrastructure/${view}" data-stat-go="${view}"`:''}><div class="stat-label"><i class="fas fa-${icon}" aria-hidden="true"></i> ${escape(label)}</div><div class="stat-value">${escape(faDigits(value))}</div></${tag}>`}
   function machineCard(m){const cpu=Number(m.load_status?.cpu||0);return `<div class="machine-item"><div class="machine-top"><div class="entity"><span class="entity-icon"><i class="fas fa-server" aria-hidden="true"></i></span><div><b>${escape(m.name)}</b><small>تعداد نودهای متصل: <bdi dir="ltr">${Number(m.nodes_count||0).toLocaleString('fa-IR')}</bdi></small></div></div>${badge(m.online?'online':'offline')}</div><div class="machine-meta"><span>پردازنده<b>${cpu.toFixed(1)}%</b></span><span>آخرین اتصال<b>${timeAgo(m.last_seen_at)}</b></span></div><div class="meter"><span style="width:${Math.min(100,cpu)}%"></span></div></div>`}
 
   function cancelServerRefresh(){if(serverPollTimer!==null){clearTimeout(serverPollTimer);timers.delete(serverPollTimer);serverPollTimer=null;}}
@@ -466,7 +495,7 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
     scope.getElementById('serverForm').onsubmit=async e=>{e.preventDefault();const body=Object.fromEntries(new FormData(e.target));try{const r=await api(server?`/servers/${server.id}`:'/servers',{method:server?'PUT':'POST',body:JSON.stringify(body)});toast(r.message);closeModal();await loadServers();}catch(err){toast(err.message,'error')}};
   }
   async function runDeployment(id,action){try{const r=await api(`/servers/${id}/deploy`,{method:'POST',body:JSON.stringify({action,kernel:'singbox'})});toast(r.message);await loadServers();}catch(e){toast(e.message,'error')}}
-  const deploymentActionLabel=action=>({install:'نصب',upgrade:'ارتقا',repair:'نصب مجدد',restart:'راه‌اندازی مجدد هسته‌ها',check:'بررسی وضعیت',uninstall:'حذف کامل سرویس مدیریت نود'}[action]||action);
+  const deploymentActionLabel=action=>({install:'نصب',upgrade:'ارتقا',repair:'نصب مجدد',restart:'راه‌اندازی مجدد هسته‌ها',check:'بررسی وضعیت',uninstall:'حذف کامل سرویس مدیریت نود',warp_prepare:'آماده‌سازی WARP',warp_test:'تست اتصال WARP'}[action]||action);
   async function showDeployments(id){try{const {data}=await api(`/servers/${id}/deployments`);openModal('گزارش عملیات',data.length?data.map(d=>`<div class="machine-item"><div class="machine-top"><b>${escape(deploymentActionLabel(d.action))} · ${jobDate(d.created_at)}</b>${badge(d.status)}</div>${deploymentProgress(d)}<pre class="log-box" dir="auto">${escape(d.log||'بدون گزارش')}</pre></div>`).join(''):empty('گزارشی وجود ندارد'))}catch(e){toast(e.message,'error')}}
 
   function cancelNodeRefresh(){if(nodePollTimer!==null){clearTimeout(nodePollTimer);timers.delete(nodePollTimer);nodePollTimer=null;}}
@@ -479,16 +508,16 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
     if(!background||!scope.getElementById('nodeSearch')){
       const query=scope.getElementById('nodeSearch')?.value||'';
       content.innerHTML=`<div class="toolbar entity-toolbar"><button class="button primary" id="addNode"><i class="fas fa-plus" aria-hidden="true"></i> ساخت نود</button><input class="search" id="nodeSearch" placeholder="جستجو"></div><article class="panel-card entity-list-shell"></article>`;
-      content.querySelector('.panel-card').innerHTML=loadingTable(['ترتیب','شماره نود','نود','نمایش','وضعیت','کاربران آنلاین','سرور مقصد','هسته','پورت','ترافیک مصرفی','عملیات'],'nodes');
+      content.querySelector('.panel-card').innerHTML=loadingTable(['ترتیب','شماره نود','نود','نمایش','کاربران آنلاین','سرور مقصد','هسته','پورت','ترافیک مصرفی','عملیات'],'nodes');
       scope.getElementById('nodeSearch').value=query;
       scope.getElementById('addNode').disabled=true;
       scope.getElementById('addNode').onclick=()=>nodeForm();scope.getElementById('nodeSearch').oninput=renderNodeRows;
     }
     const results=background?[await api('/nodes')]:await Promise.all([api('/nodes'),api('/machines'),api('/groups'),api('/routes')]);
     if(version!==nodeFetchVersion||state.view!=='nodes')return;
-    state.nodes=results[0].data;
+    state.nodes=results[0].data;state.kernelCapabilities=results[0].meta?.kernel_capabilities;
     if(!background){state.machines=results[1].data;state.groups=results[2].data;state.routes=results[3].data;scope.getElementById('addNode').disabled=false;}
-    if(draggingNode===null)renderNodeRows();scheduleNodeRefresh();
+    if(draggingNode===null){hideEntityTooltip();renderNodeRows();}scheduleNodeRefresh();
   }
   function nodeTraffic(node){
     const usage=node.traffic_usage||{total:Number(node.u||0)+Number(node.d||0),limit:Number(node.transfer_enable||0)};
@@ -497,12 +526,17 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
     const title=`مصرف: ${bytes(used)}${limit>0?` / سقف: ${bytes(limit)} / ${percent.toFixed(1)}%`:''}${usage.shared?` / مصرف مشترک با نود ${usage.source_name}`:''}`;
     return `<div class="node-traffic" title="${escape(title)}"><span dir="ltr">${escape(bytes(used))}${limit>0?` / ${escape(bytes(limit))}`:''}</span>${limit>0?`<div class="node-traffic-bar"><span class="${percent>=90?'danger':''}" style="width:${Math.min(100,percent).toFixed(1)}%"></span></div>`:''}${usage.shared?'<small>مشترک با نود والد</small>':''}</div>`;
   }
+  function nodeStatusDot(node){
+    const runtime=node.runtime||{};
+    const code=runtime.connection_state||(!node.machine_id?'unassigned':!node.enabled?'disabled':runtime.online?(Number(runtime.online_users)>0?'active':'idle'):runtime.connected?'kernel_stopped':'offline');
+    const states={active:['green','در حال اجرای عادی'],idle:['orange','بدون استفاده یا غیرعادی'],waiting_for_users:['orange','بدون استفاده یا غیرعادی'],initializing:['orange','بدون استفاده یا غیرعادی']};
+    const [color,label]=states[code]||['red','در حال اجرا نیست'];
+    return `<button type="button" class="node-runtime-dot ${color}" data-entity-tooltip="${escape(label)}" aria-label="${escape(label)}"><span aria-hidden="true"></span></button>`;
+  }
   function nodeTable(list){
     if(!list.length)return empty('نودی ساخته نشده است');
-    const markup = `<div class="table-wrap"><table class="node-table"><thead><tr><th>ترتیب</th><th>شماره نود</th><th>نود</th><th>نمایش</th><th>وضعیت</th><th>کاربران آنلاین</th><th>سرور مقصد</th><th>هسته</th><th>پورت</th><th>ترافیک مصرفی</th><th>عملیات</th></tr></thead><tbody>${list.map(n=>{
-      const online=n.enabled&&n.runtime?.online;
-      const label=!n.enabled?'غیرفعال':online?'آنلاین':n.runtime?.connected?'هسته متوقف':n.machine_id?'در انتظار اتصال':'بدون سرور';
-      return `<tr data-node-row="${n.id}"><td><div class="node-order-controls"><button type="button" class="node-drag" draggable="true" data-drag-node="${n.id}" aria-label="جابه‌جایی نود" title="برای مرتب‌سازی بکشید"><i class="fas fa-grip-vertical" aria-hidden="true"></i></button><span><button type="button" data-node-move="${n.id}" data-step="-1" aria-label="یک ردیف بالاتر" ${state.nodes[0]?.id===n.id?'disabled':''}>⌃</button><button type="button" data-node-move="${n.id}" data-step="1" aria-label="یک ردیف پایین‌تر" ${state.nodes.at(-1)?.id===n.id?'disabled':''}>⌄</button></span></div></td><td><span class="node-number"><span class="node-id-badge">${escape(n.id)}</span>${window.SpeedboxNodeEditor.protocolBadge(n.type)}</span></td><td><div class="entity node-identity"><div><b>${escape(n.name)}</b><small dir="ltr">${escape(n.host)}</small></div></div></td><td><label class="switch-line ios"><input type="checkbox" data-node-show="${n.id}" aria-label="نمایش ${escape(n.name)} در سابسکرایب" ${n.show?'checked':''}></label></td><td>${badge(online?'online':n.enabled?'not_seen':'draft',label)}</td><td><span dir="ltr">${Number(n.runtime?.online_users||0)}</span></td><td>${escape(n.machine?.name||'—')}${n.parent_id?`<small class="server-system">والد: ${escape(n.parent_id)}</small>`:''}</td><td><span class="badge">${n.kernel==='xray'?'Xray':'Sing-box'}</span></td><td><span dir="ltr">${escape(n.port)}</span></td><td>${nodeTraffic(n)}</td><td><div class="actions"><button class="button entity-edit" data-node-edit="${n.id}">ویرایش</button><button class="button entity-copy" data-node-clone="${n.id}">کپی</button><button class="button entity-delete" data-node-delete="${n.id}">حذف</button></div></td></tr>`;
+    const markup = `<div class="table-wrap"><table class="node-table"><thead><tr><th>ترتیب</th><th>شماره نود</th><th>نود</th><th>نمایش</th><th>کاربران آنلاین</th><th>سرور مقصد</th><th>هسته</th><th>پورت</th><th>ترافیک مصرفی</th><th>عملیات</th></tr></thead><tbody>${list.map(n=>{
+      return `<tr data-node-row="${n.id}"><td><div class="node-order-controls"><button type="button" class="node-drag" draggable="true" data-drag-node="${n.id}" aria-label="جابه‌جایی نود" title="برای مرتب‌سازی بکشید"><i class="fas fa-grip-vertical" aria-hidden="true"></i></button><span><button type="button" data-node-move="${n.id}" data-step="-1" aria-label="یک ردیف بالاتر" ${state.nodes[0]?.id===n.id?'disabled':''}>⌃</button><button type="button" data-node-move="${n.id}" data-step="1" aria-label="یک ردیف پایین‌تر" ${state.nodes.at(-1)?.id===n.id?'disabled':''}>⌄</button></span></div></td><td><span class="node-number"><span class="node-id-badge"><bdi dir="ltr">${escape(n.id)}${n.parent_id?` <span class="node-parent-arrow" aria-hidden="true">→</span> ${escape(n.parent_id)}`:''}</bdi></span>${window.SpeedboxNodeEditor.protocolBadge(n.type)}</span></td><td><div class="entity node-identity"><div><div class="node-name-line">${nodeStatusDot(n)}<b>${escape(n.name)}</b></div><small dir="ltr">${escape(n.host)}</small></div></div></td><td><label class="switch-line ios"><input type="checkbox" data-node-show="${n.id}" aria-label="نمایش ${escape(n.name)} در سابسکرایب" ${n.show?'checked':''}></label></td><td><span dir="ltr">${Number(n.runtime?.online_users||0)}</span>${n.parent_id?'<small class="server-system">مشترک با نود اصلی</small>':''}</td><td>${escape(n.machine?.name||'—')}${n.parent_id?`<small class="server-system">نود اصلی: ${escape(n.parent_id)}</small>`:''}</td><td><span class="badge">${n.kernel==='xray'?'Xray':'Sing-box'}</span></td><td><span dir="ltr">${escape(n.port)}</span></td><td>${nodeTraffic(n)}</td><td><div class="actions"><button class="button entity-edit" data-node-edit="${n.id}">ویرایش</button><button class="button entity-copy" data-node-clone="${n.id}">کپی</button><button class="button entity-delete" data-node-delete="${n.id}">حذف</button></div></td></tr>`;
     }).join('')}</tbody></table></div>`;
     return entityCardLayout(markup, 'nodes');
   }
@@ -531,7 +565,7 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
       row.ondrop=e=>{e.preventDefault();const id=draggingNode;draggingNode=null;const rect=row.getBoundingClientRect();if(id!==null)moveNode(id,row.dataset.nodeRow,e.clientY>rect.top+rect.height/2);};
     });
   }
-  function nodeForm(node=null){nodeEditorDispose=window.SpeedboxNodeEditor.mount({node,state,api,openModal,closeModal,toast,reload:()=>loadNodes(),enhanceControls,isSaving:()=>savingCount>0});}
+  function nodeForm(node=null,prefill=null){nodeEditorDispose=window.SpeedboxNodeEditor.mount({node,prefill,state,api,openModal,closeModal,toast,reload:()=>state.view==='tunnels'?tunnelSession.load():loadNodes(),enhanceControls,isSaving:()=>savingCount>0});}
 
   const trafficResetOptions = [['','مطابق تنظیمات سیستم'],['0','ابتدای هر ماه'],['1','ماهانه در روز پایان دوره'],['2','بدون بازنشانی'],['3','ابتدای هر سال'],['4','سالانه در روز پایان دوره']];
   const trafficResetLabel = value => trafficResetOptions.find(([key])=>key===String(value ?? ''))?.[1] || 'مطابق تنظیمات سیستم';
@@ -548,10 +582,14 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
     scope.getElementById('planSearch').oninput=renderPlanRows;
     scope.getElementById('addPlan').disabled=false;scope.getElementById('addPlan').onclick=()=>planForm();renderPlanRows();
   }
+  function planUserStats(plan){
+    const total=Number(plan.users_count||0),active=Number(plan.active_users_count||0);
+    return `<div class="plan-user-stats"><button type="button" class="plan-user-count total" data-entity-tooltip="کل کاربران این پلن، شامل اشتراک‌های منقضی‌شده" aria-label="کل کاربران: ${total}">${dashboardIcon('Users')}<span>${faDigits(total)}</span></button><button type="button" class="plan-user-count active" data-entity-tooltip="کاربران فعال این پلن" aria-label="کاربران فعال این پلن: ${active}">${dashboardIcon('Users')}<span>${faDigits(active)}</span></button></div>`;
+  }
   function renderPlanRows(){
     const query=(scope.getElementById('planSearch')?.value||'').trim().toLowerCase();
     const list=state.plans.filter(p=>`${p.name} ${planTags(p).join(' ')} ${state.groups.find(g=>g.id==p.group_id)?.name||''}`.toLowerCase().includes(query));
-    content.querySelector('.panel-card').innerHTML=list.length?entityCardLayout(`<div class="table-wrap"><table class="plan-table"><thead><tr><th>نام پلن</th><th>گروه دسترسی</th><th>ترافیک پلن</th><th>محدودیت سرعت</th><th>محدودیت اتصال</th><th>بازنشانی ترافیک</th><th>عملیات</th></tr></thead><tbody>${list.map(p=>`<tr><td><b>${escape(p.name)}</b></td><td>${escape(state.groups.find(g=>g.id==p.group_id)?.name||p.group_id||'—')}</td><td><span dir="ltr">${escape(p.transfer_enable)} GB</span></td><td>${Number(p.speed_limit)>0?`<span dir="ltr">${escape(p.speed_limit)} Mbps</span>`:'نامحدود'}</td><td>${Number(p.device_limit)>0?escape(p.device_limit):'نامحدود'}</td><td>${escape(trafficResetLabel(p.reset_traffic_method))}</td><td><div class="actions"><button class="button entity-edit" data-plan-edit="${p.id}">ویرایش</button><button class="button entity-delete" data-plan-delete="${p.id}">حذف</button></div></td></tr>`).join('')}</tbody></table></div>`, 'plans'):empty(query?'پلنی با این جستجو پیدا نشد':'پلنی تعریف نشده است');
+    content.querySelector('.panel-card').innerHTML=list.length?entityCardLayout(`<div class="table-wrap"><table class="plan-table"><thead><tr><th>نام پلن</th><th>گروه دسترسی</th><th>ترافیک پلن</th><th>محدودیت سرعت</th><th>محدودیت اتصال</th><th>بازنشانی ترافیک</th><th>عملیات</th></tr></thead><tbody>${list.map(p=>`<tr><td><b>${escape(p.name)}</b>${planUserStats(p)}</td><td>${escape(state.groups.find(g=>g.id==p.group_id)?.name||p.group_id||'—')}</td><td><span dir="ltr">${escape(p.transfer_enable)} GB</span></td><td>${Number(p.speed_limit)>0?`<span dir="ltr">${escape(p.speed_limit)} Mbps</span>`:'نامحدود'}</td><td>${Number(p.device_limit)>0?escape(p.device_limit):'نامحدود'}</td><td>${escape(trafficResetLabel(p.reset_traffic_method))}</td><td><div class="actions"><button class="button entity-edit" data-plan-edit="${p.id}">ویرایش</button><button class="button entity-delete" data-plan-delete="${p.id}">حذف</button></div></td></tr>`).join('')}</tbody></table></div>`, 'plans'):empty(query?'پلنی با این جستجو پیدا نشد':'پلنی تعریف نشده است');
     content.querySelectorAll('[data-plan-edit]').forEach(b=>b.onclick=()=>planForm(state.plans.find(p=>p.id==b.dataset.planEdit)));
     content.querySelectorAll('[data-plan-delete]').forEach(b=>b.onclick=()=>deletePlan(state.plans.find(p=>p.id==b.dataset.planDelete)));
   }
@@ -850,6 +888,7 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
     if (disposed) return;
     const selected = titles[view] ? view : 'overview';
     emergencySession?.dispose(); emergencySession=null;
+    tunnelSession?.dispose(); tunnelSession=null;
     cancelServerRefresh(); serverFetchVersion++;cancelNodeRefresh();nodeFetchVersion++;
     if(content.children.length && state.view) viewCache.set(state.view,[...content.childNodes]);
     content.replaceChildren(...(viewCache.get(selected)||[]));
@@ -866,9 +905,11 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
       closeRankCalendar();
       nodeEditorDispose?.();nodeEditorDispose=null;
       emergencySession?.dispose(); emergencySession=null;
+    tunnelSession?.dispose(); tunnelSession=null;
       disposed=true; viewCache.clear(); requests.abort(); Object.values(rankRequests).forEach(controller => controller?.abort()); timers.forEach(clearTimeout); selectObserver.disconnect();
       document.removeEventListener('click', onOutsideSelect); document.removeEventListener('keydown', onEscape);
       window.removeEventListener('scroll',hideRankTooltip,true); window.removeEventListener('resize',hideRankTooltip); rankTooltip.remove();
+      root.removeEventListener('pointerover',entityTooltipEvent);root.removeEventListener('focusin',entityTooltipEvent);root.removeEventListener('pointerout',leaveEntityTooltip);root.removeEventListener('focusout',leaveEntityTooltip);document.removeEventListener('click',entityTooltipEvent);window.removeEventListener('scroll',hideEntityTooltip,true);window.removeEventListener('resize',hideEntityTooltip);hideEntityTooltip();entityTooltip.remove();
       mobileMedia.removeEventListener('change',updateNativeSelects);
       overlay.remove(); document.body.style.overflow='';
     }

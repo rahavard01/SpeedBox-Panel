@@ -19,8 +19,9 @@ class MachineController extends Controller
     public function nodes(Request $request): JsonResponse
     {
         $machine = $this->authenticate($request);
+        $supportsWarp = in_array('warp-egress-v1', array_map('trim', explode(',', $request->header('X-Speedbox-Capabilities', ''))), true);
         return response()->json([
-            'nodes' => $this->nodes->machineNodes($machine->id)->map(fn ($node) => [
+            'nodes' => $this->nodes->machineNodes($machine->id, $supportsWarp)->map(fn ($node) => [
                 'id' => $node->id,
                 'type' => $node->type,
                 'name' => $node->name,
@@ -37,6 +38,8 @@ class MachineController extends Controller
     {
         $validated = $request->validate([
             'cpu' => ['required', 'numeric', 'between:0,100'],
+            'capabilities' => ['sometimes', 'array', 'max:32'],
+            'capabilities.*' => ['string', 'max:64'],
             'mem.total' => ['required', 'integer', 'min:0'],
             'mem.used' => ['required', 'integer', 'min:0'],
             'swap.total' => ['nullable', 'integer', 'min:0'],

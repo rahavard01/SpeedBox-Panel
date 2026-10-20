@@ -21,3 +21,4 @@ func TestUUIDRotationRemovesOldIdentityOnSameID(t *testing.T) {
 		t.Fatal("ordinary additions/removals changed")
 	}
 }
+

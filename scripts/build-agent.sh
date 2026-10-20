@@ -31,3 +31,4 @@ for name in xboard-node-linux-amd64 xbctl-linux-amd64 xboard-node-linux-arm64 xb
   mv -f -- "$STAGE/$name" "$OUTPUT/$name"
 done
 echo 'AGENT PREBUILT READY: 4 verified binaries; no Go download or build.'
+

@@ -74,6 +74,17 @@ func buildConfig(kcfg config.KernelConfig, nc *model.NodeSpec, users []model.Use
 	}
 
 	mergeCustomSingbox(cfg, kcfg)
+	if nc.WarpEnabled {
+		cfg["outbounds"] = append(cfg["outbounds"].([]M), M{
+			"type": "socks", "tag": model.WarpOutboundTag, "server": "127.0.0.1",
+			"server_port": model.WarpProxyPort, "version": "5",
+		})
+		route := cfg["route"].(M)
+		route["rules"] = append(route["rules"].([]M),
+			M{"inbound": []string{nc.Protocol + "-in"}, "network": "tcp", "outbound": model.WarpOutboundTag},
+			M{"inbound": []string{nc.Protocol + "-in"}, "network": "udp", "outbound": "direct"},
+		)
+	}
 	return cfg
 }
 

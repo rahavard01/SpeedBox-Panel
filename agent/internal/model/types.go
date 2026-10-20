@@ -11,6 +11,7 @@ type NodeSpec struct {
 	Routes          []RouteRule
 
 	KernelType       string
+	WarpEnabled      bool
 	KernelLogLevel   string
 	CustomOutbounds  []OutboundConfig
 	CustomRoutes     []map[string]any

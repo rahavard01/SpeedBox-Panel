@@ -144,3 +144,4 @@ func UserDiff(oldUsers, newUsers []model.UserSpec) (toAdd, toRemove []model.User
 	}
 	return
 }
+

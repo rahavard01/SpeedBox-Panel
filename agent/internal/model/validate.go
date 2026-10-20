@@ -28,6 +28,16 @@ func ValidateNodeSpec(n *NodeSpec, kcfg config.KernelConfig) error {
 	if err := validateOutboundTagCollisions(n.CustomOutbounds, additionalOutboundSources); err != nil {
 		return fmt.Errorf("validate outbound tags: %w", err)
 	}
+	for _, source := range additionalOutboundSources {
+		if strings.EqualFold(strings.TrimSpace(source.Tag), WarpOutboundTag) {
+			return fmt.Errorf("outbound tag %q is reserved for automatic WARP egress", WarpOutboundTag)
+		}
+	}
+	for _, outbound := range n.CustomOutbounds {
+		if strings.EqualFold(strings.TrimSpace(outbound.Tag), WarpOutboundTag) {
+			return fmt.Errorf("outbound tag %q is reserved for automatic WARP egress", WarpOutboundTag)
+		}
+	}
 	additionalTags := additionalTagNames(additionalOutboundSources)
 	availableTags := buildAvailableOutboundTags(n.CustomOutbounds, additionalTags)
 	if err := ValidateCustomOutboundsForKernel(n.CustomOutbounds, kernelType, additionalTags); err != nil {
@@ -37,6 +47,9 @@ func ValidateNodeSpec(n *NodeSpec, kcfg config.KernelConfig) error {
 		return fmt.Errorf("validate custom route rules: %w", err)
 	}
 	if err := validateTransportKernel(n.Network, kernelType); err != nil {
+		return err
+	}
+	if err := validateKernelCapabilities(n, kernelType); err != nil {
 		return err
 	}
 	if IsTCPHTTPTransport(n.Network, n.NetworkSettings) {
@@ -122,4 +135,3 @@ func buildAvailableOutboundTags(structured []OutboundConfig, rawTags []string) m
 	}
 	return available
 }
-

@@ -35,6 +35,7 @@ class ProxyServer extends Model
         'rate_time_ranges' => 'array',
         'show' => 'boolean',
         'enabled' => 'boolean',
+        'warp_enabled' => 'boolean',
         'rate_time_enable' => 'boolean',
         'machine_id' => 'integer',
         'u' => 'integer',

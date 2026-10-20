@@ -65,3 +65,4 @@ try {
     fwrite(STDERR, 'AGENT ARTIFACTS FAILED: '.$error->getMessage().PHP_EOL);
     exit(1);
 }
+

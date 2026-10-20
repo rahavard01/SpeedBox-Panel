@@ -96,6 +96,7 @@ type NodeConfig struct {
 	Routes          []RouteRule            `json:"routes"`
 
 	// Kernel settings (Xboard extension)
+	WarpEnabled      bool              `json:"warp_enabled,omitempty"`
 	KernelType       string            `json:"kernel_type,omitempty"`      // "singbox" or "xray"
 	KernelLogLevel   string            `json:"kernel_log_level,omitempty"` // "info", "warn", etc.
 	CustomOutbounds  []OutboundConfig  `json:"custom_outbounds,omitempty"`

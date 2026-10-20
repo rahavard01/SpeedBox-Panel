@@ -6,3 +6,5 @@ public/build/assets/* whitespace=-blank-at-eol
 
 # Compressed Linux executables must never undergo text conversion.
 agent-dist/*.tar.gz binary
+backpack-dist/*.gz binary
+scripts/backpack/upstream-source.tar.gz binary

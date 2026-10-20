@@ -90,9 +90,10 @@ try {
     $request = function ($owner) { $q=Request::create('/api/panel/dashboard/online','GET');$q->setUserResolver(fn()=>$owner);return $q; };
     $json = fn($response)=>$response->getData(true);
     $makeUser = function($email,$t=0) { return DB::table('v2_user')->insertGetId(['email'=>$email,'password'=>'test','uuid'=>Illuminate\Support\Str::uuid(),'token'=>bin2hex(random_bytes(16)),'t'=>$t,'group_id'=>1,'device_limit'=>5,'transfer_enable'=>1099511627776,'expired_at'=>time()+86400,'created_at'=>time(),'updated_at'=>time()]); };
-    $nodeA=App\Models\ProxyServer::forceCreate(['name'=>'A','type'=>'vmess','kernel'=>'xray','host'=>'a.test','port'=>'443','server_port'=>'443','enabled'=>true,'group_ids'=>[1]]);
-    $nodeB=App\Models\ProxyServer::forceCreate(['name'=>'B','type'=>'vmess','kernel'=>'xray','host'=>'b.test','port'=>'443','server_port'=>'443','enabled'=>true,'group_ids'=>[1]]);
-    $alias=App\Models\ProxyServer::forceCreate(['name'=>'Alias','type'=>'vmess','kernel'=>'xray','host'=>'alias.test','port'=>'443','server_port'=>'443','enabled'=>true,'parent_id'=>$nodeA->id,'group_ids'=>[1]]);
+    $machine=App\Models\ServerMachine::forceCreate(['name'=>'Online presence fixture','token'=>bin2hex(random_bytes(24))]);
+    $nodeA=App\Models\ProxyServer::forceCreate(['name'=>'A','machine_id'=>$machine->id,'type'=>'vmess','kernel'=>'xray','host'=>'a.test','port'=>'443','server_port'=>'443','enabled'=>true,'group_ids'=>[1]]);
+    $nodeB=App\Models\ProxyServer::forceCreate(['name'=>'B','machine_id'=>$machine->id,'type'=>'vmess','kernel'=>'xray','host'=>'b.test','port'=>'443','server_port'=>'443','enabled'=>true,'group_ids'=>[1]]);
+    $alias=App\Models\ProxyServer::forceCreate(['name'=>'Alias','machine_id'=>$machine->id,'type'=>'vmess','kernel'=>'xray','host'=>'alias.test','port'=>'443','server_port'=>'443','enabled'=>true,'parent_id'=>$nodeA->id,'group_ids'=>[1]]);
     $a=$makeUser('one@alpha.com');$b=$makeUser('alpha@custom.test');$c=$makeUser('three@beta.com');$stale=$makeUser('stale@alpha.com',time());
     $admission=app(App\Services\ConnectionAdmission::class);
     $leases=[];
@@ -108,6 +109,9 @@ try {
     $counts=$status->nodeUserCounts([$nodeA->id,$nodeB->id,$nodeA->id]);
     $check($counts[$nodeA->id]===2 && $counts[$nodeB->id]===2,'Per-node unique users, not IPs or global count');
     $check($status->nodeUserCounts([])===[],'Empty node request');
+    // Live leases are counted only after a fresh report confirms a running kernel.
+    $check($control->stateFor($nodeA)['online_users']===0, 'Live leases without a node report do not imply a running kernel');
+    foreach ([$nodeA,$nodeB] as $node) $control->report($node,['metrics'=>['kernel_status'=>true,'runtime_state'=>'ready']]);
     Illuminate\Support\Facades\Cache::put('speedbox:node:'.$nodeA->id.':online',[$stale=>9],300);
     $check($control->stateFor($nodeA)['online_users']===2,'Node count ignores stale report cache');
     $check($control->stateFor($alias)['online_users']===2,'Alias uses parent runtime leases');

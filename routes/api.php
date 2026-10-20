@@ -320,6 +320,16 @@ Route::middleware(['auth:sanctum', CheckTokenExpiration::class, CheckUserBanned:
 
         // === Unified infrastructure: managed servers, machines and nodes ===
         Route::prefix('infrastructure')->group(function () {
+            Route::get('/tunnels', [\App\Http\Controllers\Api\Admin\TunnelController::class, 'index']);
+            Route::post('/tunnel-tests', [\App\Http\Controllers\Api\Admin\TunnelController::class, 'test'])->middleware('throttle:5,1');
+            Route::get('/tunnel-tests/{tunnelTest}', [\App\Http\Controllers\Api\Admin\TunnelController::class, 'testShow'])->whereNumber('tunnelTest');
+            Route::post('/tunnels', [\App\Http\Controllers\Api\Admin\TunnelController::class, 'store']);
+            Route::put('/tunnels/{tunnel}', [\App\Http\Controllers\Api\Admin\TunnelController::class, 'update'])->whereNumber('tunnel');
+            Route::get('/tunnels/{tunnel}/tests', [\App\Http\Controllers\Api\Admin\TunnelController::class, 'testHistory'])->whereNumber('tunnel');
+            Route::post('/tunnels/{tunnel}/actions', [\App\Http\Controllers\Api\Admin\TunnelController::class, 'action'])->whereNumber('tunnel');
+            Route::get('/tunnel-operations/{tunnelOperation}', [\App\Http\Controllers\Api\Admin\TunnelController::class, 'operation'])->whereNumber('tunnelOperation');
+            Route::post('/tunnel-operations/{tunnelOperation}/cancel', [\App\Http\Controllers\Api\Admin\TunnelController::class, 'cancel'])->whereNumber('tunnelOperation');
+
             Route::get('/emergency-configs', [\App\Http\Controllers\Api\Admin\EmergencyConfigController::class, 'index']);
             Route::post('/emergency-configs', [\App\Http\Controllers\Api\Admin\EmergencyConfigController::class, 'store']);
             Route::put('/emergency-configs/settings', [\App\Http\Controllers\Api\Admin\EmergencyConfigController::class, 'settings']);
@@ -345,6 +355,8 @@ Route::middleware(['auth:sanctum', CheckTokenExpiration::class, CheckUserBanned:
             Route::get('/servers/{managedServer}/deployments', [InfrastructureController::class, 'deployments']);
 
             Route::get('/machines', [InfrastructureController::class, 'machines']);
+            Route::get('/machines/{machine}/warp', [\App\Http\Controllers\Api\Admin\MachineWarpController::class, 'show'])->whereNumber('machine');
+            Route::post('/machines/{machine}/warp', [\App\Http\Controllers\Api\Admin\MachineWarpController::class, 'store'])->whereNumber('machine')->middleware('throttle:10,1');
             Route::post('/machines/{machine}/rotate-token', [InfrastructureController::class, 'rotateMachineToken']);
             Route::get('/machines/{machine}/history', [InfrastructureController::class, 'machineHistory']);
 

@@ -78,6 +78,7 @@ class InfrastructureController extends Controller
 
     public function updateServer(Request $request, ManagedServer $managedServer): JsonResponse
     {
+        \App\Services\TunnelManager::protectServer($managedServer->id);
         abort_if($managedServer->status === 'removing', 409, 'این سرور در حال حذف است.');
         $data = $this->validateServer($request, $managedServer);
         foreach (['password', 'private_key', 'private_key_passphrase'] as $secret) {
@@ -96,6 +97,7 @@ class InfrastructureController extends Controller
         $panelOnly = $request->boolean('panel_only');
         $deployment = DB::transaction(function () use ($managedServer, $request, $panelOnly, $removal) {
             $server = ManagedServer::whereKey($managedServer->id)->lockForUpdate()->firstOrFail();
+            \App\Services\TunnelManager::protectServer($server->id, true);
             abort_if($server->machine?->managedServers()->where('id', '!=', $server->id)->exists(), 422, 'این ماشین با سرور دیگری مشترک است؛ ابتدا ارتباط مشترک را اصلاح کنید.');
             abort_if($server->deployments()->whereIn('status', ['queued', 'running'])->exists(), 409, 'عملیات قبلی این سرور هنوز تمام نشده است.');
             if ($panelOnly) {
@@ -124,6 +126,7 @@ class InfrastructureController extends Controller
         ]);
         $deployment = DB::transaction(function () use ($managedServer, $request, $data) {
             $server = ManagedServer::whereKey($managedServer->id)->lockForUpdate()->firstOrFail();
+            \App\Services\TunnelManager::protectServer($server->id);
             abort_if($server->status === 'removing' || $server->deployments()->whereIn('status', ['queued', 'running'])->exists(), 409, 'عملیات قبلی این سرور هنوز در صف یا در حال اجراست. تا پایان آن صبر کنید.');
             return ServerDeployment::create([
                 'managed_server_id' => $managedServer->id,
@@ -181,7 +184,7 @@ class InfrastructureController extends Controller
             ];
             return $node;
         });
-        return response()->json(['data' => $nodes]);
+        return response()->json(['data' => $nodes, 'meta' => ['kernel_capabilities' => \App\Support\NodeKernelCapabilities::definition()]]);
     }
 
     public function storeNode(Request $request): JsonResponse
@@ -199,7 +202,7 @@ class InfrastructureController extends Controller
         $data = $this->validateNode($request, $node);
         DB::transaction(function () use ($node, $data) {
             $node->update($data);
-            if (!$node->parent_id) ProxyServer::where('parent_id', $node->id)->update(['machine_id' => $node->machine_id, 'kernel' => $node->kernel, 'rate' => $node->rate]);
+            if (!$node->parent_id) ProxyServer::where('parent_id', $node->id)->update(['machine_id' => $node->machine_id, 'kernel' => $node->kernel, 'rate' => $node->rate, 'warp_enabled' => $node->warp_enabled]);
         });
         $this->nodeControl->clearNodeCache($node->id);
         return response()->json([
@@ -212,14 +215,27 @@ class InfrastructureController extends Controller
 
     public function cloneNode(ProxyServer $node): JsonResponse
     {
-        $copy = $node->replicate();
-        $copy->name = $node->name.' (کپی)';
-        $copy->code = null;
-        $copy->sort = ((int) ProxyServer::max('sort')) + 1;
-        $copy->enabled = false;
-        $copy->show = false;
-        $copy->save();
-        return response()->json(['message' => 'کپی نود به صورت غیرفعال ساخته شد.', 'data' => $copy], 201);
+        $copy = DB::transaction(function () use ($node) {
+            $source = ProxyServer::lockForUpdate()->findOrFail($node->id);
+            $parent = $source->parent_id ? ProxyServer::lockForUpdate()->findOrFail($source->parent_id) : $source;
+            abort_if($parent->parent_id || $parent->type !== $source->type, 422, 'رابطهٔ والد این نود معتبر نیست.');
+            $copy = $source->replicate();
+            $copy->name = $source->name.' (کپی)';
+            $copy->code = null;
+            $copy->sort = ((int) ProxyServer::max('sort')) + 1;
+            $copy->parent_id = $parent->id;
+            $copy->machine_id = $parent->machine_id;
+            $copy->kernel = $parent->kernel;
+            $copy->rate = $parent->rate;
+            $copy->warp_enabled = (bool) $parent->warp_enabled;
+            $copy->enabled = (bool) $source->enabled && (bool) $parent->enabled;
+            $copy->show = false;
+            $copy->u = 0;
+            $copy->d = 0;
+            $copy->save();
+            return $copy;
+        });
+        return response()->json(['message' => 'کپی به نود اصلی متصل شد؛ نمایش در سابسکرایب خاموش است.', 'data' => $copy->load('parent', 'machine')], 201);
     }
 
     public function deleteNode(ProxyServer $node): JsonResponse
@@ -232,7 +248,17 @@ class InfrastructureController extends Controller
 
     public function plans(): JsonResponse
     {
-        $plans = DB::table('v2_plan')->orderBy('sort')->get()->map(function ($plan) {
+        $counts = DB::table('v2_user')->select('plan_id')->selectRaw('COUNT(*) AS users_count')->groupBy('plan_id');
+        $active = DB::table('v2_user')->select('plan_id')->selectRaw('COUNT(*) AS active_users_count')
+            ->where('banned', 0)->whereRaw('(u + d) < transfer_enable')->groupBy('plan_id');
+        \App\Services\SubscriptionValidity::whereUnexpired($active);
+        $plans = DB::table('v2_plan')
+            ->leftJoinSub($counts, 'plan_users', 'plan_users.plan_id', '=', 'v2_plan.id')
+            ->leftJoinSub($active, 'plan_active', 'plan_active.plan_id', '=', 'v2_plan.id')
+            ->select('v2_plan.*')->selectRaw('COALESCE(plan_users.users_count, 0) AS users_count, COALESCE(plan_active.active_users_count, 0) AS active_users_count')
+            ->orderBy('v2_plan.sort')->get()->map(function ($plan) {
+            $plan->users_count = (int) $plan->users_count;
+            $plan->active_users_count = (int) $plan->active_users_count;
             $plan->tags = is_string($plan->tags) ? (json_decode($plan->tags, true) ?: []) : ($plan->tags ?? []);
             return $plan;
         });

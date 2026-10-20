@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "protocols": {
+    "shadowsocks": ["singbox", "xray"],
+    "vmess": ["singbox", "xray"],
+    "vless": ["singbox", "xray"],
+    "trojan": ["singbox", "xray"],
+    "hysteria": ["singbox", "xray"],
+    "hysteria2": ["singbox"],
+    "tuic": ["singbox"],
+    "anytls": ["singbox"],
+    "naive": ["singbox"],
+    "mieru": ["singbox"],
+    "socks": ["singbox"],
+    "http": ["singbox"]
+  },
+  "features": {
+    "hysteria1": {"kernels": ["singbox"], "reason": "Hysteria 1 به هسته Sing-box نیاز دارد."},
+    "tuic_legacy": {"kernels": [], "reason": "عامل فعلی TUIC 4 را پشتیبانی نمی‌کند؛ TUIC 5 را انتخاب کنید."},
+    "xray_transport": {"kernels": ["xray"], "reason": "این پروتکل انتقال به هسته Xray نیاز دارد."},
+    "vless_encryption": {"kernels": ["xray"], "reason": "رمزنگاری VLESS به هسته Xray نیاز دارد."},
+    "tcp_http": {"kernels": ["xray"], "reason": "قالب TCP با سرآیند HTTP به هسته Xray نیاز دارد."},
+    "ss2022_chacha": {"kernels": ["singbox"], "reason": "این روش رمزنگاری Shadowsocks برای چند کاربر به هسته Sing-box نیاز دارد."}
+  }
+}

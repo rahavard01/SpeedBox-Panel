@@ -17,6 +17,22 @@ window.SpeedboxNodeEditor = (() => {
   };
   const padding = ['stop=8','0=30-30','1=100-400','2=400-500,c,500-1000,c,500-1000,c,500-1000,c,500-1000','3=9-9,500-1000','4=500-1000','5=500-1000','6=500-1000','7=500-1000'];
   const clone = value => JSON.parse(JSON.stringify(value));
+  function compatibleKernels(type, settings, definition) {
+    if (!definition?.protocols) return {kernels:[],reason:'قواعد سازگاری هسته دریافت نشده است؛ صفحه را تازه کنید.'};
+    let kernels=[...(definition.protocols[type]||[])];const reasons=[];
+    const transport=['vmess','vless','trojan'].includes(type), network=String(settings.network??'tcp').trim().toLowerCase();
+    const features={
+      hysteria1:type==='hysteria'&&Number(settings.version??2)===1,
+      tuic_legacy:type==='tuic'&&Number(settings.version??5)!==5,
+      xray_transport:transport&&['xhttp','splithttp','kcp'].includes(network),
+      vless_encryption:type==='vless'&&[true,1,'1'].includes(settings.encryption?.enabled),
+      tcp_http:transport&&['','tcp','raw'].includes(network)&&String(settings.network_settings?.header?.type||'').trim().toLowerCase()==='http',
+      ss2022_chacha:type==='shadowsocks'&&settings.cipher==='2022-blake3-chacha20-poly1305'
+    };
+    for(const [name,enabled] of Object.entries(features))if(enabled){const rule=definition.features[name];kernels=kernels.filter(k=>rule.kernels.includes(k));reasons.push(rule.reason);}
+    if(!reasons.length&&kernels.length===1)reasons.push(`این پروتکل به هسته ${kernels[0]==='xray'?'Xray':'Sing-box'} نیاز دارد.`);
+    return {kernels,reason:reasons.join(' ')};
+  }
   const esc = value => String(value ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const get = (obj,path,fallback='') => path.split('.').reduce((o,k)=>o?.[k],obj) ?? fallback;
   const set = (obj,path,value) => { const keys=path.split('.'); const key=keys.pop(); let o=obj; keys.forEach(k=>{if(!o[k]||typeof o[k]!=='object')o[k]={};o=o[k];});o[key]=value; };
@@ -42,13 +58,15 @@ window.SpeedboxNodeEditor = (() => {
       ...(type==='vmess'?{}:{reality_settings:{server_port:443,server_name:'',allow_insecure:false,public_key:'',private_key:'',short_id:'',...(type==='vless'?{fingerprint:'chrome'}:{})}}),
       ...(type==='vless'?{flow:'',encryption:{enabled:false,encryption:'',decryption:''}}:{})};
   }
-  function mount({node,state,api,openModal,closeModal,toast,reload,enhanceControls,isSaving}) {
+  function mount({node,prefill,state,api,openModal,closeModal,toast,reload,enhanceControls,isSaving}) {
     const draft=merge({name:'',type:'shadowsocks',rate:1,rate_time_enable:false,rate_time_ranges:[],transfer_enable:0,code:'',tags:[],group_ids:[],route_ids:[],parent_id:null,machine_id:null,kernel:'singbox',host:'',port:'',server_port:'',show:false,enabled:true,custom_outbounds:[],custom_routes:[],cert_config:null},node);
     ['rate_time_ranges','tags','group_ids','route_ids','custom_outbounds','custom_routes'].forEach(key=>{if(!Array.isArray(draft[key]))draft[key]=[];});
+    if(prefill)for(const key of ['name','machine_id','host','port','server_port'])if(prefill[key]!==undefined)draft[key]=prefill[key];
     draft.protocol_settings=merge(defaults(draft.type),node?.protocol_settings);
     if(!draft.cert_config&&draft.protocol_settings.cert_config)draft.cert_config=clone(draft.protocol_settings.cert_config);
     const cache=new Map([[draft.type,clone(draft.protocol_settings)]]);
-    let disposed=false, sub=null;
+    let disposed=false, sub=null, warpTimer=null, warpSequence=0;
+    let warpState={machineId:null,data:null,account:'keep',license:'',detailsOpen:false,error:''};
     const text=(path,label,value,opts={})=>`<div class="field ${opts.wide?'full':''}"><label for="ne-${esc(path)}">${label}</label><input id="ne-${esc(path)}" data-path="${esc(path)}" value="${esc(value)}" ${opts.required?'required':''} type="${opts.number?'number':'text'}" ${opts.number?`step="${opts.step||'1'}" min="${opts.min??0}"`:''} ${opts.placeholder?`placeholder="${esc(opts.placeholder)}"`:''}></div>`;
     const select=(path,label,value,options,{multiple=false,number=false,wide=false,custom=false,protocolPicker=false}={})=>{
       const choices=[...options];if(custom&&value&&!choices.some(o=>String(Array.isArray(o)?o[0]:o)===String(value)))choices.unshift([value,value]);
@@ -106,14 +124,93 @@ window.SpeedboxNodeEditor = (() => {
       const parents=state.nodes.filter(n=>!n.parent_id&&n.id!==node?.id&&n.type===draft.type);
       if(draft.parent_id&&!parents.some(n=>n.id==draft.parent_id))draft.parent_id=null;
       const parent=parents.find(n=>n.id==draft.parent_id);
-      if(parent){draft.machine_id=parent.machine_id;draft.kernel=parent.kernel;draft.rate=parent.rate;form.querySelector('[data-path=rate]').value=parent.rate;}
+      const compatibility=compatibleKernels(draft.type,draft.protocol_settings,state.kernelCapabilities);
+      if(!parent&&!compatibility.kernels.includes(draft.kernel)&&compatibility.kernels.length)draft.kernel=compatibility.kernels[0];
+      if(parent){draft.machine_id=parent.machine_id;draft.kernel=parent.kernel;draft.rate=parent.rate;draft.warp_enabled=!!parent.warp_enabled;form.querySelector('[data-path=rate]').value=parent.rate;}
       form.querySelector('[data-path=rate]').disabled=!!parent;
       form.querySelector('.node-assignment').innerHTML=`${select('parent_id','نود والد',draft.parent_id??'', [['','بدون والد'],...parents.map(n=>[n.id,n.name])],{number:true,wide:true})}
         ${select('route_ids','قواعد مسیریابی',draft.route_ids,state.routes.map(r=>[r.id,r.remarks]),{multiple:true,wide:true})}
-        <div class="node-row">${select('machine_id','سرور مقصد',draft.machine_id??'',[['','بدون سرور'],...state.machines.filter(m=>m.is_active!==false).map(m=>[m.id,m.name])],{number:true})}${select('kernel','هسته',draft.kernel,[['singbox','Sing-box'],['xray','Xray']])}</div>
+        <div class="node-row">${select('machine_id','سرور مقصد',draft.machine_id??'',[['','بدون سرور'],...state.machines.filter(m=>m.is_active!==false).map(m=>[m.id,m.name])],{number:true})}${select('kernel','هسته',draft.kernel,(parent?[parent.kernel]:compatibility.kernels).map(k=>[k,k==='xray'?'Xray':'Sing-box']))}</div>
+        <p class="node-kernel-note full" role="status">${esc(parent?`هسته از نود اصلی ${parent.id} گرفته می‌شود. ${compatibility.reason}`:compatibility.reason||'هر دو هسته با تنظیمات فعلی سازگار هستند.')}</p>
+        <div class="node-warp-slot full"></div>
         ${toggle('enabled','فعال بودن نود',draft.enabled)}${toggle('show','نمایش در سابسکرایب',draft.show)}`;
       if(parent)form.querySelectorAll('[data-path="machine_id"],[data-path="kernel"]').forEach(el=>el.disabled=true);
-      bind(form.querySelector('.node-assignment'),draft,input=>{if(input.dataset.path==='parent_id')assignment();});
+      form.querySelectorAll('[data-path="parent_id"] option').forEach(option=>{const candidate=parents.find(n=>String(n.id)===option.value);if(candidate)option.disabled=!compatibility.kernels.includes(candidate.kernel);});
+      const invalid=!compatibility.kernels.includes(draft.kernel);
+      form.querySelector('.node-kernel-note').classList.toggle('is-error',invalid);
+      if(invalid)form.querySelector('.node-kernel-note').textContent=parent?'تنظیمات این نود با هستهٔ والد سازگار نیست؛ تنظیمات یا نود والد را تغییر دهید.':compatibility.reason||'برای این ترکیب تنظیمات، هستهٔ سازگاری وجود ندارد.';
+      form.querySelector('[type="submit"]').disabled=invalid;
+      bind(form.querySelector('.node-assignment'),draft,input=>{if(['parent_id','machine_id'].includes(input.dataset.path))assignment();});
+      if(warpState.machineId!==draft.machine_id){clearTimeout(warpTimer);warpSequence++;warpState={machineId:draft.machine_id,data:null,account:'keep',license:'',detailsOpen:false,error:''};}
+      drawWarp();
+      if(draft.warp_enabled&&!parent&&!warpState.data&&draft.machine_id)loadWarp();
+    }
+    function drawWarp() {
+      const target=form.querySelector('.node-warp-slot');
+      if(!target)return;
+      const parent=state.nodes.find(n=>n.id==draft.parent_id);
+      const data=warpState.data, status=data?.status, operation=data?.operation;
+      const busy=warpState.submitting||(operation&&['queued','running'].includes(operation.status));
+      const installed=status?.installed===true||status?.ready===true||['free','plus'].includes(status?.account);
+      const fresh=status?.installed===false;
+      const ready=status?.ready&&data?.supported;
+      const label=warpState.submitting?'در حال ارسال درخواست':busy?(operation?.status==='queued'?'در صف عملیات':'در حال اجرای عملیات'):fresh?'نصب نشده':ready?'متصل':installed?'نیازمند بررسی':'بررسی نشده';
+      const selected=warpState.account==='keep'?(status?.account==='plus'?'plus':'free'):warpState.account;
+      const disabled=busy||!draft.machine_id;
+      const accountFields=()=>`<div class="field"><label>نوع حساب</label><select data-warp-account ${disabled?'disabled':''}><option value="free" ${selected==='free'?'selected':''}>رایگان</option><option value="plus" ${selected==='plus'?'selected':''}>WARP+</option></select></div>
+        ${selected==='plus'?`<div class="field"><label for="nodeWarpLicense">کد لایسنس WARP+</label><input id="nodeWarpLicense" type="password" dir="ltr" autocomplete="new-password" value="${esc(warpState.license)}" placeholder="${installed&&status?.account==='plus'?'برای حفظ لایسنس فعلی، این کادر را خالی بگذارید':'کد لایسنس را وارد کنید'}" ${disabled?'disabled':''}></div>`:''}`;
+      const notInstalledError=fresh&&(status?.error_code==='not_installed'||/^WARP روی (?:این )?سرور نصب نیست[؛.]/.test(status?.error||''));
+      const message=warpState.error||(!notInstalledError&&status?.error)||'';
+      target.innerHTML=`<section class="node-warp-card">${toggle('warp_enabled','WARP',!!draft.warp_enabled)}
+        ${parent?'<p class="node-warp-note">تنظیم WARP از نود والد گرفته می‌شود.</p>':draft.warp_enabled?`<div class="node-warp-content"><p class="node-warp-note">اتصال‌های TCP این نود از WARP عبور می‌کنند. ترافیک UDP از اتصال مستقیم سرور استفاده می‌کند.</p>
+        <div class="node-warp-status"><span role="status">${esc(label)}</span>${installed?`<span>حساب سرور: <strong>${status.account==='plus'?'WARP+':status.account==='free'?'رایگان':'نامشخص'}</strong></span>`:''}</div>
+        ${message?`<p class="node-warp-message" role="alert">${esc(message)}</p>`:''}
+        ${installed?`<details class="node-warp-account" ${warpState.detailsOpen?'open':''}><summary>تغییر حساب WARP سرور</summary>${accountFields()}
+        <p class="node-warp-note">حساب WARP بین تمام نودهای این سرور مشترک است.</p>
+        ${status.account==='plus'&&selected==='free'?'<p class="node-warp-message">حساب این سرور از WARP+ به رایگان تغییر می‌کند؛ این تغییر روی همهٔ نودهایی که WARP روشن دارند اعمال می‌شود.</p>':''}
+        <div class="node-warp-actions"><button type="button" class="button secondary small" data-warp-action="change" ${disabled?'disabled':''}>اعمال تغییر حساب</button></div></details>`:`${fresh?'<p class="node-warp-note">WARP روی این سرور نصب نیست. برای فعال‌سازی، از گزینهٔ «نصب و راه‌اندازی» استفاده کنید.</p>':''}${accountFields()}<p class="node-warp-note">حساب WARP بین نودهای این سرور مشترک است؛ حساب موجود هنگام راه‌اندازی حفظ می‌شود.</p>`}
+        <div class="node-warp-actions">${!ready?`<button type="button" class="button primary small node-warp-main" data-warp-action="${installed?'prepare':'install'}" ${disabled?'disabled':''}>${installed?'راه‌اندازی مجدد':'نصب و راه‌اندازی'}</button>`:''}<button type="button" class="button secondary small" data-warp-action="test" ${disabled?'disabled':''}>تست اتصال</button></div>
+        ${!draft.machine_id?'<p class="node-warp-message">ابتدا سرور مقصد را انتخاب کنید.</p>':''}
+        ${busy?`<p class="node-warp-note" aria-live="polite">${esc(operation?.action==='upgrade'?'در حال به‌روزرسانی نرم‌افزار سرور…':operation?.log||'در حال ارسال درخواست…')}</p>`:''}</div>`:''}</section>`;
+      const enabled=target.querySelector('[data-path="warp_enabled"]');
+      enabled.disabled=!!parent;
+      enabled.onchange=()=>{draft.warp_enabled=enabled.checked;drawWarp();if(enabled.checked&&draft.machine_id&&!warpState.data)loadWarp();};
+      target.querySelector('details')?.addEventListener('toggle',e=>{if(e.target.isConnected)warpState.detailsOpen=e.target.open;});
+      const account=target.querySelector('[data-warp-account]');
+      if(account){account.onchange=()=>{warpState.detailsOpen=!!target.querySelector('details')?.open;warpState.account=account.value;warpState.license='';drawWarp();};}
+      enhanceControls(target);
+      target.querySelector('#nodeWarpLicense')?.addEventListener('input',e=>{warpState.license=e.target.value;});
+      target.querySelectorAll('[data-warp-action]').forEach(button=>button.onclick=()=>runWarp(button.dataset.warpAction));
+    }
+    async function loadWarp() {
+      const machineId=draft.machine_id, sequence=++warpSequence;
+      if(!machineId||disposed)return;
+      clearTimeout(warpTimer);
+      try {
+        const r=await api(`/machines/${machineId}/warp`);
+        if(disposed||machineId!==draft.machine_id||sequence!==warpSequence)return;
+        warpState.data=r.data;warpState.error='';drawWarp();
+        if(['queued','running'].includes(r.data?.operation?.status))warpTimer=setTimeout(loadWarp,2500);
+      }catch(error){if(disposed||sequence!==warpSequence||error.name==='AbortError')return;warpState.error=error.message;drawWarp();}
+    }
+    async function runWarp(action) {
+      if(!draft.machine_id)return;
+      const machineId=draft.machine_id;
+      if(warpState.submitting||['queued','running'].includes(warpState.data?.operation?.status))return;
+      const changesAccount=action==='install'||action==='change';
+      const actualAction=changesAccount?'prepare':action;
+      const selected=warpState.account==='keep'?(warpState.data?.status?.account==='plus'?'plus':'free'):warpState.account;
+      const account=action==='change'?selected:action==='install'&&selected==='plus'?'plus':'keep';
+      const license=changesAccount?warpState.license:'';
+      if(actualAction==='prepare'&&account==='plus'&&!license&&warpState.data?.status?.account!=='plus'){toast('کد لایسنس WARP+ را وارد کنید.','error');return;}
+      warpState.submitting=true;drawWarp();
+      try {
+        const body=actualAction==='prepare'?{action:actualAction,account,license:license||null}:{action:actualAction};
+        const r=await api(`/machines/${machineId}/warp`,{method:'POST',body:JSON.stringify(body)});
+        if(disposed||machineId!==draft.machine_id)return;
+        warpState.license='';warpState.account='keep';warpState.detailsOpen=false;toast(r.message);await loadWarp();
+      }catch(error){if(!disposed&&machineId===draft.machine_id&&error.name!=='AbortError')toast(error.message,'error');}
+      finally{if(!disposed&&machineId===draft.machine_id){warpState.submitting=false;drawWarp();}}
     }
     function ech(prefix) {
       return `${pt(prefix+'.enabled','فعال‌سازی ECH')}${get(draft.protocol_settings,prefix+'.enabled')?`<div class="node-ech-fields full"><div class="node-row">${pf(prefix+'.query_server_name','نام عمومی ECH',{placeholder:'ech.example.com'})}<button type="button" class="button secondary" data-generate-ech="${prefix}">تولید کلید ECH</button></div>${pa(prefix+'.config','پیکربندی ECH')}${pa(prefix+'.key','کلید خصوصی ECH')}</div>`:''}`;
@@ -159,7 +256,7 @@ window.SpeedboxNodeEditor = (() => {
       bind(target,draft,input=>{
         // Redraw only dependencies. Text entry never destroys focus or selection.
         if(['tls','version','plugin','obfs.open','utls.enabled','encryption.enabled','tls.ech.enabled','tls_settings.ech.enabled'].some(path=>input.dataset.path==='protocol_settings.'+path))protocol();
-        if((input.dataset.path==='protocol_settings.network'&&['xhttp','kcp'].includes(input.value))||(input.dataset.path==='protocol_settings.encryption.enabled'&&input.checked)){draft.kernel='xray';assignment();}
+        if(['protocol_settings.network','protocol_settings.version','protocol_settings.cipher','protocol_settings.encryption.enabled'].includes(input.dataset.path))assignment();
       });
       target.querySelector('[data-vless-encryption]')?.addEventListener('click',async()=>{
         if(!draft.machine_id){toast('ابتدا سرور مقصد را انتخاب کنید.','error');return;}
@@ -246,8 +343,8 @@ window.SpeedboxNodeEditor = (() => {
           html=toggle('protocol_settings.multiplex.enabled','فعال‌سازی چندگانه‌سازی',mux.enabled);
           if(mux.enabled)html+=`<div class="node-row">${select('protocol_settings.multiplex.protocol','پروتکل',mux.protocol,['smux','yamux','h2mux'])}${text('protocol_settings.multiplex.max_connections','حداکثر اتصال',mux.max_connections,{number:true,min:1})}</div>`+toggle('protocol_settings.multiplex.padding','پرکردن بسته‌ها',mux.padding)+toggle('protocol_settings.multiplex.brutal.enabled','فعال‌سازی Brutal',mux.brutal?.enabled)+(mux.brutal?.enabled?`<div class="node-row">${text('protocol_settings.multiplex.brutal.up_mbps','سرعت ارسال (Mbps)',mux.brutal.up_mbps,{number:true})}${text('protocol_settings.multiplex.brutal.down_mbps','سرعت دریافت (Mbps)',mux.brutal.down_mbps,{number:true})}</div>`:'');
         }
-        if(active==='outbounds')html=area('custom_outbounds','خروجی‌های سفارشی',working.custom_outbounds,'json');
-        if(active==='routing')html=area('custom_routes','مسیرهای سفارشی',working.custom_routes,'json');
+        if(active==='outbounds')html=area('custom_outbounds','خروجی‌های سفارشی',working.custom_outbounds,'json')+(draft.warp_enabled?'<p class="node-warp-note">خروجی خودکار WARP جداگانه اعمال می‌شود؛ نیازی به وارد کردن آن در این کادر نیست.</p>':'');
+        if(active==='routing')html=area('custom_routes','مسیرهای سفارشی',working.custom_routes,'json')+(draft.warp_enabled?'<p class="node-warp-note">مسیرهای خودکار WARP پس از قواعد دستی اعمال می‌شوند؛ نیازی به وارد کردن آن‌ها در این کادر نیست.</p>':'');
         target.innerHTML=html;
         bind(target,working,input=>{delete errors[input.dataset.path];if(input.tagName==='SELECT'||input.type==='checkbox')draw();});
         target.querySelectorAll('[data-format=json]').forEach(input=>input.addEventListener('input',()=>{try{const data=JSON.parse(input.value);if(!data||typeof data!=='object'||(input.dataset.path.startsWith('custom_')&&!Array.isArray(data))||(input.dataset.path==='cert_config.dns_env'&&Array.isArray(data)))throw Error();delete errors[input.dataset.path];input.setCustomValidity('');}catch(_){errors[input.dataset.path]=true;input.setCustomValidity('ساختار JSON معتبر نیست.');}}));
@@ -258,19 +355,20 @@ window.SpeedboxNodeEditor = (() => {
     function header() {
       form.querySelector('.node-protocol-head').innerHTML=select('type','پروتکل',draft.type,protocols,{protocolPicker:true});
       const selector=form.querySelector('[data-path=type]');
-      selector.onchange=()=>{cache.set(draft.type,clone(draft.protocol_settings));draft.type=selector.value;draft.protocol_settings=merge(defaults(draft.type),cache.get(draft.type));if(['tuic','anytls','naive','mieru'].includes(draft.type))draft.kernel='singbox';header();protocol();assignment();};enhanceControls(form.querySelector('.node-protocol-head'));
+      selector.onchange=()=>{cache.set(draft.type,clone(draft.protocol_settings));draft.type=selector.value;draft.protocol_settings=merge(defaults(draft.type),cache.get(draft.type));header();protocol();assignment();};enhanceControls(form.querySelector('.node-protocol-head'));
     }
     common();header();protocol();assignment();
     form.querySelector('[data-advanced]').onclick=advanced;
     form.onsubmit=async e=>{
       e.preventDefault();if(!form.reportValidity())return;
+      if(!compatibleKernels(draft.type,draft.protocol_settings,state.kernelCapabilities).kernels.includes(draft.kernel)){toast('تنظیمات نود با هسته انتخاب‌شده سازگار نیست.','error');return;}
       const body=clone(draft);delete body.transfer_enable_gb;delete body.runtime;delete body.machine;delete body.parent;delete body.created_at;delete body.updated_at;delete body.id;delete body.u;delete body.d;
       body.protocol_settings=clone(draft.protocol_settings);
       if(body.type==='hysteria'){body.protocol_settings.bandwidth={...body.protocol_settings.bandwidth,up:Number(get(body,'protocol_settings.bandwidth.up',0)),down:Number(get(body,'protocol_settings.bandwidth.down',0))};}
       try{const r=await api(node?`/nodes/${node.id}`:'/nodes',{method:node?'PUT':'POST',body:JSON.stringify(body)});if(disposed)return;toast(r.message);closeModal();await reload();}catch(error){if(error.name!=='AbortError')toast(error.message,'error');}
     };
-    return () => {disposed=true;closeSub();};
+    return () => {disposed=true;warpSequence++;clearTimeout(warpTimer);warpState.license='';closeSub();};
   }
-  return {mount,protocols,protocolBadge};
+  return {mount,protocols,protocolBadge,compatibleKernels};
 })();
 

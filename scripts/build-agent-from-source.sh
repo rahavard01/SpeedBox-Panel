@@ -33,8 +33,8 @@ BUILD_DIR=$(mktemp -d "${OUTPUT_DIR}/.build.XXXXXX")
 trap 'rm -rf "$BUILD_DIR"' EXIT
 cd "${AGENT_DIR}"
 for arch in amd64 arm64; do
-  CGO_ENABLED=0 GOOS=linux GOARCH="${arch}" go build -p 2 -trimpath -ldflags "-s -w -X main.version=panel-speedbox-http-obfs-uuid-v1" -tags "with_quic with_utls with_wireguard with_acme with_clash_api" -o "${BUILD_DIR}/xboard-node-linux-${arch}" ./cmd/xboard-node
-  CGO_ENABLED=0 GOOS=linux GOARCH="${arch}" go build -p 2 -trimpath -ldflags "-s -w -X main.version=panel-speedbox-http-obfs-uuid-v1" -o "${BUILD_DIR}/xbctl-linux-${arch}" ./cmd/xbctl
+  CGO_ENABLED=0 GOOS=linux GOARCH="${arch}" go build -p 2 -trimpath -ldflags "-s -w -X main.version=panel-speedbox-http-obfs-uuid-v1-nodes-v2" -tags "with_quic with_utls with_wireguard with_acme with_clash_api" -o "${BUILD_DIR}/xboard-node-linux-${arch}" ./cmd/xboard-node
+  CGO_ENABLED=0 GOOS=linux GOARCH="${arch}" go build -p 2 -trimpath -ldflags "-s -w -X main.version=panel-speedbox-http-obfs-uuid-v1-nodes-v2" -o "${BUILD_DIR}/xbctl-linux-${arch}" ./cmd/xbctl
 done
 
 chmod 0755 "${BUILD_DIR}"/*
@@ -42,3 +42,4 @@ for artifact in "${BUILD_DIR}"/*; do mv -f "$artifact" "${OUTPUT_DIR}/"; done
 echo "SpeedBox agent binaries are ready in ${OUTPUT_DIR}."
 
 python3 "${ROOT_DIR}/scripts/package-agent.py"
+

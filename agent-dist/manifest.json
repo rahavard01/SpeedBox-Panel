@@ -4,29 +4,29 @@
       "binaries": {
         "xbctl-linux-amd64": {
           "bytes": 7123106,
-          "sha256": "6f642f02c931896c4463efeb367479d77cc9389eebdb17e827e4e85e755337c6"
+          "sha256": "3db192b07cfda2384d3c9e015e2c317265e96d7683d073f8200fdd0bf9c1dce5"
         },
         "xboard-node-linux-amd64": {
-          "bytes": 66711714,
-          "sha256": "91400a294dabafdbe3d4e8f1642f75de86402c2c5b0f4ad844eb59abc9c0cecc"
+          "bytes": 66728098,
+          "sha256": "236bf01cce24d908ed035587f8a7b65e1510838f09c63c051af24ab33a681db1"
         }
       },
-      "bytes": 25878760,
-      "sha256": "4adb871467651667bfe1e67a2500575bbbc9213f6fa9ebd6108fcbdcbb416cda"
+      "bytes": 25882155,
+      "sha256": "a0cc37bf36a189eb714bce701edf70686342fc339588b0abf788e17174a4ffbb"
     },
     "arm64": {
       "binaries": {
         "xbctl-linux-arm64": {
           "bytes": 6619298,
-          "sha256": "0c847bc667baaa48f671b93469e71742ab3135f2d33f5efd6426d9a9eced7102"
+          "sha256": "8363240f5b0985e916645262206e539ebe9bb146a4f7766739df8a19d67c9a57"
         },
         "xboard-node-linux-arm64": {
-          "bytes": 61604002,
-          "sha256": "a869f0b99f23da3f5637f32a0b462e0bad67b5515b50c8d478266f111035dd02"
+          "bytes": 61669538,
+          "sha256": "ee791f5e51685507f83779e4a45e4c3f42a191c489bd271715cbc6f9af29b937"
         }
       },
-      "bytes": 23297286,
-      "sha256": "4f275e41f32f0a5597f89e59b51cf4c08c61d6339cd8c575c184b7cf209e3fee"
+      "bytes": 23302304,
+      "sha256": "05ee2b02a95419e0bf17eb0c06316e6b361045155aefdf9f55157d0d5a98dd8e"
     }
   },
   "format": 1,
@@ -89,19 +89,23 @@
     "agent/internal/kernel/customcfg.go": "804432ad33164e6b85ae306baab15c24b8c294c333a0d087c58ee5ff5d71c007",
     "agent/internal/kernel/geo.go": "29de4766c3c6ba1108f895841a17d2cadaa26efc84ca8a9ab1d5a1bc069cb588",
     "agent/internal/kernel/geodata/geodata.go": "14b4b26044f0555af4ec02e5a9609679ab7767dd3461a5da00a8326b9fbee766",
-    "agent/internal/kernel/kernel.go": "cc8065ab3d5c71369f2c803b5d83e30be915cab21de9e9f5b02f256b0b4e5038",
-    "agent/internal/kernel/singbox/config.go": "716a53096c7ef2ec214a0e2a90fc7d17bdf7f9cf26280d09ae4eecd0a8b549b9",
+    "agent/internal/kernel/kernel.go": "6dd2572b1549d2c9495891b08d30bec19db6a1c13ddf57b6c076af7ec66a0f9e",
+    "agent/internal/kernel/singbox/config.go": "b88d5634ea0867b7b8de21a2f2d4a61090ccd3913ef0cca0fcaab2919f495713",
     "agent/internal/kernel/singbox/config_test.go": "0ccb5ed6e3ff6f9f29339f9e27fc65c221e24582b29082973c70dc7fe871e0be",
     "agent/internal/kernel/singbox/conntracker.go": "e6b30e3a2304dfbe2fbe980fde4ec29d113570678e3f712bd87034cd28775ea4",
-    "agent/internal/kernel/singbox/singbox.go": "1b3e7b556afc8ff78945de084d68f54d5cfd11ccea1c15e77c6b847fcacd7d0b",
+    "agent/internal/kernel/singbox/singbox.go": "464df63be35269515c50d56ca7cfb2bdfeb1ba0eda42d54afae3ac812468652d",
     "agent/internal/kernel/singbox/singbox_test.go": "50332631bef00d7cd555c84574dde6fe206c54c546b9ede53fcc7765b120aad3",
-    "agent/internal/kernel/uuid_rotation_test.go": "111b43b4bd2ebe2a6aa1933a4852d8af0ee11fcf39e73c24b0e6e341bc35760b",
-    "agent/internal/kernel/xray/config.go": "f9e7d8ea7a6d3c3030eaf6f980f066d3477474eb1fd1deaccb499942fda3966b",
+    "agent/internal/kernel/singbox/warp_reload_test.go": "a65ea8f915dade2fbd041588f2bbd75b371a2b3dbbf0749dd249a46bc6e488c1",
+    "agent/internal/kernel/singbox/warp_test.go": "3bad194c1a585ace32c4d55aa818421038b54b2fef4117bb9ec75b0f2edcb04f",
+    "agent/internal/kernel/uuid_rotation_test.go": "e4cb6aab7966148ff19ac140d1a31ac3dfb9d185d4a1b764ced29d55cbe67c0b",
+    "agent/internal/kernel/warp_integration_test.go": "9bed5b70237938577044ed010dbca04734f9e21c7f743135cb78e16f0835e639",
+    "agent/internal/kernel/xray/config.go": "6aba5ee0510f2a1c3147402273da5e434b737aeb6b884037cc6535cd7d97245d",
     "agent/internal/kernel/xray/config_test.go": "eefed1724fe34ea78f916cc75f0e25058bb17bc5ef6f490a9307ee9082c15fea",
     "agent/internal/kernel/xray/dispatcher.go": "4f37523c953653a1b6793e14a732cff6b2ce37390623814d79a47c550374502c",
     "agent/internal/kernel/xray/dispatcher_test.go": "c040f44cc405f729e9dc441907c39dd883e265f545be9ce690cc32b6d575a8bd",
-    "agent/internal/kernel/xray/uuid_rotation_test.go": "3d377c193a4c3237426cb47cdf3bc762dc49328d5820ca8e36f40200d96a252e",
-    "agent/internal/kernel/xray/xray.go": "fbef824f767a8b82c72f7ad58bf35efaef952414855b2f41a5961e8f5c310c6e",
+    "agent/internal/kernel/xray/uuid_rotation_test.go": "e3be676bdd56ad141ae64cd74f7402d62c021e5b6d0032973c75178639e61aff",
+    "agent/internal/kernel/xray/warp_test.go": "64e274537185ee0d07b6396594c1eb5ee979dde329e87175c301a733b7d1f703",
+    "agent/internal/kernel/xray/xray.go": "b45fa36f635b0135513fc049c3b5ea8c3d273429f5bb1b2106cc71a74d57aed0",
     "agent/internal/kernel/xray/xray_test.go": "5c5be8114b3803c649d1ee41019d8b000f704d975cacea07dbc343ced8635c37",
     "agent/internal/limiter/limiter.go": "70b0458c98d4cead52d376ff955ef8099e315f9d08bef1c33678931f2f22b8cc",
     "agent/internal/limiter/limiter_test.go": "b8461b201e92c2a29365ed454000330f6ae304a8bcaec2163d6a06e4ba8c9968",
@@ -117,29 +121,35 @@
     "agent/internal/model/custom_route_support.go": "b4287798c85edd664ca2684de3e6ff3620e233721fd9ab5e0cdc73cd48d0dfd9",
     "agent/internal/model/custom_route_validate.go": "83a0d1390537adca3e3be902fbad2f539bf94bd0f039c01114c9b73112cc54e3",
     "agent/internal/model/custom_route_validate_test.go": "36dc7fc5456a99b15deb3b69a8c9c12d1fa1b6a68b6a1c260ea795514a0bafbc",
-    "agent/internal/model/panel.go": "aa53ebbc9855fda96ce20a80086492eaea865bed582e8a3192d2e0d3e169b8d7",
+    "agent/internal/model/kernel-capabilities.json": "91722709f9e1346e07fa21d9e29d41ae16b49890b48b6ea65ac7a7f2682866c4",
+    "agent/internal/model/kernel_capabilities.go": "16056f97cef3c8d60d7ed90d2df1cbb594a0ee470f45cf3dd168f81bf87ac719",
+    "agent/internal/model/kernel_capabilities_test.go": "368272942c0f2e4b53072ffa56597a7fd1d9835bec295fee7213206b23142332",
+    "agent/internal/model/panel.go": "58b63f599d369fa0c2ac9c782a3545c60008d610f2d26c37d56cda531193a9bc",
     "agent/internal/model/panel_test.go": "bba03ffc5ae5d2623c14c2edac825003b432c6a41776e438efb85c8ddc7b8eb7",
     "agent/internal/model/standalone.go": "0f989225b0db76492a6338dae6b129532d24785d960be91d342ea12eb109fade",
     "agent/internal/model/standalone_test.go": "70426404fb563f38ae0e160c7e9361db5e478ff16706ab1c290dd6ace5b6ce93",
-    "agent/internal/model/types.go": "0dc32e4599133c40ff513d3aedb3d804e8c8d15c7377023928591addf77f3ddb",
-    "agent/internal/model/validate.go": "b536335a5fe39917b697eab2d0281a2345ebd049913538c5f33933377edb1ac4",
+    "agent/internal/model/types.go": "eb64b5283fcd0d61d52b5c61299ca4825bda4db76e11fdde5b7ef877fab4229d",
+    "agent/internal/model/validate.go": "249c0c62d7d08ed7e2878fc25cfbed33b58c1d7ce6b5ff8a43a24e0082099218",
+    "agent/internal/model/warp.go": "0497da1f20a98e8de1f8f9e6cc8531e3d8ae761c3ed2a375f344bdaae6e4c270",
+    "agent/internal/model/warp_test.go": "7854f5a75965b678d82df8a125f86cff781e60e5cbab39e95c3a7cebe8c0f3f6",
     "agent/internal/monitor/monitor.go": "94912bf0c41de20ce679dcaf06c9da945f5ef22a7bf5709fad7bde4ddb5113a1",
     "agent/internal/nlog/nlog.go": "211142223c7708793c2ccf26bcb3aa3de1ce1c8f64ca18617b1928ee482dfdfb",
-    "agent/internal/panel/client.go": "4711c70a471c94c495fa8cf6cfe3b3172c46e014dce4a6c92ab95729b20888af",
+    "agent/internal/panel/client.go": "cf014ec48808c17dc7a63b7767aa186005cbe874daf4d96111b27ef8f8d863c2",
     "agent/internal/panel/client_test.go": "19f6b523fd97d290cfa7af758e6c9231eaeec7856992595f96884c1e8b0c448d",
-    "agent/internal/panel/types.go": "f0312e20d586ca7299715a72b8121f942295429efbda49b37d00d603d513cb86",
+    "agent/internal/panel/types.go": "4c4c3bde11152e55cce01a8d4648a619f473d53c5eaf89f6320ae6f35540c447",
     "agent/internal/panel/types_test.go": "3e2d2d835ea1b9939ea773d489e275e524453554720985fa40d69e2f486fccc1",
     "agent/internal/panel/ws.go": "dda733ec1976ce415ce7d7a6e5222d16e10cf22df53871a40eafe8ed5456c0a5",
     "agent/internal/panel/ws_test.go": "8a570638d05c345112ef4317589018d7f9521481bf78a20a2f43c695283fbc5d",
-    "agent/internal/service/service.go": "cfb5906f9c6651398357f8ead4b94a0b901a4758b8c5d149567e35038645fecc",
+    "agent/internal/service/first_users_test.go": "3f2dca069ca771c2790d9c236b5ad2e9e920a93f49c5b2df000db4b3e004accd",
+    "agent/internal/service/service.go": "7c6539bb5ee3104c0a2ab3f7c8c292137ab25ff731775b965ff7579827021260",
     "agent/internal/service/service_test.go": "a320ca309e8dfd45ff3aaacf4dd5cdfd6d64c8521f94c3d1af0588d8300ff0ec",
-    "agent/internal/service/uuid_rotation_test.go": "2aebfc5d2aff58d2cf48463c92589202b3dc8028cab87688951bd793a5308355",
+    "agent/internal/service/uuid_rotation_test.go": "638ab458fa581860ef0b84b9bb6863d890513f519fc7f56249532880f19605d9",
     "agent/internal/tracker/tracker.go": "e52075dd2482712b239cfe7043626795429bfc3a0f1eef441f9a0e67d5ed7ec7",
     "agent/internal/tracker/tracker_test.go": "2a05026190894f66ea02f978796f9ad88201edab78b77c8c26a3ae0830d6abd1",
-    "scripts/agent-artifacts.php": "2a8663d4b603e2a4548b89a882b89ce318a48b5c19d5e80a073bf88b04e35480",
-    "scripts/build-agent-from-source.sh": "08d3207e82972b95e7f92bafcc0b2d9fe0e3ef0292a0cafa11cf7dd3b9f671fc",
-    "scripts/build-agent.sh": "6b8bbccba941b097281b48a45f976f92c657c4d1dd63379ce396744dfc151f4b",
-    "scripts/package-agent.py": "0bd931f312246b9d2bd4b0da0886b66630542fb9b894e4226ddd1878ccd67126"
+    "scripts/agent-artifacts.php": "da5662c710978ef80d829b6c8cefeffddcd841e5a068fa107d7357b7a5c8f3ec",
+    "scripts/build-agent-from-source.sh": "ae819c9fc6ac9accfa72ea83cea188ac8c93df021f1d79318d64b85d67deda90",
+    "scripts/build-agent.sh": "14089d7b06d90e6e3e72f11a260858f1b24494cf049b71ec78867d26a3adb207",
+    "scripts/package-agent.py": "cdb4f34ef469eaa583d413f5f6733830dfe872006c8d8300693fe535d2a2be8c"
   },
-  "version": "panel-speedbox-http-obfs-uuid-v1"
+  "version": "panel-speedbox-http-obfs-uuid-v1-nodes-v2"
 }

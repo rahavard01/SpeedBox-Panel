@@ -81,6 +81,19 @@ func buildConfig(kcfg config.KernelConfig, nc *model.NodeSpec, users []model.Use
 	cfg["routing"] = buildRouting(nc.Routes, nc.CustomRouteRules, mergeRouteList(nc.CustomRoutes, kcfg.CustomRoute))
 
 	mergeCustomXray(cfg, kcfg)
+	if nc.WarpEnabled {
+		cfg["outbounds"] = append(cfg["outbounds"].([]M), M{
+			"tag": model.WarpOutboundTag, "protocol": "socks",
+			"settings": M{"servers": []M{{"address": "127.0.0.1", "port": model.WarpProxyPort}}},
+		})
+		// Fallback rules come after all existing rules, including private-IP blocks.
+		// A failed SOCKS connection must not silently fall back to direct TCP.
+		routing := cfg["routing"].(M)
+		routing["rules"] = append(routing["rules"].([]M),
+			M{"type": "field", "inboundTag": []string{nc.Protocol + "-in"}, "network": "tcp", "outboundTag": model.WarpOutboundTag},
+			M{"type": "field", "inboundTag": []string{nc.Protocol + "-in"}, "network": "udp", "outboundTag": "direct"},
+		)
+	}
 	return cfg
 }
 
@@ -924,4 +937,3 @@ func echPEMToBase64(data []byte) string {
 	}
 	return base64.StdEncoding.EncodeToString(block.Bytes)
 }
-

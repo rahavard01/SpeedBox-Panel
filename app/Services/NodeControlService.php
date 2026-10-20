@@ -4,17 +4,19 @@ namespace App\Services;
 
 use App\Models\ProxyServer;
 use App\Models\ServerRoute;
+use App\Models\ServerMachine;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
 class NodeControlService
 {
-    public function machineNodes(int $machineId): Collection
+    public function machineNodes(int $machineId, ?bool $supportsWarp = null): Collection
     {
         return ProxyServer::query()
             ->where('machine_id', $machineId)
             ->where('enabled', true)
+            ->when(!($supportsWarp ?? ServerMachine::find($machineId)?->supportsWarp()), fn ($q) => $q->where('warp_enabled', false))
             ->where(fn ($q) => $q->whereNull('parent_id')->orWhere('parent_id', 0))
             ->orderBy('sort')
             ->get();
@@ -57,6 +59,7 @@ class NodeControlService
             'networkSettings' => (object) data_get($settings, 'network_settings', []),
             'accept_proxy_protocol' => (bool) data_get($settings, 'network_settings.acceptProxyProtocol', false),
             'kernel_type' => $node->kernel ?: 'singbox',
+            'warp_enabled' => (bool) $node->warp_enabled,
             'kernel_log_level' => data_get($settings, 'kernel_log_level', 'warn'),
             'base_config' => [
                 'push_interval' => (int) RuntimeSetting::get('server_push_interval', 30),
@@ -200,12 +203,29 @@ class NodeControlService
 
     public function stateFor(ProxyServer $node, ?array $onlineCounts = null): array
     {
+        $sourceId = $node->id;
+        $nodeEnabled = (bool) $node->enabled;
         $node = $node->runtimeNode();
         $onlineCounts ??= app(AccountOnlineStatus::class)->nodeUserCounts([(int) $node->id]);
         $lastSeen = (int) Cache::get("speedbox:node:{$node->id}:last_seen", 0);
         $metrics = Cache::get("speedbox:node:{$node->id}:metrics", []);
         $connected = $lastSeen > time() - 300;
         $running = filter_var(data_get($metrics, 'kernel_status', false), FILTER_VALIDATE_BOOLEAN);
+        $onlineUsers = $node->enabled && $connected && $running ? (int) ($onlineCounts[$node->id] ?? 0) : 0;
+        $runtimeState = data_get($metrics, 'runtime_state');
+        $connectionState = match (true) {
+            !$node->machine_id => 'unassigned',
+            !$node->enabled => 'disabled',
+            !$lastSeen && (!$node->created_at || $node->created_at->timestamp > time() - 300) => 'awaiting_report',
+            !$connected => 'offline',
+            $running && $onlineUsers > 0 => 'active',
+            $running => 'idle',
+            $runtimeState === 'error' => 'kernel_error',
+            $runtimeState === 'waiting_for_users' => 'waiting_for_users',
+            $runtimeState === 'initializing' => 'initializing',
+            array_key_exists('total_users', (array) $metrics) && (int) $metrics['total_users'] === 0 => 'waiting_for_users',
+            default => 'kernel_stopped',
+        };
         return [
             'online' => $node->enabled && $connected && $running,
             'connected' => $connected,
@@ -213,7 +233,11 @@ class NodeControlService
             'last_seen_at' => $lastSeen ?: null,
             'status' => Cache::get("speedbox:node:{$node->id}:status"),
             'metrics' => Cache::get("speedbox:node:{$node->id}:metrics"),
-            'online_users' => (int) ($onlineCounts[$node->id] ?? 0),
+            'online_users' => $onlineUsers,
+            'connection_state' => $connectionState,
+            'source_id' => (int) $node->id,
+            'shared' => (int) $sourceId !== (int) $node->id,
+            'node_enabled' => $nodeEnabled,
         ];
     }
 

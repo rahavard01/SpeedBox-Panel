@@ -66,7 +66,7 @@ class InfrastructureNodeRules
             'allow_insecure' => 'nullable|boolean',
         ],
         'hysteria' => [
-            'version' => 'required|integer',
+            'version' => 'required|integer|in:1,2',
             'alpn' => 'nullable|string',
             'obfs.open' => 'nullable|boolean',
             'obfs.type' => 'string|nullable',
@@ -210,6 +210,7 @@ class InfrastructureNodeRules
             'name' => 'required|string|max:100', 'type' => ['required', Rule::in(ProxyServer::TYPES)],
             'kernel' => ['required', Rule::in(ProxyServer::KERNELS)],
             'machine_id' => 'nullable|integer|exists:v2_server_machine,id',
+            'warp_enabled' => 'sometimes|boolean',
             'host' => 'required|string|max:255', 'port' => 'required|string|max:64',
             'server_port' => ['required', 'integer', 'between:1,65535', Rule::unique('v2_server')->where(fn ($q) => $q->where('machine_id', $request->input('machine_id'))->where('enabled', true)->where(fn ($p) => $p->whereNull('parent_id')->orWhere('parent_id', 0)))->ignore($node?->id)],
             'rate' => 'required|numeric|min:0|max:9999', 'transfer_enable' => 'nullable|integer|min:0',
@@ -247,6 +248,7 @@ class InfrastructureNodeRules
             'email' => 'آدرس ایمیل معتبر نیست.', 'regex' => 'قالب :attribute معتبر نیست.', 'ip' => 'آدرس IP معتبر نیست.',
             'date_format' => 'ساعت باید با قالب ۲۴ ساعته HH:mm وارد شود.',
         ], ['name'=>'نام نود','machine_id'=>'سرور مقصد','server_port'=>'پورت سرور','code'=>'شناسه سفارشی','parent_id'=>'نود والد','rate'=>'ضریب ترافیک'])->validate();
+        $data['protocol_settings'] ??= [];
         if (!empty($data['parent_id'])) {
             $parent = ProxyServer::findOrFail($data['parent_id']);
             if ($parent->id === $node?->id || $parent->parent_id || $parent->type !== $data['type']) {
@@ -256,12 +258,35 @@ class InfrastructureNodeRules
             $data['machine_id'] = $parent->machine_id;
             $data['kernel'] = $parent->kernel;
             $data['rate'] = $parent->rate;
+            $data['warp_enabled'] = (bool) $parent->warp_enabled;
+        }
+        $data['warp_enabled'] ??= (bool) $node?->warp_enabled;
+        if ($data['warp_enabled'] && !isset($parent)) {
+            $machine = \App\Models\ServerMachine::find($data['machine_id'] ?? 0);
+            if (!$machine?->supportsWarp()) {
+                throw ValidationException::withMessages(['warp_enabled' => 'پشتیبانی WARP هنوز از طرف این سرور تأیید نشده است؛ ابتدا وضعیت نرم‌افزار سرور را در بخش WARP بررسی کنید.']);
+            }
+            $newTarget = !$node?->warp_enabled || (int) $node?->machine_id !== (int) $machine->id || (bool) $node?->parent_id;
+            if ($newTarget && (!data_get($machine->warp_status, 'ready') || (int) data_get($machine->warp_status, 'checked_at') < time() - 300)) {
+                throw ValidationException::withMessages(['warp_enabled' => 'ابتدا آماده‌سازی یا تست اتصال WARP را روی سرور مقصد انجام دهید؛ نتیجه موفق باید مربوط به پنج دقیقه اخیر باشد.']);
+            }
+        }
+        foreach ($data['custom_outbounds'] ?? [] as $outbound) {
+            if (strtolower(trim((string) ($outbound['tag'] ?? ''))) === 'speedbox-warp') {
+                throw ValidationException::withMessages(['custom_outbounds' => 'تگ speedbox-warp برای خروجی خودکار WARP رزرو شده است؛ برای خروجی دستی تگ دیگری انتخاب کنید.']);
+            }
         }
         if ($node && $node->type !== $data['type'] && ProxyServer::where('parent_id', $node->id)->exists()) throw ValidationException::withMessages(['type'=>'ابتدا نودهای زیرمجموعه را منتقل کنید؛ پروتکل والد باید با آن‌ها یکی باشد.']);
         if ($data['kernel'] === 'xray' && in_array($data['type'], ['tuic','anytls','naive','mieru'], true)) {
             throw ValidationException::withMessages(['kernel'=>'این پروتکل به هسته Sing-box نیاز دارد.']);
         }
         $runtimeSettings = isset($parent) ? $parent->protocol_settings : $data['protocol_settings'];
+        foreach ([$runtimeSettings, $data['protocol_settings']] as $settings) {
+            $compatibility = NodeKernelCapabilities::resolve($data['type'], (array) $settings);
+            if (!in_array($data['kernel'], $compatibility['kernels'], true)) {
+                throw ValidationException::withMessages(['kernel' => $compatibility['reason'] ?: 'تنظیمات انتخاب‌شده با این هسته سازگار نیست.']);
+            }
+        }
         if (!RealityTransport::isSupported((array) $runtimeSettings)) {
             throw ValidationException::withMessages(['protocol_settings.network' => RealityTransport::ERROR]);
         }

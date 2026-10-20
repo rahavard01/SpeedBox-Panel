@@ -1,0 +1,22 @@
+{
+  "protocol": 1,
+  "upstream_commit": "132467bfdfb2698d74ada2992413e75bfccbfbd3",
+  "upstream_version": "v1.9.0",
+  "source_sha256": "3420eb1ee7f7057a08d2fe5159158664525869475958ff708148f258cd443886",
+  "integration_sources": {
+    "speedbox.go": "8db2a1eeca9dd3095e7638c18c0ae7fbfd9f5f51094042a2d7d6f167c0daa7bf",
+    "bridge.go": "8742727ed88ecd691593b79774dd60095531e085751a3140550b6938572d5e74",
+    "bridge_test.go": "974b3b93065061d5b9c664ec02ee6726888fd8283279414848a0aa016f9edbc4",
+    "build.py": "def2d26e49377917e494bba24a8f50add25ffd5c11627c0a73310fb7364029b3"
+  },
+  "archives": {
+    "amd64": {
+      "sha256": "eb788b6c7a49b19cdbbd83791ebc3f648ed162efcd0c6107338029f222a406fd",
+      "binary_sha256": "3a6b54f056b724f86716f6ae12a4e05b0f8ed6b11de8158be6b56b7e12a251af"
+    },
+    "arm64": {
+      "sha256": "3002823f9fd6d9e2e93786127ede432b8f8460d834fb190bbaae179b57b44db0",
+      "binary_sha256": "0ef1cc3cb8daaa5172fd63dc1672e84fc1ebc374faee3ca14e53ec1772e5c780"
+    }
+  }
+}

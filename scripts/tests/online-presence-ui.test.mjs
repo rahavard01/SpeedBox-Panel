@@ -113,12 +113,12 @@ try{
   win.localStorage.setItem('token','fixture-admin');win.localStorage.setItem('user',JSON.stringify({role:1}));
   let count=2,calls=0;const notices=[];
   const normalTimeout=win.setTimeout.bind(win);win.setTimeout=(fn,delay,...args)=>normalTimeout(fn,delay===5000?25:delay,...args);
-  win.fetch=async url=>{const nodes=String(url).endsWith('/nodes');if(nodes)calls++;return {ok:true,status:200,json:async()=>({data:nodes?[{id:1,name:'Fixture',type:'vless',host:'node.test',port:443,enabled:true,show:true,kernel:'xray',machine_id:1,runtime:{online:false,connected:false,online_users:count}}]:[]})}};
+  win.fetch=async url=>{const nodes=String(url).endsWith('/nodes');if(nodes)calls++;return {ok:true,status:200,json:async()=>({data:nodes?[{id:1,name:'Fixture',type:'vless',host:'node.test',port:443,enabled:true,show:true,kernel:'xray',machine_id:1,runtime:{online:count>0,connected:true,kernel_running:true,connection_state:count>0?'active':'idle',online_users:count}}]:[]})}};
   for(const name of ['node-editor','infrastructure'])vm.runInContext(readFileSync(path.join(root,'public/speedbox/'+name+'.js'),'utf8'),context);
   const mounted=win.SpeedboxInfrastructure.mount(host,{router:{replace(){throw Error('Unexpected auth redirect')},push(){}},notify:(...args)=>notices.push(args),view:'nodes'});
-  const cell=()=>host.querySelector('[data-node-row="1"] td:nth-child(6)');
+  const cell=()=>{const index=[...host.querySelectorAll('.node-table thead th')].findIndex(th=>th.textContent.trim()==='کاربران آنلاین');return index<0?null:host.querySelector('[data-node-row="1"]')?.cells[index]};
   async function waitNode(expected){const until=Date.now()+3000;while(Date.now()<until){if(cell()?.textContent.trim()===String(expected))return;await sleep(15)}throw Error('Node count did not reach '+expected+'; '+host.textContent+'; '+JSON.stringify(notices))}
-  await waitNode(2);check(cell().textContent.trim()==='2','Node uses active count independently of heartbeat');
+  await waitNode(2);check(cell().textContent.trim()==='2','Node displays the server-provided active user count');
   count=0;await waitNode(0);check(cell().textContent.trim()==='0','Node disconnect clears displayed count on next poll');
   count=1;await waitNode(1);check(cell().textContent.trim()==='1','Node reconnect updates without page reload');
   mounted.dispose();await sleep(50);const after=calls;await sleep(70);check(calls===after,'Unmounted node view stops polling');

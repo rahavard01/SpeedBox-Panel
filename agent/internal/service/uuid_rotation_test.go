@@ -16,3 +16,4 @@ func TestUUIDDeltaForOnlyUserDoesNotStopKernel(t *testing.T) {
 		t.Fatalf("rotation used destructive delta: %+v users=%+v", k, s.lastUsers)
 	}
 }
+

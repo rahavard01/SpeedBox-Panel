@@ -94,6 +94,7 @@ func NodeSpecFromPanel(nc *panel.NodeConfig) *NodeSpec {
 		NetworkSettings:     cloneAnyMap(nc.NetworkSettings),
 		Routes:              routes,
 		KernelType:          nc.KernelType,
+		WarpEnabled:         nc.WarpEnabled,
 		KernelLogLevel:      nc.KernelLogLevel,
 		CustomOutbounds:     outbounds,
 		CustomRoutes:        cloneMapSlice(nc.CustomRoutes),

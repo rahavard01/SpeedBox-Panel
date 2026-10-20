@@ -9,6 +9,9 @@
 .speedbox-infrastructure .stat-label{display:block;direction:rtl}
 .speedbox-infrastructure .stat-label>i{font-size:14px;margin-left:5px}
 .speedbox-infrastructure .stat-value{direction:ltr;margin:8px 0 4px}
+.speedbox-infrastructure .stat-link{display:block;color:inherit;text-decoration:none;cursor:pointer;transition:transform .18s ease,border-color .18s ease,background .18s ease}
+.speedbox-infrastructure .stat-link:hover{border-color:rgba(0,180,255,.45);background:rgba(0,0,0,.48)}
+.speedbox-infrastructure .stat-link:focus-visible{outline:2px solid #75cfff;outline-offset:3px}
 .speedbox-infrastructure .dashboard-grid{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:18px}
 :where(.speedbox-infrastructure,.speedbox-infrastructure-overlay) .panel-card{width:100%;padding:16px;text-align:right}
 :where(.speedbox-infrastructure,.speedbox-infrastructure-overlay) .panel-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px}
@@ -347,6 +350,18 @@
 :is(.speedbox-infrastructure,.speedbox-infrastructure-overlay) .button.entity-copy:hover:not(:disabled){filter:brightness(1.08)}
 
 /* XBoard field contract with the spacing and modal surfaces of Panel. */
+.speedbox-infrastructure-overlay .node-warp-card{padding:14px;border:1px solid #8a6da366;border-radius:12px;background:#ffffff04}
+.speedbox-infrastructure-overlay .node-warp-card>.switch-field{font-size:12px}
+.speedbox-infrastructure-overlay .node-warp-content{display:grid;gap:12px;padding-top:8px}
+.speedbox-infrastructure-overlay .node-warp-note{margin:0;color:#c2baca;font-size:11px;line-height:1.9;text-align:right;grid-column:1/-1}
+.speedbox-infrastructure-overlay .node-warp-status{display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:11px}
+.speedbox-infrastructure-overlay .node-warp-status code{font-size:12px}
+.speedbox-infrastructure-overlay .node-warp-actions{display:flex;flex-wrap:wrap;gap:8px}
+.speedbox-infrastructure-overlay .node-warp-account{border-top:1px solid #ffffff17;padding-top:12px}
+.speedbox-infrastructure-overlay .node-warp-account summary{cursor:pointer;font-size:12px}
+.speedbox-infrastructure-overlay .node-warp-account .field{margin-top:14px}
+.speedbox-infrastructure-overlay .node-warp-account .node-warp-note{margin-top:12px}
+.speedbox-infrastructure-overlay .node-warp-message{margin:0;color:#e9bf90;font-size:11px;line-height:1.9}
 .speedbox-infrastructure-overlay .infrastructure-modal.node-modal{width:min(576px,94vw);max-width:576px;padding:18px;overflow:visible}
 .speedbox-infrastructure-overlay .node-modal .announcement-modal-heading{margin-bottom:22px}
 .speedbox-infrastructure-overlay .node-modal .node-protocol-head{display:flex;justify-content:center;align-items:center;margin-bottom:22px}
@@ -390,6 +405,19 @@
 @media(max-width:400px){.speedbox-infrastructure-overlay .node-row.node-tls-row,.speedbox-infrastructure-overlay .node-remote-field{grid-template-columns:minmax(0,1fr)}.speedbox-infrastructure-overlay .node-tls-row .switch-field{justify-content:space-between}}
 
 .speedbox-infrastructure .node-number .node-id-badge{display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;min-width:28px;height:28px;margin:0;padding:0 8px;border:1px solid #ffffff40;border-radius:7px;background:#ffffff0d;color:#d0d0d0;font-size:11px;font-weight:600;line-height:1;vertical-align:middle}
+.speedbox-infrastructure .node-parent-arrow{color:#a0a9b8;margin:0 3px}
+.speedbox-infrastructure .node-name-line{display:flex;align-items:center;justify-content:center;gap:7px;min-width:0}
+.speedbox-infrastructure .node-name-line b{overflow-wrap:anywhere;order:-1}
+.speedbox-infrastructure .node-runtime-dot{display:inline-flex;align-items:center;justify-content:center;flex:0 0 22px;width:22px;height:26px;padding:0;margin:0;border:0;border-radius:6px;background:transparent;cursor:help;box-shadow:none}
+.speedbox-infrastructure .node-runtime-dot span{width:9px;height:9px;border-radius:50%;background:var(--node-dot);box-shadow:0 0 7px color-mix(in srgb,var(--node-dot) 35%,transparent)}
+.speedbox-infrastructure .node-runtime-dot.green{--node-dot:#35d892}.speedbox-infrastructure .node-runtime-dot.orange{--node-dot:#f5ae42}.speedbox-infrastructure .node-runtime-dot.red{--node-dot:#f36572}
+.speedbox-infrastructure .node-runtime-dot:focus-visible,.speedbox-infrastructure .plan-user-count:focus-visible{outline:2px solid #75cfff;outline-offset:2px}
+.speedbox-infrastructure .plan-user-stats{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:6px;margin-top:8px}
+.speedbox-infrastructure .plan-user-count{display:inline-flex;align-items:center;justify-content:center;gap:5px;min-height:25px;margin:0;padding:3px 7px;border:1px solid #aab0bd33;border-radius:6px;background:#aab0bd0d;color:#bac0cb;font-family:inherit;font-size:11px;line-height:1.5;cursor:help;box-shadow:none}
+.speedbox-infrastructure .plan-user-count.active{border-color:#35d89244;background:#35d8920d;color:#70e8ad}
+.speedbox-entity-tooltip{position:fixed;right:auto;bottom:auto;transform:none;z-index:100100;box-sizing:border-box;width:max-content;max-width:min(300px,calc(100vw - 16px));padding:10px 12px;direction:rtl;text-align:center;white-space:normal;line-height:1.9;pointer-events:none}
+.speedbox-infrastructure-overlay .node-kernel-note{margin:0;padding:9px 11px;border:1px solid #75cfff26;border-radius:8px;background:#75cfff08;color:#bfc9d7;font-size:11px;line-height:1.9;text-align:center}
+.speedbox-infrastructure-overlay .node-kernel-note.is-error{color:#ffabb3;border-color:#f3657244;background:#f365720c}
 /* The protocol itself is the picker surface; there is no inner badge. */
 .speedbox-infrastructure-overlay .node-protocol-head .protocol-select{width:100%;direction:ltr}
 .speedbox-infrastructure-overlay .node-protocol-head .protocol-select .invoice-custom-select__trigger,
@@ -499,3 +527,14 @@
  .speedbox-infrastructure-overlay .infrastructure-modal.job-modal{padding:16px}
 }
 
+
+/* Compact WARP controls; the shared account editor stays collapsed. */
+.speedbox-infrastructure-overlay .node-warp-card{padding:12px}
+.speedbox-infrastructure-overlay .node-warp-content{gap:8px;padding-top:6px}
+.speedbox-infrastructure-overlay .node-warp-content>.field{margin:0}
+.speedbox-infrastructure-overlay .node-warp-status{justify-content:flex-start;flex-wrap:wrap;gap:8px 18px}
+.speedbox-infrastructure-overlay .node-warp-actions{align-items:center;margin:0}
+.speedbox-infrastructure-overlay .node-warp-card .node-warp-actions .button{display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;height:30px;min-height:30px;max-height:30px;padding:0 10px;line-height:1.5;font-size:11px;white-space:nowrap;margin:0}
+.speedbox-infrastructure-overlay .node-warp-account{padding-top:8px}
+.speedbox-infrastructure-overlay .node-warp-account summary{color:#c2baca}
+@media(max-width:480px){.speedbox-infrastructure-overlay .node-warp-actions{display:grid;grid-template-columns:1fr 1fr}.speedbox-infrastructure-overlay .node-warp-actions .button:only-child{grid-column:1/-1}}

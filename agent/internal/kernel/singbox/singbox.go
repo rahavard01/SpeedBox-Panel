@@ -19,7 +19,7 @@ import (
 	"golang.org/x/time/rate"
 
 	"github.com/cedar2025/xboard-node/internal/admission"
- "github.com/cedar2025/xboard-node/internal/config"
+	"github.com/cedar2025/xboard-node/internal/config"
 	"github.com/cedar2025/xboard-node/internal/kernel"
 	"github.com/cedar2025/xboard-node/internal/model"
 	"github.com/cedar2025/xboard-node/internal/nlog"
@@ -58,7 +58,7 @@ type SingBox struct {
 	// deviceLimitFunc resolves a user UUID to (limit, hasLimit) for gate-keeping.
 	// Set once by SetDeviceLimitFunc and forwarded to every new ConnTracker.
 	deviceLimitFunc func(string) (int, bool)
- admissionFunc admission.AcquireFunc
+	admissionFunc   admission.AcquireFunc
 
 	// trackerRegistered prevents duplicate AppendTracker calls on the same
 	// Router instance during Reload. Reset to false on full restart.
@@ -143,7 +143,9 @@ func (s *SingBox) Start(nodeConfig *model.NodeSpec, users []model.UserSpec, tls 
 
 	// Fresh tracker on full restart.
 	s.connTracker = NewConnTracker(0)
- if s.admissionFunc!=nil{s.connTracker.SetConnectionAdmission(s.admissionFunc)}
+	if s.admissionFunc != nil {
+		s.connTracker.SetConnectionAdmission(s.admissionFunc)
+	}
 	s.connTracker.SetUserMap(buildUserMap(users))
 	if s.speedLimitFunc != nil {
 		s.connTracker.SetSpeedLimitFunc(s.speedLimitFunc)
@@ -225,10 +227,41 @@ func (s *SingBox) Reload(nodeConfig *model.NodeSpec, users []model.UserSpec, tls
 	}
 
 	// Update routing rules
+	// A route reload alone cannot add a new outbound. Install the automatic
+	// WARP outbound before referring to it, and remove it only after disabling.
+	om := service.FromContext[adapter.OutboundManager](s.ctx)
+	createdWarp := false
+	if nodeConfig.WarpEnabled {
+		if om == nil {
+			return fmt.Errorf("outbound manager not available for WARP")
+		}
+		if _, exists := om.Outbound(model.WarpOutboundTag); !exists {
+			for _, outbound := range opts.Outbounds {
+				if outbound.Tag == model.WarpOutboundTag {
+					logger := singLog.NewNOPFactory().NewLogger("outbound/socks[" + model.WarpOutboundTag + "]")
+					if err := om.Create(s.ctx, router, logger, outbound.Tag, outbound.Type, outbound.Options); err != nil {
+						return fmt.Errorf("create WARP outbound: %w", err)
+					}
+					createdWarp = true
+					break
+				}
+			}
+		}
+	}
 	if err := router.UpdateRules(opts.Route.Rules, opts.Route.RuleSet); err != nil {
-		nlog.Core().Debug("routing reload failed", "error", err)
+		if createdWarp {
+			_ = om.Remove(model.WarpOutboundTag)
+		}
+		return fmt.Errorf("reload routing rules: %w", err)
 	} else {
 		nlog.Core().Debug("sing-box routing reloaded")
+	}
+	if !nodeConfig.WarpEnabled && om != nil {
+		if _, exists := om.Outbound(model.WarpOutboundTag); exists {
+			if err := om.Remove(model.WarpOutboundTag); err != nil {
+				return fmt.Errorf("remove WARP outbound: %w", err)
+			}
+		}
 	}
 
 	nopFactory := singLog.NewNOPFactory()
@@ -660,6 +693,10 @@ func buildUserMap(users []model.UserSpec) map[string]int {
 }
 
 func (s *SingBox) SetConnectionAdmission(fn admission.AcquireFunc) {
- s.mu.Lock();defer s.mu.Unlock();s.admissionFunc=fn
- if s.connTracker!=nil{s.connTracker.SetConnectionAdmission(fn)}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.admissionFunc = fn
+	if s.connTracker != nil {
+		s.connTracker.SetConnectionAdmission(fn)
+	}
 }

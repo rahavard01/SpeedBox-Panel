@@ -308,6 +308,7 @@ func (c *Client) PushAlive(data map[int][]string) error {
 // PushStatus submits system status to the panel
 func (c *Client) PushStatus(cpu float64, mem, swap, disk [2]uint64) error {
 	payload := map[string]interface{}{
+		"capabilities": []string{"warp-egress-v1"},
 		"cpu":  cpu,
 		"mem":  map[string]interface{}{"total": mem[0], "used": mem[1]},
 		"swap": map[string]interface{}{"total": swap[0], "used": swap[1]},
@@ -436,6 +437,7 @@ func (c *Client) doRequest(method, path string, body []byte, ifNoneMatch string)
 
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
+	req.Header.Set("X-Speedbox-Capabilities", "warp-egress-v1")
 	if ifNoneMatch != "" {
 		req.Header.Set("If-None-Match", ifNoneMatch)
 	}

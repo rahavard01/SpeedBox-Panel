@@ -15,7 +15,7 @@ import (
 	"time"
 
 	"github.com/cedar2025/xboard-node/internal/admission"
- "github.com/cedar2025/xboard-node/internal/cert"
+	"github.com/cedar2025/xboard-node/internal/cert"
 	"github.com/cedar2025/xboard-node/internal/cert/dnsproviders"
 	"github.com/cedar2025/xboard-node/internal/config"
 	"github.com/cedar2025/xboard-node/internal/controlplane"
@@ -30,18 +30,20 @@ import (
 )
 
 type Service struct {
- admissionCancel context.CancelFunc
-	cfg          *config.Config
-	source       controlplane.Source
-	sink         controlplane.Sink
-	kernel       kernel.Kernel
-	tracker      *tracker.Tracker
-	limiter      *limiter.Limiter
-	speedTracker *limiter.SpeedTracker
-	cert         *cert.Manager
+	admissionCancel context.CancelFunc
+	cfg             *config.Config
+	source          controlplane.Source
+	sink            controlplane.Sink
+	kernel          kernel.Kernel
+	tracker         *tracker.Tracker
+	limiter         *limiter.Limiter
+	speedTracker    *limiter.SpeedTracker
+	cert            *cert.Manager
 
-	lastConfig *model.NodeSpec
-	lastUsers  []model.UserSpec
+	lastConfig      *model.NodeSpec
+	lastUsers       []model.UserSpec
+	lastKernelError string
+	retryKernelAt   time.Time
 
 	// nodeLog is the logger with node context for this service instance.
 	nodeLog *nlog.NodeLog
@@ -171,7 +173,11 @@ func newService(cfg *config.Config, cp controlplane.ControlPlane) *Service {
 }
 
 func (s *Service) Run(ctx context.Context) error {
- defer func(){if s.admissionCancel!=nil{s.admissionCancel()}}()
+	defer func() {
+		if s.admissionCancel != nil {
+			s.admissionCancel()
+		}
+	}()
 	// Start cert manager (handles auto-TLS or manual cert verification)
 	if err := s.cert.Start(ctx); err != nil {
 		return fmt.Errorf("cert manager: %w", err)
@@ -257,17 +263,21 @@ func (s *Service) initialSetup(ctx context.Context) error {
 		return err
 	}
 
- if bootstrap.ConnectionAdmission {
-  caller,ok:=s.source.(admission.Caller)
-  if !ok{return fmt.Errorf("control plane does not support required connection admission")}
-  gate:=admission.New(caller)
-  k,ok:=s.kernel.(interface{SetConnectionAdmission(admission.AcquireFunc)})
-  if !ok{return fmt.Errorf("kernel does not support required connection admission")}
-  k.SetConnectionAdmission(gate.Acquire)
-  gateCtx,cancel:=context.WithCancel(ctx)
-  s.admissionCancel=cancel
-  go gate.Run(gateCtx)
- }
+	if bootstrap.ConnectionAdmission {
+		caller, ok := s.source.(admission.Caller)
+		if !ok {
+			return fmt.Errorf("control plane does not support required connection admission")
+		}
+		gate := admission.New(caller)
+		k, ok := s.kernel.(interface{ SetConnectionAdmission(admission.AcquireFunc) })
+		if !ok {
+			return fmt.Errorf("kernel does not support required connection admission")
+		}
+		k.SetConnectionAdmission(gate.Acquire)
+		gateCtx, cancel := context.WithCancel(ctx)
+		s.admissionCancel = cancel
+		go gate.Run(gateCtx)
+	}
 
 	if s.cfg.Node.PushInterval == 0 && bootstrap.PushInterval > 0 {
 		s.pushInterval = bootstrap.PushInterval
@@ -319,13 +329,15 @@ func (s *Service) initialSetup(ctx context.Context) error {
 		"users", len(bootstrap.Users),
 	)
 
+	// Apply the panel's certificate policy even when the node is waiting for
+	// its first account. Otherwise the first startup would still use local TLS.
+	s.applyRemoteOverrides(ctx, bootstrap.Config)
 	if len(bootstrap.Users) == 0 {
 		nlog.Core().Warn("no users, kernel will not start until users are available")
 		s.markMailboxReadyAndDrain(ctx)
 		return nil
 	}
 
-	s.applyRemoteOverrides(ctx, bootstrap.Config)
 	if !s.startKernel(bootstrap.Config, bootstrap.Users) {
 		return fmt.Errorf("start kernel")
 	}
@@ -747,9 +759,17 @@ func (s *Service) restoreUserState(users []model.UserSpec, hash string) {
 // records the successfully applied state. Returns false on error.
 func (s *Service) startKernel(nc *model.NodeSpec, users []model.UserSpec) bool {
 	if err := s.kernel.Start(nc, users, s.cert.TLSCert()); err != nil {
+		s.metricsMu.Lock()
+		s.lastKernelError = "kernel_start_failed"
+		s.metricsMu.Unlock()
+		s.retryKernelAt = time.Now().Add(30 * time.Second)
 		nlog.Core().Error("failed to start kernel", "error", err)
 		return false
 	}
+	s.metricsMu.Lock()
+	s.lastKernelError = ""
+	s.metricsMu.Unlock()
+	s.retryKernelAt = time.Time{}
 
 	s.appliedState.Config = nc
 	s.appliedState.Users = users
@@ -772,6 +792,9 @@ func (s *Service) ensureRunning() bool {
 	if s.kernel.IsRunning() {
 		return true
 	}
+	if time.Now().Before(s.retryKernelAt) {
+		return false
+	}
 	if len(s.lastUsers) > 0 && s.lastConfig != nil {
 		return s.startKernel(s.lastConfig, s.lastUsers)
 	}
@@ -783,11 +806,24 @@ func (s *Service) ensureRunning() bool {
 // applyUserUpdate replaces the full user set and hot-swaps the kernel.
 // Called from WS sync.users and REST polling.
 func (s *Service) applyUserUpdate(ctx context.Context, users []model.UserSpec, newHash string) {
-	if !s.ensureRunning() {
+	prevUsers, prevHash := s.prepareUserState(users)
+	if len(users) == 0 {
+		s.kernel.Stop()
+		s.appliedState.Users = nil
+		s.metricsMu.Lock()
+		s.lastKernelError = ""
+		s.metricsMu.Unlock()
+		s.retryKernelAt = time.Time{}
 		return
 	}
-
-	prevUsers, prevHash := s.prepareUserState(users)
+	if !s.kernel.IsRunning() {
+		// Keep the desired users even if startup fails, so the bounded retry can
+		// recover without a second user change or an agent restart.
+		if s.lastConfig != nil {
+			s.startKernel(s.lastConfig, users)
+		}
+		return
+	}
 	added, removed, err := s.kernel.UpdateUsers(users)
 	if err != nil {
 		nlog.Core().Warn(fmt.Sprintf("UpdateUsers failed, restarting kernel: %v", err))
@@ -815,7 +851,8 @@ func (s *Service) applyUserDelta(ctx context.Context, action string, deltaUsers 
 		}
 		merged := mergeUsers(s.lastUsers, deltaUsers)
 
-		if !s.ensureRunning() {
+		if !s.kernel.IsRunning() {
+			s.applyUserUpdate(ctx, merged, "")
 			return
 		}
 
@@ -849,7 +886,8 @@ func (s *Service) applyUserDelta(ctx context.Context, action string, deltaUsers 
 		}
 		filtered := subtractUsers(s.lastUsers, deltaUsers)
 
-		if !s.kernel.IsRunning() {
+		if !s.kernel.IsRunning() || len(filtered) == 0 {
+			s.applyUserUpdate(ctx, filtered, "")
 			return
 		}
 
@@ -952,6 +990,9 @@ func (s *Service) applyChanges(ctx context.Context, configChanged, usersChanged 
 }
 
 func (s *Service) trackAndEnforce(ctx context.Context) {
+	if !s.ensureRunning() {
+		return
+	}
 	if !s.kernel.IsRunning() {
 		return
 	}
@@ -1038,6 +1079,8 @@ func (s *Service) pushReportSync() {
 func (s *Service) buildMetrics(status monitor.Status) map[string]interface{} {
 	s.metricsMu.RLock()
 	lastUsers := s.lastUsers
+	lastConfig := s.lastConfig
+	lastKernelError := s.lastKernelError
 	wsClient := s.wsClient
 	s.metricsMu.RUnlock()
 
@@ -1052,6 +1095,16 @@ func (s *Service) buildMetrics(status monitor.Status) map[string]interface{} {
 	m["total_connections"] = s.tracker.TotalConnections()
 	m["active_users"] = len(online)
 	m["total_users"] = len(lastUsers)
+	switch {
+	case s.kernel.IsRunning():
+		m["runtime_state"] = "ready"
+	case lastKernelError != "":
+		m["runtime_state"] = "error"
+	case lastConfig != nil && len(lastUsers) == 0:
+		m["runtime_state"] = "waiting_for_users"
+	default:
+		m["runtime_state"] = "initializing"
+	}
 
 	// Speed
 	m["inbound_speed"] = s.tracker.InboundSpeed()

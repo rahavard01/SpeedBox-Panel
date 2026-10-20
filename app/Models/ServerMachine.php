@@ -15,11 +15,17 @@ class ServerMachine extends Model
         'is_active' => 'boolean',
         'last_seen_at' => 'integer',
         'load_status' => 'array',
+        'warp_status' => 'array',
     ];
 
     public function nodes(): HasMany
     {
         return $this->hasMany(ProxyServer::class, 'machine_id');
+    }
+
+    public function supportsWarp(): bool
+    {
+        return in_array('warp-egress-v1', (array) data_get($this->load_status, 'capabilities', []), true);
     }
 
     public function managedServers(): HasMany

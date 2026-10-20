@@ -24,6 +24,7 @@ class SpeedboxInfrastructureTest extends TestCase
         (require database_path('migrations/2025_01_01_000000_create_speedbox_core_tables.php'))->up();
         (require database_path('migrations/2026_10_08_000001_create_speedbox_infrastructure_tables.php'))->up();
         (require database_path('migrations/2026_10_10_000003_create_connection_admission_leases.php'))->up();
+        (require database_path('migrations/2026_10_18_000001_add_node_warp_egress.php'))->up();
         $this->machine = ServerMachine::create(['name' => 'Test server', 'token' => str_repeat('t', 48), 'is_active' => true]);
         $group = ServerGroup::create(['name' => 'Test group']);
         $this->node = ProxyServer::create([

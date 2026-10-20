@@ -4,9 +4,10 @@ const speedboxServerSections = [
   { view: 'configuration', label: 'پیکربندی سیستم', icon: 'cogs' },
   { view: 'servers', label: 'مدیریت سرورها', icon: 'server' },
   { view: 'nodes', label: 'مدیریت نودها', icon: 'project-diagram' },
-  { view: 'emergency-configs', label: 'کانفیگ‌های اضطراری', icon: 'life-ring' },
   { view: 'plans', label: 'مدیریت پلن‌ها', icon: 'tags' },
-  { view: 'routing', label: 'گروه‌های دسترسی و مسیریابی', icon: 'route' }
+  { view: 'routing', label: 'گروه‌های دسترسی و مسیریابی', icon: 'route' },
+  { view: 'tunnels', label: 'مدیریت تونل‌ها', icon: 'exchange-alt' },
+  { view: 'emergency-configs', label: 'کانفیگ‌های اضطراری', icon: 'life-ring' }
 ];
 const speedboxConfigurationAliases = ['site-settings','security-settings','subscription-settings','server-settings','subscription-templates','settings'];
 window.__SPEEDBOX_SERVER_MENU__ = ({ element, component, link, slot }) =>

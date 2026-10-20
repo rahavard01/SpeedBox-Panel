@@ -40,6 +40,7 @@ class NodeController extends Controller
         /** @var ProxyServer|null $node */
         $node = $request->attributes->get('speedbox_node');
         abort_if(!$node, 422, 'node_id is required.');
+        abort_if($node->warp_enabled && !in_array('warp-egress-v1', array_map('trim', explode(',', $request->header('X-Speedbox-Capabilities', ''))), true), 426, 'This node requires an agent supporting WARP egress.');
         $payload = $this->nodes->configFor($node);
         return $this->etag($request, $payload, "node-config-{$node->id}");
     }
