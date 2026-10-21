@@ -1,4 +1,7 @@
 .speedbox-infrastructure .emergency-page{display:grid;gap:20px}
+.speedbox-infrastructure .emergency-client-tag{display:inline-flex;align-items:center;justify-content:center;padding:4px 8px;border:1px solid rgba(255,255,255,.16);border-radius:7px;color:rgba(255,255,255,.8);background:rgba(255,255,255,.04);font-size:10px;line-height:1.5}
+.speedbox-infrastructure-overlay .emergency-tags-field textarea{min-height:64px;font-size:12px;line-height:1.8;resize:vertical}
+.speedbox-infrastructure-overlay .emergency-tags-field small{grid-column:1/-1;color:var(--muted);font-size:10px;line-height:1.9}
 .speedbox-infrastructure .emergency-placement{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:20px 24px}
 .speedbox-infrastructure .emergency-placement-info{display:flex;align-items:center;gap:12px;min-width:0}
 .speedbox-infrastructure .emergency-placement-info h2{font-size:13px;font-weight:600;margin:0 0 5px}

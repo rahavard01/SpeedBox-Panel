@@ -80,7 +80,9 @@ final class EmergencyConfigController extends Controller
         $data = $request->validate([
             'name'=>['required','string','max:150', 'not_regex:/[\x00-\x1f\x7f]/', Rule::unique('speedbox_emergency_configs','name')->ignore($config?->id), Rule::unique('v2_server','name')],
             'config_uri'=>'required|string|max:16384', 'show'=>'required|boolean',
+            'tags'=>'sometimes|array|max:20', 'tags.*'=>['required','string','max:100','distinct','not_regex:/[\x00-\x1f\x7f]/'],
         ], ['name.unique'=>'این نام قبلاً برای یک نود یا کانفیگ ثبت شده است.', 'name.required'=>'نام نمایشی را وارد کنید.', 'config_uri.required'=>'لینک کانفیگ را وارد کنید.']);
+        $data['tags'] = array_values(array_unique(array_filter(array_map('trim', $data['tags'] ?? $config?->tags ?? []), fn ($tag) => $tag !== '')));
         try { $server = $parser->parse($data['config_uri'], $data['name']); }
         catch (\InvalidArgumentException $error) { throw ValidationException::withMessages(['config_uri'=>$error->getMessage()]); }
         return [...$data, 'protocol'=>$server['type'], 'host'=>$server['host'], 'port'=>$server['port']];

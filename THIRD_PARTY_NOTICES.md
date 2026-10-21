@@ -21,3 +21,13 @@ build script are in that same directory. The modified build uses separate
 configuration paths, service names and a JSON integration interface; it does not
 replace a manually installed BackPack binary. Global kernel tuning is disabled
 in this integration build.
+
+## GOST and Linux GRE integration
+
+The independently written integration uses official GOST 2.11.5 and 3.0.0
+Linux amd64/arm64 binaries, with their MIT licenses in `gost-dist/`.
+Original distribution URLs and SHA-256 hashes are recorded in the artifact
+manifest. Upstreams: https://github.com/ginuerzh/gost and
+https://github.com/go-gost/gost. Linux GRE uses the operating system's `ip`
+and `nft` tools. No code, web panel or binary from DrSaeedHub/Tunnel-Panel
+or masoudgb/Gost-ip6 is redistributed or executed.

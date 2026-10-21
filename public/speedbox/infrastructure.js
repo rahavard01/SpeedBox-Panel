@@ -86,6 +86,15 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
   function loadingTable(headers,kind=''){const markup=`<div class="table-wrap"><table><thead><tr>${headers.map(label=>`<th>${escape(label)}</th>`).join('')}</tr></thead><tbody><tr><td class="entity-loading-cell" colspan="${headers.length}">${loading()}</td></tr></tbody></table></div>`;return kind?entityCardLayout(markup,kind):markup;}
   function loading(){ return '<div class="loading" role="status" aria-live="polite"><i class="fas fa-spinner fa-spin" aria-hidden="true"></i><span>در حال دریافت اطلاعات…</span></div>'; }
   function openModal(title,body,options={}){
+    const previousTitle=scope.getElementById('modalTitle').textContent;
+    const previousBody=scope.getElementById('modalBody');
+    const signature=form=>form?[form.id,...form.getAttributeNames().filter(n=>n.startsWith('data-')).sort()].join('|'):null;
+    const previousForm=signature(previousBody.querySelector('form'));
+    const visible=!modalBackdrop.hidden;
+    const scroll=[modalBackdrop,overlay.querySelector('.infrastructure-modal'),previousBody,previousBody.querySelector('.modal-fields')].map(el=>({top:el?.scrollTop||0,left:el?.scrollLeft||0}));
+    const focused=previousBody.contains(document.activeElement)?document.activeElement:null;
+    const focusName=focused?.getAttribute('name'),focusId=focused?.id;
+    const selection=focused&&typeof focused.selectionStart==='number'?[focused.selectionStart,focused.selectionEnd]:null;
     modalCloseHandler=options.onClose||null;
     nodeEditorDispose?.(); nodeEditorDispose=null;
     overlay.querySelector('.infrastructure-modal').classList.toggle('node-modal',!!options.node);
@@ -102,7 +111,16 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
     if(!actions){actions=document.createElement('div');actions.className='form-actions';container.appendChild(actions);}
     if(!container.querySelector('[data-close]')) actions.insertAdjacentHTML('beforeend',`<button class="button cancel" type="button" data-close>${form?'انصراف':'بستن'}</button>`);
     modalBody.querySelectorAll('[data-close]').forEach(button=>{button.classList.add('cancel');button.onclick=closeModal;});
-    modalBackdrop.hidden=false; modalBackdrop.scrollTop=0; document.body.style.overflow='hidden';
+    const preserve=options.preserveView??(visible&&previousTitle===title&&previousForm!==null&&previousForm===signature(form));
+    modalBackdrop.hidden=false; document.body.style.overflow='hidden';
+    const restore=()=>{
+      if(modalBackdrop.hidden||modalBody.firstElementChild!==rendered)return;
+      const next=focusName?[...modalBody.querySelectorAll('[name]')].find(el=>el.name===focusName):focusId?[...modalBody.querySelectorAll('[id]')].find(el=>el.id===focusId):null;
+      if(next&&!next.disabled){next.focus({preventScroll:true});if(selection&&typeof next.setSelectionRange==='function')try{next.setSelectionRange(...selection);}catch{}}
+      [modalBackdrop,overlay.querySelector('.infrastructure-modal'),modalBody,modalBody.querySelector('.modal-fields')].forEach((el,i)=>{if(el){el.scrollTop=scroll[i].top;el.scrollLeft=scroll[i].left;}});
+    };
+    const rendered=modalBody.firstElementChild;
+    if(preserve){restore();requestAnimationFrame(restore);}else modalBackdrop.scrollTop=0;
   }
   function closeModal(force=false){ if(savingCount && force!==true)return; nodeEditorDispose?.();nodeEditorDispose=null;modalBackdrop.hidden=true; document.body.style.overflow='';const handler=modalCloseHandler;modalCloseHandler=null;handler?.(); }
   modalBackdrop.addEventListener('click',e=>{if(e.target===modalBackdrop)closeModal()});
@@ -354,7 +372,7 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
     let timestamp=String(value).replace(' ','T');
     if(!/(Z|[+-]\d{2}:?\d{2})$/.test(timestamp))timestamp+='+03:30';
     const date=new Date(timestamp);
-    return Number.isNaN(date.getTime())?'—':date.toLocaleString('fa-IR-u-ca-persian',{timeZone:'Asia/Tehran'});
+    return Number.isNaN(date.getTime())?'—':'\u2066'+date.toLocaleDateString('fa-IR-u-ca-persian',{timeZone:'Asia/Tehran'})+' — '+date.toLocaleTimeString('fa-IR',{timeZone:'Asia/Tehran',hour:'2-digit',minute:'2-digit',hour12:false})+'\u2069';
   };
   function showQueueJobs(jobs,title) {
     openModal(title,jobs.length?`<div class="queue-job-list">${jobs.map((job,index)=>`<button type="button" class="queue-job" data-job-detail="${index}"><span><b dir="ltr">${escape(jobName(job.name))}</b><small>${jobDate(job.finished_at||job.started_at)}</small></span>${badge(job.status)}</button>`).join('')}</div>`:empty('کاری ثبت نشده است'));
@@ -874,8 +892,9 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
   mobileMedia.addEventListener('change',updateNativeSelects);
   function closeSelect(wrap){wrap.classList.remove('is-open');wrap.querySelector('[role=listbox]').hidden=true;wrap.querySelector('.invoice-custom-select__trigger').setAttribute('aria-expanded','false');}
   function closeAllSelects(){scope.querySelectorAll('.invoice-custom-select.is-open').forEach(closeSelect);}
-  const onOutsideSelect=e=>{const path=e.composedPath();if(!path.some(el=>el.classList?.contains('invoice-custom-select')))closeAllSelects();if(calendarSession&&!path.includes(calendarSession.picker))closeRankCalendar();};
-  const onEscape=e=>{if(e.key==='Escape'){const open=scope.querySelector('.invoice-custom-select.is-open');if(open){closeSelect(open);open.querySelector('button').focus();}else if(calendarSession){e.preventDefault();closeRankCalendar(true);}else if(!modalBackdrop.hidden)closeModal();}};
+  const closeActionMenus=except=>scope.querySelectorAll('details.tunnel-actions[open],details[data-panel-menu][open]').forEach(menu=>{if(!except?.includes(menu))menu.open=false;});
+  const onOutsideSelect=e=>{closeActionMenus(e.composedPath());const path=e.composedPath();if(!path.some(el=>el.classList?.contains('invoice-custom-select')))closeAllSelects();if(calendarSession&&!path.includes(calendarSession.picker))closeRankCalendar();};
+  const onEscape=e=>{if(e.key==='Escape'){const menu=scope.querySelector('details.tunnel-actions[open],details[data-panel-menu][open]');if(menu){e.preventDefault();menu.open=false;menu.querySelector('summary')?.focus({preventScroll:true});return;}const open=scope.querySelector('.invoice-custom-select.is-open');if(open){closeSelect(open);open.querySelector('button').focus();}else if(calendarSession){e.preventDefault();closeRankCalendar(true);}else if(!modalBackdrop.hidden)closeModal();}};
   document.addEventListener('click',onOutsideSelect); document.addEventListener('keydown',onEscape);
   const selectObserver=new MutationObserver(()=>{enhanceControls(root);enhanceControls(overlay);});
   selectObserver.observe(root,{childList:true,subtree:true});selectObserver.observe(overlay,{childList:true,subtree:true});

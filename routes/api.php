@@ -320,7 +320,16 @@ Route::middleware(['auth:sanctum', CheckTokenExpiration::class, CheckUserBanned:
 
         // === Unified infrastructure: managed servers, machines and nodes ===
         Route::prefix('infrastructure')->group(function () {
+            Route::get('/network-tunnels/capabilities', [\App\Http\Controllers\Api\Admin\NetworkTunnelController::class, 'capabilities']);
+            Route::post('/network-tunnels', [\App\Http\Controllers\Api\Admin\NetworkTunnelController::class, 'store']);
+            Route::put('/network-tunnels/{tunnel}', [\App\Http\Controllers\Api\Admin\NetworkTunnelController::class, 'update'])->whereNumber('tunnel');
+            Route::post('/network-tunnels/{tunnel}/actions', [\App\Http\Controllers\Api\Admin\NetworkTunnelController::class, 'action'])->whereNumber('tunnel');
+            Route::get('/network-tunnels/{tunnel}/export', [\App\Http\Controllers\Api\Admin\NetworkTunnelController::class, 'export'])->whereNumber('tunnel');
+            Route::get('/network-tunnels/{tunnel}/samples', [\App\Http\Controllers\Api\Admin\NetworkTunnelController::class, 'samples'])->whereNumber('tunnel');
+            Route::post('/network-tunnels/profiles', [\App\Http\Controllers\Api\Admin\NetworkTunnelController::class, 'profiles']);
             Route::get('/tunnels', [\App\Http\Controllers\Api\Admin\TunnelController::class, 'index']);
+            Route::post('/network-tunnel-tests', [\App\Http\Controllers\Api\Admin\NetworkTunnelController::class, 'test'])->middleware('throttle:5,1');
+            Route::get('/network-tunnel-tests/{tunnelTest}', [\App\Http\Controllers\Api\Admin\NetworkTunnelController::class, 'testShow'])->whereNumber('tunnelTest');
             Route::post('/tunnel-tests', [\App\Http\Controllers\Api\Admin\TunnelController::class, 'test'])->middleware('throttle:5,1');
             Route::get('/tunnel-tests/{tunnelTest}', [\App\Http\Controllers\Api\Admin\TunnelController::class, 'testShow'])->whereNumber('tunnelTest');
             Route::post('/tunnels', [\App\Http\Controllers\Api\Admin\TunnelController::class, 'store']);

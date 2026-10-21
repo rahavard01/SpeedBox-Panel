@@ -67,7 +67,21 @@ try {
     $normalize=static fn($p)=>PHP_OS_FAMILY==='Windows'?strtolower(str_replace('\\','/',$p)):str_replace('\\','/',$p);
     $check($normalize(realpath((new ReflectionClass(App\Http\Kernel::class))->getFileName()))===$normalize(realpath($root.'/app/Http/Kernel.php')),'This project source is loaded');
     $check(isset($console->all()['inspire']),'Console route registered');
-    $check(count($app->make(Illuminate\Console\Scheduling\Schedule::class)->events())===13,'All 13 schedules preserved');
+    $events=$app->make(Illuminate\Console\Scheduling\Schedule::class)->events();
+    $check(count($events)===14,'All 13 existing schedules and the tunnel monitor registered');
+    $named=[];
+    foreach($events as $event) if($event->description!==null) $named[$event->description]=$event;
+    foreach(['connections:expired-leases','subscription:traffic-reset','announcements:due-tick',
+        'v2user:expiry-tick','bot-payment-message-cleanup','userbot-card-processing-recovery',
+        'userbot-telegram-delivery-retry','userbot-expiry-warning','userbot-traffic-warning',
+        'userbot-sms-event-cleanup','receipt-ai-auto-approve'] as $name) {
+        $check(isset($named[$name]),'Existing schedule preserved: '.$name);
+    }
+    foreach(['crypto:verify-topups','userbot:verify-crypto-orders'] as $command) {
+        $check(count(array_filter($events,static fn($event)=>str_contains($event->command??'',$command)))===1,'Existing command schedule preserved: '.$command);
+    }
+    $monitor=$named['tunnels:outage-monitor']??null;
+    $check($monitor!==null && $monitor->expression==='* * * * *' && $monitor->withoutOverlapping,'Tunnel monitor runs every minute without overlapping');
     $global=$http->getGlobalMiddleware();
     foreach ([App\Http\Middleware\ApplyRuntimeSettings::class,App\Http\Middleware\TrustProxies::class,
         Illuminate\Foundation\Http\Middleware\PreventRequestsDuringMaintenance::class] as $class) $check(in_array($class,$global,true),'Required global '.$class);

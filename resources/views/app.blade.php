@@ -25,6 +25,7 @@
 
   <script src="/speedbox/node-editor.js?v={{ filemtime(public_path('speedbox/node-editor.js')) }}"></script>
   <script src="/speedbox/emergency-configs.js?v={{ filemtime(public_path('speedbox/emergency-configs.js')) }}"></script>
+  <script src="/speedbox/network-tunnels.js?v={{ filemtime(public_path('speedbox/network-tunnels.js')) }}"></script>
   <script src="/speedbox/tunnels.js?v={{ filemtime(public_path('speedbox/tunnels.js')) }}"></script>
   <script src="/speedbox/infrastructure.js?v={{ filemtime(public_path('speedbox/infrastructure.js')) }}"></script>
   <script src="/speedbox/register-infrastructure.js?v={{ filemtime(public_path('speedbox/register-infrastructure.js')) }}"></script>
@@ -52,6 +53,7 @@
   <link rel="stylesheet" href="/speedbox/bot-faqs.css?v={{ filemtime(public_path('speedbox/bot-faqs.css')) }}">
   <link rel="stylesheet" href="/speedbox/branding.css?v={{ filemtime(public_path('speedbox/branding.css')) }}">
   <link rel="stylesheet" href="/speedbox/infrastructure.css?v={{ filemtime(public_path('speedbox/infrastructure.css')) }}">
+  <link rel="stylesheet" href="/speedbox/network-tunnels.css?v={{ filemtime(public_path('speedbox/network-tunnels.css')) }}">
   <link rel="stylesheet" href="/speedbox/tunnels.css?v={{ filemtime(public_path('speedbox/tunnels.css')) }}">
   <link rel="stylesheet" href="/speedbox/emergency-configs.css?v={{ filemtime(public_path('speedbox/emergency-configs.css')) }}">
   <link rel="stylesheet" href="/speedbox/partner-statistics.css?v={{ filemtime(public_path('speedbox/partner-statistics.css')) }}">

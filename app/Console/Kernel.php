@@ -21,6 +21,8 @@ class Kernel extends ConsoleKernel
      */
     protected function schedule(Schedule $schedule): void
     {
+        $schedule->call(fn () => app(\App\Services\TunnelOutageMonitor::class)->tick())
+            ->everyMinute()->name('tunnels:outage-monitor')->withoutOverlapping();
         $schedule->call(fn () => \Illuminate\Support\Facades\DB::table('speedbox_connection_leases')->where('expires_at', '<=', time())->delete())
             ->everyMinute()->name('connections:expired-leases')->withoutOverlapping();
         $schedule->call(fn () => app(\App\Services\SubscriptionTrafficReset::class)->tick())

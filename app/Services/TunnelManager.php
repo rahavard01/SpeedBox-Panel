@@ -1,7 +1,7 @@
 <?php
 namespace App\Services;
 
-use App\Jobs\{RunTunnelOperation, RunTunnelMaintenance, RunTunnelReconfigure};
+use App\Jobs\{RunTunnelOperation, RunTunnelMaintenance, RunTunnelReconfigure, RunNetworkTunnelOperation, RunNetworkTunnelTest};
 use App\Models\{ManagedServer, ServerTunnel, TunnelConnectionTest, TunnelOperation};
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -36,7 +36,8 @@ class TunnelManager
             abort_if(config('queue.default') === 'sync', 422, 'برای اجرای عملیات تونل، صف عملیات سرورها باید فعال باشد.');
             $entity = $tunnel ?? $test;
             $ids = [$entity->iran_server_id, $entity->foreign_server_id]; sort($ids);
-            $maintenance = in_array($action,['maintenance-status','optimize','engine-update'],true);
+            $network = $tunnel && $tunnel->engine !== 'backpack';
+            $maintenance = !$network && in_array($action,['maintenance-status','optimize','engine-update'],true);
             if ($maintenance) {
                 $scope=$this->maintenanceScope($tunnel);
                 if($action==='engine-update')abort_unless(($payload['confirmed_server_ids']??[])===$scope['server_ids'],409,'سرورهای وابسته تغییر کرده‌اند؛ وضعیت را دوباره بررسی کنید.');
@@ -54,7 +55,9 @@ class TunnelManager
             $op = TunnelOperation::create(['action' => $action, 'tunnel_id' => $tunnel?->id, 'test_id' => $test?->id,
                 'status' => 'queued', 'progress' => 0, 'payload' => $payload, 'deadline' => now()->addMinutes($test ? 40 : ($maintenance ? 45 : 10)), 'message' => 'در صف عملیات سرورها']);
             foreach ($ids as $id) DB::table('speedbox_tunnel_leases')->insert(['managed_server_id' => $id, 'operation_id' => $op->id]);
-            if ($maintenance) RunTunnelMaintenance::dispatch($op->id)->afterCommit();
+            if ($action==='network-test') RunNetworkTunnelTest::dispatch($op->id)->afterCommit();
+            elseif ($network) RunNetworkTunnelOperation::dispatch($op->id)->afterCommit();
+            elseif ($maintenance) RunTunnelMaintenance::dispatch($op->id)->afterCommit();
             elseif ($action==='reconfigure') RunTunnelReconfigure::dispatch($op->id)->afterCommit();
             else RunTunnelOperation::dispatch($op->id)->afterCommit();
             return $op;
@@ -66,6 +69,7 @@ class TunnelManager
     {
         $ids=[(int)$tunnel->iran_server_id,(int)$tunnel->foreign_server_id];sort($ids);
         $query=ServerTunnel::where('status','!=','deleted');
+        if(Schema::hasColumn('speedbox_tunnels','engine'))$query->where('engine','backpack');
         if($lock)$query->lockForUpdate();
         $all=$query->get(['id','iran_server_id','foreign_server_id']);
         do {
@@ -84,6 +88,11 @@ class TunnelManager
         $ports=[(int)$server->ssh_port];
         foreach(ServerTunnel::where('status','!=','deleted')->where(fn($q)=>$q->where('iran_server_id',$server->id)->orWhere('foreign_server_id',$server->id))->get() as $t) {
             $iran=(int)$t->iran_server_id===(int)$server->id;
+            if($t->engine!=='backpack') {
+                if(!$iran && $t->engine==='gost' && $t->transport==='grpc')$ports[]=(int)$t->settings['tunnel_port'];
+                foreach($t->settings['mappings'] as $map)$ports=[...$ports,...range((int)$map[$iran?'public_port':'target_port'],(int)($map[$iran?'public_end':'target_end']??$map[$iran?'public_port':'target_port']))];
+                continue;
+            }
             $listenerIran=$t->kind==='reverse'||$t->orientation==='swapped';
             if($iran===$listenerIran)$ports[]=(int)$t->settings['tunnel_port'];
             foreach($t->settings['mappings'] as $map)$ports[]=(int)$map[$iran?'public_port':'target_port'];
@@ -137,5 +146,8 @@ class TunnelManager
             $op->update(['status' => $status, 'progress' => 100, 'message' => $message, 'result' => $result]);
             DB::table('speedbox_tunnel_leases')->where('operation_id', $op->id)->delete();
         });
+        // Notification failures must never change the result of a tunnel operation.
+        try { app(TunnelOutageMonitor::class)->record($op->fresh()); }
+        catch (\Throwable) { \Illuminate\Support\Facades\Log::warning('Tunnel health observation could not be saved.', ['operation_id'=>$op->id]); }
     }
 }

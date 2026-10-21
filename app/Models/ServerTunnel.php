@@ -9,6 +9,7 @@ class ServerTunnel extends Model
     protected $guarded = ['id'];
     protected $hidden = ['secret'];
     protected $casts = ['secret' => 'encrypted', 'settings' => 'array', 'remote_status' => 'array'];
+    public function getEngineAttribute($value): string { return $value ?: 'backpack'; }
     public function iran() { return $this->belongsTo(ManagedServer::class, 'iran_server_id'); }
     public function foreign() { return $this->belongsTo(ManagedServer::class, 'foreign_server_id'); }
     public function operations() { return $this->hasMany(TunnelOperation::class, 'tunnel_id'); }

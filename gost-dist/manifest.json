@@ -1,0 +1,33 @@
+{
+  "format": 1,
+  "artifacts": {
+    "2.11.5": {
+      "amd64": {
+        "file": "gost-2.11.5-linux-amd64.gz",
+        "sha256": "cb2afacad4edf47d77474b74926a7f7c2e6ba9fa42ced69f0fdf303c7282a5fc",
+        "binary_sha256": "448fbd7b3389fe2aa421de224d065cea7064de0869a036610e5363c931df5b7c",
+        "source": "https://github.com/ginuerzh/gost/releases/download/v2.11.5/gost-linux-amd64-2.11.5.gz"
+      },
+      "arm64": {
+        "file": "gost-2.11.5-linux-arm64.gz",
+        "sha256": "0fa0db88115b543999e798b4b3916fbb2ea4321b878da6ebb6e9dfaa9a32bf4d",
+        "binary_sha256": "62ba351055dda0aaa685ba20549d334d5a7af84b2809f6e5da7ae2ae443dae42",
+        "source": "https://github.com/ginuerzh/gost/releases/download/v2.11.5/gost-linux-armv8-2.11.5.gz"
+      }
+    },
+    "3.0.0": {
+      "amd64": {
+        "file": "gost-3.0.0-linux-amd64.gz",
+        "sha256": "320cee97543f535e5179513fb95edafb43b0f0cafeb5f49e4fb3d7c91c266599",
+        "binary_sha256": "08647765735ed01360a42d314b5e322ce38be7ae93f3c6031d26349f1f764856",
+        "source": "https://github.com/go-gost/gost/releases/download/v3.0.0/gost_3.0.0_linux_amd64.tar.gz"
+      },
+      "arm64": {
+        "file": "gost-3.0.0-linux-arm64.gz",
+        "sha256": "653df1d323967d9ec5201cf87c7099f55086b7703d4eb4c4896378dff264030e",
+        "binary_sha256": "5017faba5160c91d976a9e54bf8994f6aa6ba28c82b505117ea86449864eba56",
+        "source": "https://github.com/go-gost/gost/releases/download/v3.0.0/gost_3.0.0_linux_arm64.tar.gz"
+      }
+    }
+  }
+}

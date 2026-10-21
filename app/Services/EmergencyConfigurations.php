@@ -34,6 +34,7 @@ final class EmergencyConfigurations
                 continue;
             }
             $server['id'] = 'emergency-'.$config->id;
+            $server['tags'] = $config->tags ?? [];
             $server['_emergency_position'] = $position;
             $external[] = $server;
         }

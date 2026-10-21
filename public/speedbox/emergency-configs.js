@@ -33,7 +33,7 @@ window.SpeedboxEmergencyConfigs = {
           <div class="emergency-order" role="group" aria-label="ترتیب ${escape(row.name)}"><span class="emergency-order-number">${number(index+1)}</span><button type="button" class="emergency-icon-button emergency-drag" data-emergency-drag="${row.id}" draggable="true" aria-label="جابه‌جایی ${escape(row.name)}" title="برای تغییر ترتیب بکشید">${icon('grip-vertical')}</button><button type="button" class="emergency-icon-button" data-emergency-action="up" data-id="${row.id}" aria-label="${escape(row.name)} یک ردیف بالاتر" title="یک ردیف بالاتر" ${index===0||busy?'disabled':''}>${icon('chevron-up')}</button><button type="button" class="emergency-icon-button" data-emergency-action="down" data-id="${row.id}" aria-label="${escape(row.name)} یک ردیف پایین‌تر" title="یک ردیف پایین‌تر" ${index===rows.length-1||busy?'disabled':''}>${icon('chevron-down')}</button></div>
         </div>
         <div class="emergency-card-footer">
-          <div class="emergency-display-group"><div class="emergency-display"><label class="switch-line ios"><input type="checkbox" data-emergency-show="${row.id}" aria-label="نمایش ${escape(row.name)} در لیست" ${row.show?'checked':''} ${busy?'disabled':''}></label></div>${window.SpeedboxNodeEditor.protocolBadge(row.protocol)}</div>
+          <div class="emergency-display-group"><div class="emergency-display"><label class="switch-line ios"><input type="checkbox" data-emergency-show="${row.id}" aria-label="نمایش ${escape(row.name)} در لیست" ${row.show?'checked':''} ${busy?'disabled':''}></label></div>${window.SpeedboxNodeEditor.protocolBadge(row.protocol)}${(row.tags||[]).some(tag=>String(tag).toLowerCase()==='sbonly')?'<span class="emergency-client-tag" dir="ltr">SpeedBox</span>':''}</div>
           <div class="actions emergency-actions"><button type="button" class="button entity-edit" data-emergency-action="edit" data-id="${row.id}" aria-label="ویرایش ${escape(row.name)}" ${busy?'disabled':''}>${icon('pen')}<span>ویرایش</span></button><button type="button" class="button entity-delete" data-emergency-action="delete" data-id="${row.id}" aria-label="حذف ${escape(row.name)}" ${busy?'disabled':''}>${icon('trash-alt')}<span>حذف</span></button></div>
         </div>
       </article>`;
@@ -66,6 +66,7 @@ window.SpeedboxEmergencyConfigs = {
       openModal(row?'ویرایش کانفیگ اضطراری':'افزودن کانفیگ اضطراری', `<form id="emergencyForm" autocomplete="off">
         <div class="field"><label for="emergencyName">نام نمایشی</label><input id="emergencyName" name="name" required maxlength="150" value="${escape(row?.name||'')}" placeholder="مثلاً مسیر اضطراری آلمان"></div>
         <div class="field emergency-link-field"><label for="emergencyLink">لینک کانفیگ</label><textarea id="emergencyLink" name="config_uri" required maxlength="16384" rows="5" dir="ltr" spellcheck="false" autocapitalize="off" placeholder="vless://…">${escape(row?.config_uri||'')}</textarea></div>
+        <div class="field emergency-tags-field"><label for="emergencyTags">تگ کانفیگ</label><textarea id="emergencyTags" name="tags" rows="2" dir="ltr" maxlength="2100" placeholder="SBONLY">${escape((row?.tags||[]).join('\n'))}</textarea><small>هر خط یک تگ؛ با SBONLY این کانفیگ فقط در SpeedBox نمایش داده می‌شود.</small></div>
         <div class="field emergency-modal-display"><label for="emergencyVisible">نمایش در لیست</label><label class="switch-line ios"><input id="emergencyVisible" name="show" type="checkbox" ${row?.show===false?'':'checked'}></label></div>
         <div class="emergency-form-error" role="alert" hidden></div>
         <div class="form-actions"><button class="button primary" type="submit">ذخیره</button></div>
@@ -75,7 +76,7 @@ window.SpeedboxEmergencyConfigs = {
       form.onsubmit=event=>{
         event.preventDefault();
         if (busy || !form.reportValidity()) return;
-        const data={name:form.elements.name.value.trim(),config_uri:form.elements.config_uri.value.trim(),show:form.elements.show.checked};
+        const data={name:form.elements.name.value.trim(),config_uri:form.elements.config_uri.value.trim(),show:form.elements.show.checked,tags:[...new Set(form.elements.tags.value.split(/\r?\n/).map(tag=>tag.trim()).filter(Boolean))]};
         operation(async()=>{
           errorBox.hidden=true;
           try {

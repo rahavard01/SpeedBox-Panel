@@ -146,6 +146,7 @@ class RunTunnelOperation implements ShouldQueue, ShouldBeEncrypted
                 $t->update(['status'=>$failed?'needs_review':match($op->action){'delete'=>'deleted','stop'=>'stopped',default=>'checking'},
                     'message'=>$failed?'عملیات فقط روی یکی از دو سمت انجام شد؛ پس از رفع اتصال دوباره اجرا کنید.':'عملیات روی هر دو سرور انجام شد.']);
             }
+            if (!$failed && in_array($op->action,['start','stop'],true)) $t->update(['settings'=>[...$settings,'enabled'=>$op->action==='start']]);
             if ($failed) { $manager->finish($op,'failed',$t->message ?? 'دریافت گزارش کامل نشد.',$result);return; }
         }
         if($op->action==='delete')foreach($servers as $server)$this->refreshReservations($server,$remote,$manager);

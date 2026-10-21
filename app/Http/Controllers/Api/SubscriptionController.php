@@ -75,6 +75,8 @@ class SubscriptionController extends Controller
                 $servers = $this->speedBoxServers($servers, $request);
                 $servers = $this->decorateServers($servers, $user);
                 $servers = app(EmergencyConfigurations::class)->merge($servers, $types, $keywords);
+                // Emergency rows are appended after node filtering; enforce the same client gate.
+                $servers = $this->speedBoxServers($servers, $request);
 
                 $client = $this->getClientInfo($request);
                 $class = app('protocols.manager')->matchProtocolClassName($client['flag']) ?? General::class;
