@@ -43,7 +43,7 @@
 .tunnel-card>footer { padding-top: 12px; border-top: 1px solid rgba(255,255,255,.08); }
 /* Keep the native primary/secondary colors; normalize only geometry. */
 .speedbox-infrastructure .tunnel-workspace .button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; box-sizing: border-box; height: 36px; min-height: 36px; margin: 0; padding: 0 13px; border-radius: 9px; font-family: inherit; font-size: 11px; line-height: 1.6; white-space: nowrap; cursor: pointer; }
-.tunnel-workspace .tunnel-create { height: 38px; min-height: 38px; margin: 0; justify-content: center; }
+.speedbox-infrastructure .tunnel-workspace .tunnel-create { height: 38px; min-height: 38px; margin: 0; justify-content: center; border-radius: 10px; }
 .tunnel-workspace .button:disabled { opacity: .4; cursor: not-allowed; }
 .tunnel-workspace .tunnel-create:focus-visible,.tunnel-workspace .button:focus-visible,.tunnel-actions button:focus-visible { outline: 2px solid rgba(255,255,255,.7); outline-offset: 3px; }
 .speedbox-infrastructure .tunnel-workspace .is-selected { background: rgba(255,255,255,.14); border-color: rgba(255,255,255,.45); color: #fff; }
