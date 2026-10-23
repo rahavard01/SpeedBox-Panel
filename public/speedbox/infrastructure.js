@@ -90,6 +90,8 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
     const previousBody=scope.getElementById('modalBody');
     const signature=form=>form?[form.id,...form.getAttributeNames().filter(n=>n.startsWith('data-')).sort()].join('|'):null;
     const previousForm=signature(previousBody.querySelector('form'));
+    const disclosures=new Map();
+    if(options.kind==='tunnel')for(const el of previousBody.querySelectorAll('details')){const key=el.querySelector('summary')?.textContent;const states=disclosures.get(key)||[];states.push(el.open);disclosures.set(key,states);}
     const visible=!modalBackdrop.hidden;
     const scroll=[modalBackdrop,overlay.querySelector('.infrastructure-modal'),previousBody,previousBody.querySelector('.modal-fields')].map(el=>({top:el?.scrollTop||0,left:el?.scrollLeft||0}));
     const focused=previousBody.contains(document.activeElement)?document.activeElement:null;
@@ -120,7 +122,9 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
       [modalBackdrop,overlay.querySelector('.infrastructure-modal'),modalBody,modalBody.querySelector('.modal-fields')].forEach((el,i)=>{if(el){el.scrollTop=scroll[i].top;el.scrollLeft=scroll[i].left;}});
     };
     const rendered=modalBody.firstElementChild;
-    if(preserve){restore();requestAnimationFrame(restore);}else modalBackdrop.scrollTop=0;
+    if(preserve){
+      for(const el of modalBody.querySelectorAll('details')){const states=disclosures.get(el.querySelector('summary')?.textContent);if(states?.length)el.open=states.shift();}
+      restore();if(options.kind!=='tunnel')requestAnimationFrame(restore);}else modalBackdrop.scrollTop=0;
   }
   function closeModal(force=false){ if(savingCount && force!==true)return; nodeEditorDispose?.();nodeEditorDispose=null;modalBackdrop.hidden=true; document.body.style.overflow='';const handler=modalCloseHandler;modalCloseHandler=null;handler?.(); }
   modalBackdrop.addEventListener('click',e=>{if(e.target===modalBackdrop)closeModal()});
@@ -847,7 +851,7 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
           const search=document.createElement('input');search.type='text';search.className='form-input select-cipher-search';search.dir='ltr';search.placeholder='جستجو یا رمزنگاری سفارشی';search.setAttribute('aria-label','جستجو یا وارد کردن رمزنگاری سفارشی');
           const custom=document.createElement('button');custom.type='button';custom.className='invoice-custom-select__option';custom.hidden=true;
           const options=[...menu.children];search.oninput=()=>{const q=search.value.trim();options.forEach(b=>b.hidden=!b.textContent.toLowerCase().includes(q.toLowerCase()));custom.hidden=!q||[...select.options].some(o=>o.value===q);custom.textContent='استفاده از '+q;};
-          custom.onclick=()=>{const value=search.value.trim();if(!value)return;const option=new Option(value,value,true,true);select.appendChild(option);select.dispatchEvent(new Event('change',{bubbles:true}));closeSelect(wrap);trigger.focus();};
+          custom.onclick=()=>{const value=search.value.trim();if(!value)return;const option=new Option(value,value,true,true);select.appendChild(option);select.dispatchEvent(new Event('change',{bubbles:true}));closeSelect(wrap);trigger.focus({preventScroll:true});};
           search.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();if(!custom.hidden)custom.click();else options.find(b=>!b.hidden)?.click();}};
           menu.prepend(search);menu.appendChild(custom);
         }
@@ -857,11 +861,11 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
         closeAllSelects();
         if(open){wrap.classList.add('is-open');menu.hidden=false;trigger.setAttribute('aria-expanded','true');menu.querySelector('.is-selected,button')?.focus();}
       };
-      trigger.onkeydown=e=>{if(e.key==='ArrowDown'){e.preventDefault();if(menu.hidden)trigger.click();else menu.querySelector('button')?.focus();}};
+      trigger.onkeydown=e=>{if(e.key==='ArrowDown'){e.preventDefault();if(menu.hidden)trigger.click();else menu.querySelector('button')?.focus({preventScroll:true});}};
       menu.onkeydown=e=>{
         const items=[...menu.querySelectorAll('button:not(:disabled)')].filter(button=>!button.hidden); const index=items.indexOf(document.activeElement);
         if(e.key==='ArrowDown'||e.key==='ArrowUp'){e.preventDefault();items[(index+(e.key==='ArrowDown'?1:-1)+items.length)%items.length]?.focus();}
-        if(e.key==='Escape'){e.preventDefault();e.stopPropagation();closeSelect(wrap);trigger.focus();}
+        if(e.key==='Escape'){e.preventDefault();e.stopPropagation();closeSelect(wrap);trigger.focus({preventScroll:true});}
       };
       select.addEventListener('change',update);
       select.addEventListener('invalid',()=>{if(!mobileMedia.matches)trigger.focus();wrap.classList.add('is-invalid');});

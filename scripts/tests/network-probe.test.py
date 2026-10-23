@@ -81,6 +81,69 @@ class Probe(unittest.TestCase):
     conn.sendall(p.struct.pack('!I',0))
     self.assertEqual(p.line(conn)['bytes'],131072)
   finally:echo.close()
+ def test_download_error_does_not_skip_authenticated_upload(self):
+  echo=p.Echo('127.0.0.1','c'*64);echo.start();request=p.tcp_request;phases=[]
+  def failing_download(host,port,token,mode,*args,**kwargs):
+   if mode=='download':raise ConnectionResetError('asymmetric download failure')
+   return request(host,port,token,mode,*args,**kwargs)
+  try:
+   with patch.object(p,'SAMPLES',2),patch.object(p,'BULK',65536),patch.object(p,'tcp_request',side_effect=failing_download):
+    result=p.measure_protocol('127.0.0.1',echo.port,'c'*64,'tcp',progress=lambda v:phases.append(v['phase']))
+   self.assertIsNone(result['download']);self.assertGreater(result['upload'],0);self.assertEqual(result['upload_bytes'],65536)
+   self.assertEqual(result['status'],'unstable');self.assertFalse(result['download_complete']);self.assertIn('upload',phases)
+  finally:echo.close()
+ def test_slow_echo_and_download_leave_time_for_upload(self):
+  echo=p.Echo('127.0.0.1','c'*64);seen=[]
+  def client(conn):
+   try:
+    with conn:
+     conn.settimeout(1);q=p.line(conn);seen.append(q['op'])
+     if not echo.authorized(q):return
+     if q['op']=='echo':time.sleep(.025);p.send(conn,{'seq':q['seq']})
+     elif q['op']=='download':conn.sendall(b'x'*8192);time.sleep(.8)
+     elif q['op']=='upload-sample':
+      n=0
+      while True:
+       size=p.struct.unpack('!I',p.exact(conn,4))[0]
+       if not size:break
+       data=p.exact(conn,size);self.assertEqual(data,b'x'*size);n+=size;p.send(conn,{'bytes':n})
+      p.send(conn,{'bytes':n,'done':True})
+   except OSError:pass
+   finally:echo.slots.release()
+  echo.tcp_client=client;echo.start()
+  try:
+   with patch.object(p,'BULK',65536):
+    started=time.monotonic();result=p.measure_protocol('127.0.0.1',echo.port,'c'*64,'tcp',budget_seconds=.6)
+   self.assertLess(time.monotonic()-started,.9);self.assertIn('upload-sample',seen);self.assertGreater(result['upload'],0)
+   self.assertEqual(result['download_bytes'],8192);self.assertGreater(result['download'],0);self.assertEqual(result['status'],'unstable')
+  finally:echo.close()
+ def test_partial_upload_retains_only_receiver_acknowledged_bytes(self):
+  echo=p.Echo('127.0.0.1','c'*64)
+  def client(conn):
+   try:
+    with conn:
+     conn.settimeout(1);q=p.line(conn)
+     if not echo.authorized(q):return
+     size=p.struct.unpack('!I',p.exact(conn,4))[0];p.exact(conn,size);p.send(conn,{'bytes':size});time.sleep(.5)
+   except OSError:pass
+   finally:echo.slots.release()
+  echo.tcp_client=client;echo.start()
+  try:
+   with patch.object(p,'BULK',131072):
+    count,rate=p.tcp_upload('127.0.0.1',echo.port,'c'*64,time.monotonic()+.2)
+   self.assertEqual(count,32768);self.assertGreater(rate,0)
+  finally:echo.close()
+ def test_full_upload_consumes_terminator_before_final_ack(self):
+  echo=p.Echo('127.0.0.1','c'*64);echo.start()
+  try:
+   with patch.object(p,'BULK',65536):
+    with p.tcp_request('127.0.0.1',echo.port,'c'*64,'upload-sample') as conn:
+     for i in range(2):
+      conn.sendall(p.struct.pack('!I',32768)+b'x'*32768);self.assertEqual(p.line(conn),{'bytes':32768*(i+1)})
+     conn.settimeout(.05)
+     with self.assertRaises(socket.timeout):p.line(conn)
+     conn.settimeout(1);conn.sendall(p.struct.pack('!I',0));self.assertEqual(p.line(conn),{'bytes':65536,'done':True})
+  finally:echo.close()
  def test_gre_alias_is_set_and_verified_before_address_or_route(self):
   c=config();calls=[]
   def run(args,check=True):

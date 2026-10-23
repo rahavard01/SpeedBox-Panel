@@ -201,8 +201,8 @@
 /* Keep every result within the modal width, including narrow screens. */
 .speedbox-infrastructure-overlay .tunnel-modal .button { box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;gap:7px;height:36px;min-height:36px;margin:0;padding:0 14px;font-size:11px;line-height:1.6;white-space:nowrap; }
 .tunnel-result-list { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;min-width:0; }
-.tunnel-result-row { display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:8px;padding:8px;border:1px solid rgba(255,255,255,.12);border-radius:10px;min-width:0; }
-.tunnel-result-row.is-recommended { background:linear-gradient(135deg,rgba(190,132,39,.12),rgba(243,199,106,.04));border-color:rgba(231,181,82,.38); }
+.tunnel-result-row { background:linear-gradient(145deg,rgba(31,32,36,.97),rgba(17,18,21,.98));color:#eee;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:8px;padding:8px;border:1px solid rgba(255,255,255,.12);border-radius:10px;min-width:0; }
+.tunnel-result-row.is-recommended { border-color:rgba(231,181,82,.65); }
 .tunnel-result-method { display:grid;gap:4px;min-width:0; }
 .tunnel-result-method .tunnel-badge { padding:2px 6px;line-height:1.5; }
 .tunnel-result-method>b { font-size:12px;text-align:right;overflow-wrap:anywhere; }
@@ -322,10 +322,3 @@
 .tunnel-roundtrip-metrics{grid-template-columns:repeat(3,minmax(0,1fr))}
 
 
-/* The recommendation action follows the gold card in every engine. */
-.speedbox-infrastructure-overlay .tunnel-modal .tunnel-result-row.is-recommended>button.button {
- background:linear-gradient(135deg,#bc812a,#efd088);border:1px solid #d9ac57;color:#2d200b;
- box-shadow:inset 0 1px 0 rgba(255,244,207,.4),0 3px 12px rgba(186,132,39,.2);
-}
-.speedbox-infrastructure-overlay .tunnel-modal .tunnel-result-row.is-recommended>button.button:hover:not(:disabled) {background:linear-gradient(135deg,#d3993b,#ffe0a0);border-color:#f2ce84;}
-.speedbox-infrastructure-overlay .tunnel-modal .tunnel-result-row.is-recommended>button.button:focus-visible {outline:2px solid #f5d68e;outline-offset:3px;}

@@ -210,11 +210,30 @@
  .speedbox-infrastructure-overlay .tunnel-modal .tunnel-mapping-row>.button{font-size:10px;padding:8px}
 }
 
-.network-wattunnel{--network-color:#bd9df1}.wat-map{display:grid;grid-template-columns:repeat(4,minmax(0,1fr)) auto;gap:10px;align-items:end;padding:12px;border:1px solid rgba(150,160,180,.2);border-radius:10px}.wat-mappings,.wat-test-settings{display:grid;gap:12px}.wat-carriers{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;padding:14px 0}.wat-carriers label{display:flex;gap:8px;align-items:center}.wat-editor .network-advanced-content{padding-top:16px}
-@media(max-width:640px){.wat-map{grid-template-columns:repeat(2,minmax(0,1fr))}.wat-map>button{grid-column:1/-1}.wat-carriers{grid-template-columns:repeat(2,minmax(0,1fr))}}
-.speedbox-infrastructure-overlay .tunnel-modal .wat-editor .field{display:grid;grid-template-columns:minmax(0,1fr);gap:8px;min-width:0;max-width:100%;margin:0}
-.speedbox-infrastructure-overlay .tunnel-modal .wat-editor .field>small{grid-column:1;min-width:0;overflow-wrap:anywhere}
-.speedbox-infrastructure-overlay .tunnel-modal .wat-editor .form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+
+.network-wattunnel{--network-color:#bd9df1}
+.wat-mappings,.wat-test-settings{display:grid;gap:12px}
+.wat-carriers{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;padding:14px 0}
+.wat-carriers label{display:flex;gap:8px;align-items:center}
+.speedbox-infrastructure .tunnel-toolbar .network-filters>.seg-btn{display:inline-flex;align-items:center;justify-content:center;line-height:20px;min-height:40px;box-sizing:border-box}
+.speedbox-infrastructure-overlay .tunnel-modal .wat-editor .form-grid{display:grid;grid-template-columns:minmax(0,1fr);gap:16px}
+.speedbox-infrastructure-overlay .tunnel-modal .wat-editor .field{display:grid;grid-template-columns:minmax(0,1fr) minmax(150px,min(44%,220px));align-items:center;gap:10px;min-width:0;max-width:100%;margin:0}
+.speedbox-infrastructure-overlay .tunnel-modal .wat-editor .field>label{padding:0;line-height:1.8;white-space:normal;text-align:right}
+.speedbox-infrastructure-overlay .tunnel-modal .wat-editor .field>:is(input,select,.speedbox-select){width:100%;min-width:0;max-width:none;box-sizing:border-box}
+.speedbox-infrastructure-overlay .tunnel-modal .wat-editor .field>small{grid-column:1/-1;min-width:0;overflow-wrap:anywhere;margin:0}
 .speedbox-infrastructure-overlay .tunnel-modal .wat-editor .network-section{margin-top:18px}
-@media(max-width:540px){.speedbox-infrastructure-overlay .tunnel-modal .wat-editor .form-grid{grid-template-columns:minmax(0,1fr)}.speedbox-infrastructure .tunnel-toolbar .network-filters>.seg-btn{padding:10px 5px;font-size:11px}}
+.speedbox-infrastructure-overlay .tunnel-modal .wat-editor .network-advanced-content{display:grid;gap:16px;padding-top:16px}
+.speedbox-infrastructure-overlay .tunnel-modal .wat-editor .wat-map{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto;gap:12px;align-items:end;padding:12px;border:1px solid rgba(255,255,255,.14);border-radius:12px}
+.speedbox-infrastructure-overlay .tunnel-modal .wat-map .field{grid-template-columns:minmax(0,1fr);grid-template-rows:1fr 38px;gap:8px;align-items:end}
+.speedbox-infrastructure-overlay .tunnel-modal .wat-map>.button{height:38px;min-height:38px;align-self:end}
+@media(max-width:540px){
+ .wat-carriers{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .speedbox-infrastructure .tunnel-toolbar .network-filters>.seg-btn{padding:10px 5px;font-size:11px}
+ .speedbox-infrastructure-overlay .tunnel-modal .wat-editor .field{grid-template-columns:minmax(0,1fr) minmax(130px,47%)}
+ .speedbox-infrastructure-overlay .tunnel-modal .wat-editor .wat-map{gap:8px;padding:10px}
+ .speedbox-infrastructure-overlay .tunnel-modal .wat-editor .wat-map .field{grid-template-columns:minmax(0,1fr)}
+ .speedbox-infrastructure-overlay .tunnel-modal .wat-map .field>label{font-size:10px}
+}
 @media(min-width:769px){.speedbox-infrastructure-overlay .tunnel-modal .wat-editor select.infrastructure-native-select{width:1px!important;min-width:0!important;height:1px!important;min-height:0!important}}
+
+.speedbox-infrastructure-overlay .modal-backdrop:has(.tunnel-modal){overflow-anchor:none}

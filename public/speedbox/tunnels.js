@@ -99,6 +99,22 @@ window.SpeedboxTunnels = (() => {
     const modalOptions=()=>({kind:'tunnel',onClose:()=>{switching=false;selectedTestId=null;wizard=false;editing=null;draft=null;selection=null;maintenance=null;}});
     const safe=fn=>async e=>{e?.preventDefault?.();if(busy||disposed)return;busy=true;content.setAttribute('aria-busy','true');try{await fn(e);}catch(error){if(!disposed&&error.name!=='AbortError')toast(error.message,'error');}finally{busy=false;content.removeAttribute('aria-busy');}};
     const network=window.SpeedboxNetworkTunnels?.mount({api,toast,openModal,closeModal,modalBody,enhanceControls,openNode,safe,progress,openMaintenance,data:()=>data,refresh:()=>refreshCards(),backpack:()=>{wizard=true;editing=null;selection=null;draft=null;renderWizard();}});
+    let retainingView=false;
+    function retainView(render){
+      if(retainingView)return render();
+      const containers=new Set([document.scrollingElement]);
+      for(const start of [content,modalBody(),modalBody()?.querySelector('.modal-fields')])for(let el=start;el;el=el.parentElement)containers.add(el);
+      const positions=[...containers].filter(Boolean).map(el=>[el,el.scrollTop,el.scrollLeft]);
+      const focus=document.activeElement;
+      const key=focus?.id?['id',focus.id]:focus?.name?['name',focus.name]:focus?[...focus.attributes].filter(a=>a.name.startsWith('data-')).map(a=>[a.name,a.value])[0]:null;
+      let output;retainingView=true;try{output=render();}finally{retainingView=false;}
+      const restore=()=>{
+        if(disposed)return;
+        if(key&&!focus?.isConnected){const next=[...content.querySelectorAll('button,input,select,summary'),...modalBody().querySelectorAll('button,input,select,summary')].find(el=>el.getAttribute(key[0])===key[1]);next?.focus({preventScroll:true});}
+        for(const [el,top,left] of positions)if(el.isConnected){el.scrollTop=top;el.scrollLeft=left;}
+      };
+      restore();return output;
+    }
     let engineFilter='all';
     const serverName=id=>data.servers.find(s=>s.id===Number(id))?.name||'سرور حذف‌شده';
     function shell() {
@@ -146,6 +162,7 @@ window.SpeedboxTunnels = (() => {
     async function refreshCards(){const answer=await api('/tunnels');if(disposed)return;data=answer;renderCards();renderHistory();if(logOperation){const op=data.data.find(t=>t.operation?.id===logOperation)?.operation;if(op&&!active(op)){logOperation=null;showLogs(op);}}if(maintenance)await refreshMaintenance();}
     async function pollTest(render=true){if(!test)return;const id=test.id;const answer=await api(`/tunnel-tests/${id}`);if(disposed||test?.id!==id)return;test=answer.data;testOperation=answer.operation;data.tests=[test,...data.tests.filter(t=>t.id!==test.id)].slice(0,10);renderHistory();if(render&&wizard&&(!draft||switching))renderWizard();}
     function renderCards(){
+      return retainView(()=>{
       const allLive=data.data.filter(t=>t.status!=='deleted');
       const live=allLive.filter(t=>engineFilter==='all'||(t.engine||'backpack')===engineFilter);
       // Keep creation in the same toolbar position, including an empty list.
@@ -165,14 +182,18 @@ window.SpeedboxTunnels = (() => {
         if(b.dataset.tunnelAction==='delete'){confirmDelete(t);return;}
         await operation(t,b.dataset.tunnelAction);
       }));
+      });
     }
     function renderHistory(){
+      return retainView(()=>{
       content.querySelector('[data-history-count]').textContent=data.tests.length.toLocaleString('fa-IR');
       content.querySelector('[data-tunnel-history]').innerHTML=data.tests.length?data.tests.map(t=>`<button type="button" class="tunnel-history-row" data-history="${t.id}"><span>${t.engine&&t.engine!=='backpack'?esc(window.SpeedboxNetworkTunnels.label(t))+' — ':''}${esc(serverName(t.iran_server_id))} / ${esc(serverName(t.foreign_server_id))}</span>${badge(t.status)}<small>${timeValue(new Date(t.created_at).getTime()/1000)}</small></button>`).join(''):'<p class="tunnel-muted">هنوز بررسی اتصالی انجام نشده است.</p>';
       content.querySelectorAll('[data-history]').forEach(b=>b.onclick=safe(async()=>{const selected=data.tests.find(t=>t.id===Number(b.dataset.history));if(selected.engine&&selected.engine!=='backpack'){wizard=false;await network.resumeTest(selected);return;}test=selected;selection=null;editing=null;draft=null;wizard=true;await pollTest(false);renderWizard();}));
       syncLayout();
+      });
     }
     function renderWizard(){
+      const draw=()=>{
       if(!wizard)return;
       if(switching){renderMethodPicker();return;}
       if(draft){renderSetup();return;}
@@ -189,9 +210,13 @@ window.SpeedboxTunnels = (() => {
         const answer=await api('/tunnel-tests',{method:'POST',body:JSON.stringify(payload)});if(disposed)return;test=answer.data;testOperation=answer.operation;data.tests=[test,...data.tests.filter(t=>t.id!==test.id)].slice(0,10);renderHistory();toast(answer.message);renderWizard();schedule();
       });
       renderResults();enhanceControls(modalBody());
+      };
+      const stage=switching?'data-method-picker':draft?'data-tunnel-setup':'data-test-form';
+      return modalBody().querySelector(`[${stage}]`)?retainView(draw):draw();
     }
     function serverOptions(selected){return data.servers.map(s=>`<option value="${s.id}" ${s.id===Number(selected)?'selected':''}>${esc(s.name)} — ${esc(s.host)}</option>`).join('');}
     function renderResults(){
+      return retainView(()=>{
       const box=wizardBox()?.querySelector('[data-test-results]');if(!box||!test)return;
       const pending=active(testOperation);
       const rows=(test.results||[]).length?test.results:pending?[
@@ -201,7 +226,7 @@ window.SpeedboxTunnels = (() => {
       const recommended=rows.find(r=>r.recommended);
       const stale=editing&&(!test.updated_at&&!test.created_at||Date.now()-new Date(test.updated_at||test.created_at).getTime()>=86400000);
       const shown=rows.filter(r=>filter==='all'||r.status===filter);
-      box.innerHTML=`<div class="tunnel-results"><div class="tunnel-result-heading"><div><h3>نتیجهٔ بررسی اتصال</h3><p>${esc(testOperation?.message||test.message||'در انتظار شروع تست…')}</p></div>${badge(test.status)}</div>${pending?`<div class="tunnel-test-progress">${progress(testOperation)}<button type="button" class="button secondary" data-cancel-test ${testOperation.cancel_requested?'disabled':''}>توقف بررسی</button></div>`:''}${recommended?`<div class="tunnel-recommendation"><span>روش پیشنهادی</span><b dir="ltr">${esc(recommended.label)}</b><small>می‌توانید هر روش موفق دیگری را هم انتخاب کنید.</small></div>`:''}${rows.length?`<div class="tunnel-result-filters">${[['all','همهٔ روش‌ها'],['ok','موفق'],['unstable','ناپایدار']].map(([v,l])=>`<button type="button" class="button secondary ${filter===v?'is-selected':''}" data-result-filter="${v}">${l}</button>`).join('')}</div><div class="tunnel-result-list" role="list" aria-label="نتایج روش‌های اتصال">${shown.map(r=>`<article class="tunnel-result-row ${r.recommended?'is-recommended':''}" role="listitem"><div class="tunnel-result-method"><b dir="ltr">${esc(r.label)}</b><div>${badge(r.status)}${r.recommended?'<span class="tunnel-pick">پیشنهادی</span>':''}<span class="tunnel-orientation">${r.orientation==='swapped'?'برعکس':'معمول'}</span></div></div><dl class="tunnel-result-metrics ${r.measurement==='round_trip_1mib'?'tunnel-roundtrip-metrics':''}"><div><dt>پاسخ موفق</dt><dd><bdi dir="ltr">${r.ok??'—'} / ${r.total??'—'}</bdi></dd></div><div><dt>تأخیر</dt><dd>${numeric(r.rtt,'ms')}</dd></div>${r.measurement==='round_trip_1mib'?`<div><dt>سرعت</dt><dd>${numeric(r.speed,'Mbps')}</dd></div>`:`<div><dt>دریافت</dt><dd>${numeric(r.download,'Mbps')}</dd></div><div><dt>ارسال</dt><dd>${numeric(r.upload,'Mbps')}</dd></div>`}</dl><button type="button" class="button ${r.recommended?'primary':'secondary'}" data-select-result="${esc(r.id)}" ${!r.selectable||pending||stale||test.status!=='completed'?'disabled':''}>ادامه با این روش</button>${r.reason?`<p class="tunnel-row-note">${esc(r.reason)}</p>`:''}</article>`).join('')}</div><p class="tunnel-muted">این نتایج مربوط به زمان تست هستند؛ کیفیت اتصال ممکن است تغییر کند.</p>`:pending?'<p class="tunnel-muted">آماده‌سازی و بررسی مسیر ممکن است چند دقیقه طول بکشد. بستن صفحه، تست را متوقف نمی‌کند.</p>':'<p class="tunnel-muted">نتیجه‌ای برای نمایش وجود ندارد؛ بررسی اتصال را دوباره اجرا کنید.</p>'}</div>`;
+      box.innerHTML=`<div class="tunnel-results"><div class="tunnel-result-heading"><div><h3>نتیجهٔ بررسی اتصال</h3><p>${esc(testOperation?.message||test.message||'در انتظار شروع تست…')}</p></div>${badge(test.status)}</div>${pending?`<div class="tunnel-test-progress">${progress(testOperation)}<button type="button" class="button secondary" data-cancel-test ${testOperation.cancel_requested?'disabled':''}>توقف بررسی</button></div>`:''}${recommended?`<div class="tunnel-recommendation"><span>روش پیشنهادی</span><b dir="ltr">${esc(recommended.label)}</b><small>می‌توانید هر روش موفق دیگری را هم انتخاب کنید.</small></div>`:''}${rows.length?`<div class="tunnel-result-filters">${[['all','همهٔ روش‌ها'],['ok','موفق'],['unstable','ناپایدار']].map(([v,l])=>`<button type="button" class="button secondary ${filter===v?'is-selected':''}" data-result-filter="${v}">${l}</button>`).join('')}</div><div class="tunnel-result-list" role="list" aria-label="نتایج روش‌های اتصال">${shown.map(r=>`<article class="tunnel-result-row ${r.recommended?'is-recommended':''}" role="listitem"><div class="tunnel-result-method"><b dir="ltr">${esc(r.label)}</b><div>${badge(r.status)}${r.recommended?'<span class="tunnel-pick">پیشنهادی</span>':''}<span class="tunnel-orientation">${r.orientation==='swapped'?'برعکس':'معمول'}</span></div></div><dl class="tunnel-result-metrics ${r.measurement==='round_trip_1mib'?'tunnel-roundtrip-metrics':''}"><div><dt>پاسخ موفق</dt><dd><bdi dir="ltr">${r.ok??'—'} / ${r.total??'—'}</bdi></dd></div><div><dt>تأخیر</dt><dd>${numeric(r.rtt,'ms')}</dd></div>${r.measurement==='round_trip_1mib'?`<div><dt>سرعت</dt><dd>${numeric(r.speed,'Mbps')}</dd></div>`:`<div><dt>دریافت</dt><dd>${numeric(r.download,'Mbps')}</dd></div><div><dt>ارسال</dt><dd>${numeric(r.upload,'Mbps')}</dd></div>`}</dl><button type="button" class="button secondary" data-select-result="${esc(r.id)}" ${!r.selectable||pending||stale||test.status!=='completed'?'disabled':''}>ادامه با این روش</button></article>`).join('')}</div><p class="tunnel-muted">این نتایج مربوط به زمان تست هستند؛ کیفیت اتصال ممکن است تغییر کند.</p>`:pending?'<p class="tunnel-muted">آماده‌سازی و بررسی مسیر ممکن است چند دقیقه طول بکشد. بستن صفحه، تست را متوقف نمی‌کند.</p>':'<p class="tunnel-muted">نتیجه‌ای برای نمایش وجود ندارد؛ بررسی اتصال را دوباره اجرا کنید.</p>'}</div>`;
       box.querySelector('[data-cancel-test]')?.addEventListener('click',safe(async()=>{await api(`/tunnel-operations/${testOperation.id}/cancel`,{method:'POST',body:'{}'});await pollTest();}));
       box.querySelectorAll('[data-result-filter]').forEach(b=>b.onclick=()=>{filter=b.dataset.resultFilter;renderResults();});
       box.querySelectorAll('[data-select-result]').forEach(b=>b.onclick=()=>{
@@ -210,6 +235,7 @@ window.SpeedboxTunnels = (() => {
         editing=null;
         draft=backpackSetup?.testId===test.id&&backpackSetup?.resultId===selection.id?clone(backpackSetup.draft):{name:`${serverName(test.iran_server_id)} — ${serverName(test.foreign_server_id)}`,public_host:data.servers.find(s=>s.id===test.iran_server_id)?.host||'',tunnel_port:8000,accept_udp:selection.kind==='reverse'&&selection.transport==='udp',peer_host:'',mappings:[{public_port:443,target_port:443}],accept_unstable:false};
         renderWizard();
+      });
       });
     }
     function renderMethodPicker(){
@@ -250,7 +276,7 @@ window.SpeedboxTunnels = (() => {
       form.addEventListener('input',capture);form.addEventListener('change',capture);
       form.querySelector('[data-back-results]')?.addEventListener('click',()=>{capture();backpackSetup={testId:test.id,resultId:selection.id,draft:clone(draft)};editing=null;draft=null;selection=null;renderWizard();});
       form.querySelector('[data-add-mapping]').onclick=()=>{capture();if(draft.mappings.length>=20){toast('حداکثر ۲۰ پورت می‌توانید اضافه کنید.','error');return;}draft.mappings.push({public_port:0,target_port:0});renderMappings();};
-      function renderMappings(){form.querySelector('[data-mapping-list]').innerHTML=draft.mappings.map((m,i)=>`<div class="tunnel-mapping-row"><div class="field"><label for="bp-public-${i}">پورت اتصال کاربران روی ایران</label><input class="form-input" id="bp-public-${i}" type="number" min="1" max="65535" value="${m.public_port||''}" data-map="public_port" data-index="${i}" required dir="ltr"></div><span class="tunnel-map-arrow" aria-hidden="true">←</span><div class="field"><label for="bp-target-${i}">پورت نود روی سرور خارج</label><input class="form-input" id="bp-target-${i}" type="number" min="1" max="65535" value="${m.target_port||''}" data-map="target_port" data-index="${i}" required dir="ltr"></div><button type="button" class="button danger" data-remove-map="${i}" ${draft.mappings.length===1?'disabled':''} aria-label="حذف این پورت">حذف</button></div>`).join('');form.querySelectorAll('[data-map]').forEach(input=>input.oninput=()=>draft.mappings[Number(input.dataset.index)][input.dataset.map]=Number(input.value));form.querySelectorAll('[data-remove-map]').forEach(b=>b.onclick=()=>{draft.mappings.splice(Number(b.dataset.removeMap),1);renderMappings();});}
+      function renderMappings(){retainView(()=>{form.querySelector('[data-mapping-list]').innerHTML=draft.mappings.map((m,i)=>`<div class="tunnel-mapping-row"><div class="field"><label for="bp-public-${i}">پورت اتصال کاربران روی ایران</label><input class="form-input" id="bp-public-${i}" type="number" min="1" max="65535" value="${m.public_port||''}" data-map="public_port" data-index="${i}" required dir="ltr"></div><span class="tunnel-map-arrow" aria-hidden="true">←</span><div class="field"><label for="bp-target-${i}">پورت نود روی سرور خارج</label><input class="form-input" id="bp-target-${i}" type="number" min="1" max="65535" value="${m.target_port||''}" data-map="target_port" data-index="${i}" required dir="ltr"></div><button type="button" class="button danger" data-remove-map="${i}" ${draft.mappings.length===1?'disabled':''} aria-label="حذف این پورت">حذف</button></div>`).join('');form.querySelectorAll('[data-map]').forEach(input=>input.oninput=()=>draft.mappings[Number(input.dataset.index)][input.dataset.map]=Number(input.value));form.querySelectorAll('[data-remove-map]').forEach(b=>b.onclick=()=>{draft.mappings.splice(Number(b.dataset.removeMap),1);renderMappings();});});}
       renderMappings();enhanceControls(modalBody());
       form.onsubmit=safe(async()=>{if(!form.reportValidity())return;capture();const payload={...draft,...(!editing?{test_id:test.id,result_id:selection.id}:selection?{test_id:selectedTestId,result_id:selection.id}:{})};const answer=await api(editing?`/tunnels/${editing.id}`:'/tunnels',{method:editing?'PUT':'POST',body:JSON.stringify(payload)});if(disposed)return;toast(answer.message);closeModal();editing=null;draft=null;selection=null;wizard=false;await refreshCards();});
     }
@@ -318,7 +344,7 @@ window.SpeedboxTunnels = (() => {
     }
 
     async function operation(t,action){const answer=await api(`/tunnels/${t.id}/actions`,{method:'POST',body:JSON.stringify({action})});if(disposed)return;toast(answer.message);if(action==='logs'){if(active(answer.data))logOperation=answer.data.id;else showLogs(answer.data);}await refreshCards();}
-    function confirmDelete(t){openModal('حذف تونل',`<p>تونل «${esc(t.name)}» از هر دو سرور حذف شود؟</p><p class="tunnel-muted">نودها حذف نمی‌شوند، اما اتصال آن‌ها از این تونل قطع می‌شود.</p><div class="form-actions"><button type="button" class="button server-delete-confirm" data-confirm-tunnel-delete>حذف از دو سرور</button></div>`);modalBody().querySelector('[data-confirm-tunnel-delete]').onclick=safe(async()=>{const answer=await api(`/tunnels/${t.id}/actions`,{method:'POST',body:JSON.stringify({action:'delete',confirm:true})});closeModal();toast(answer.message);await refreshCards();});}
+    function confirmDelete(t){openModal('حذف تونل',`<p>تونل «${esc(t.name)}» از هر دو سرور حذف شود؟</p><p class="tunnel-muted">نودها حذف نمی‌شوند، اما اتصال آن‌ها از این تونل قطع می‌شود.</p><div class="form-actions"><button type="button" class="button server-delete-confirm" data-confirm-tunnel-delete>حذف از دو سرور</button></div>`,modalOptions());modalBody().querySelector('[data-confirm-tunnel-delete]').onclick=safe(async()=>{const answer=await api(`/tunnels/${t.id}/actions`,{method:'POST',body:JSON.stringify({action:'delete',confirm:true})});closeModal();toast(answer.message);await refreshCards();});}
     function details(t){
       const s=t.settings;
       openModal('جزئیات تونل BackPack',`<div class="tunnel-details"><section class="tunnel-detail-summary"><header><h3>${esc(t.name)}</h3>${badge(t.status)}</header><p class="tunnel-muted">${esc(t.message)}</p><dl><dt>سرور ایران</dt><dd>${esc(t.iran?.name)}</dd><dt>سرور خارج</dt><dd>${esc(t.foreign?.name)}</dd><dt>آدرس کاربران</dt><dd>${s.mappings.map(m=>`<bdi class="tunnel-detail-endpoint" dir="ltr">${esc(endpoint(s.public_host,m.public_port,m.public_end))}</bdi>`).join('')}</dd><dt>پورت ارتباط دو سرور</dt><dd><bdi dir="ltr">${s.tunnel_port}</bdi></dd></dl></section><div class="tunnel-end-status">${[['iran','سرور ایران'],['foreign','سرور خارج']].map(([side,label])=>{const r=t.remote_status?.[side],m=r?.metrics;return `<section><h4>${label}</h4><p>${r?.error?esc(r.error):!r?'هنوز بررسی نشده':r.active?'سرویس روشن است':'سرویس متوقف است'}</p><dl><dt>وضعیت ارتباط</dt><dd>${m?.connected===true?'برقرار':m?.connected===false?'قطع':'تأیید نشده'}</dd><dt>دریافت / ارسال</dt><dd><bdi dir="ltr">${bytes(m?.bytes_in)} / ${bytes(m?.bytes_out)}</bdi></dd><dt>آخرین بررسی</dt><dd>${timeValue(r?.checked_at)}</dd></dl></section>`;}).join('')}</div><section class="tunnel-node-options"><header><h4>استفاده برای نود</h4><p>نود روی سرور خارج اجرا می‌شود؛ آدرس اتصال کاربران، سرور ایران است.</p></header><div class="tunnel-node-grid"><div class="field"><label for="tunnel-node-mapping">پورت موردنظر</label><select class="form-input" id="tunnel-node-mapping">${s.mappings.map((m,i)=>`<option value="${i}">${m.public_port} ← ${m.target_port}</option>`).join('')}</select></div><button type="button" class="button secondary" data-create-tunnel-node ${!t.foreign?.machine_id?'disabled':''}>ساخت نود جدید</button><div class="field"><label for="tunnel-existing-node">نود موجود روی سرور خارج</label><select class="form-input" id="tunnel-existing-node"><option value="">انتخاب کنید</option>${(t.nodes||[]).map(n=>`<option value="${n.id}">${esc(n.name)} — ${n.server_port}</option>`).join('')}</select></div><button type="button" class="button secondary" data-edit-tunnel-node>استفاده برای نود موجود</button></div><p class="tunnel-muted">فرم نود باز می‌شود؛ تغییرات پس از بررسی و ذخیرهٔ شما اعمال خواهند شد. تنظیمات TLS و دامنهٔ آن را هم بررسی کنید.</p></section></div>`,{kind:'tunnel'});

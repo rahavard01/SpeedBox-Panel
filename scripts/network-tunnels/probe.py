@@ -131,16 +131,17 @@ class Echo:
     elif mode=='download':
      data=b'x'*32768
      for _ in range(BULK//len(data)):conn.sendall(data)
-    elif mode=='upload-frames':
+    elif mode in ('upload-frames','upload-sample'):
      n=0
-     while n<BULK:
+     while True:
       size=struct.unpack('!I',exact(conn,4))[0]
       if size==0:break
       if size>32768 or n+size>BULK:raise ValueError('invalid upload frame size')
       data=exact(conn,size)
       if data!=b'x'*size:raise ValueError('upload frame integrity failed')
       n+=len(data)
-     send(conn,{'bytes':n})
+      if mode=='upload-sample':send(conn,{'bytes':n})
+     send(conn,{'bytes':n,'done':True})
   except (OSError,ValueError):pass
   finally:self.slots.release()
  def tcp_loop(self):
@@ -178,11 +179,48 @@ class Echo:
   for target in (self.tcp_loop,self.udp_loop):threading.Thread(target=target,daemon=True).start()
  def close(self):self.closed=True;self.tcp.close();self.udp.close()
 
-def tcp_request(host,port,token,mode,seq=0):
- conn=socket.create_connection((host,port),timeout=1.5);conn.settimeout(4);send(conn,{'token':token,'op':mode,'seq':seq});return conn
+def tcp_request(host,port,token,mode,seq=0,timeout=4):
+ conn=socket.create_connection((host,port),timeout=max(.01,min(1.5,timeout)))
+ try:
+  conn.settimeout(max(.01,timeout));send(conn,{'token':token,'op':mode,'seq':seq});return conn
+ except BaseException:
+  conn.close();raise
+
+def tcp_upload(host,port,token,deadline):
+ # Drain cumulative receiver acknowledgements while the sender fills the pipe.
+ # Count only bytes verified at the far end, including on a partial transfer.
+ started=time.monotonic();acknowledged=0;last_ack=None;sent=0
+ conn=None;sender=None
+ try:
+  conn=tcp_request(host,port,token,'upload-sample',timeout=deadline-started)
+  def write():
+   nonlocal sent
+   try:
+    chunk=b'x'*32768
+    while sent<BULK and time.monotonic()<deadline:
+     data=chunk[:min(len(chunk),BULK-sent)]
+     conn.sendall(struct.pack('!I',len(data))+data);sent+=len(data)
+    conn.sendall(struct.pack('!I',0))
+   except OSError:pass
+  sender=threading.Thread(target=write,daemon=True);sender.start()
+  while time.monotonic()<deadline:
+   conn.settimeout(max(.01,deadline-time.monotonic()))
+   q=line(conn);n=q.get('bytes')
+   if type(n) is not int or not acknowledged<=n<=BULK:raise ValueError('invalid upload acknowledgement')
+   if n>acknowledged:acknowledged=n;last_ack=time.monotonic()
+   if q.get('done'):break
+ except (OSError,ValueError):pass
+ finally:
+  if conn:
+   with contextlib.suppress(OSError):conn.shutdown(socket.SHUT_RDWR)
+   conn.close()
+  if sender:sender.join(timeout=.1)
+ return acknowledged,(acknowledged*8/max(.001,last_ack-started)/1e6 if last_ack else None)
+
 
 def measure_protocol(host,port,token,proto,budget_seconds=30,progress=None):
  started=time.monotonic();deadline=started+max(.01,min(float(budget_seconds),30))
+ echo_deadline=min(deadline,started+max(.01,min(10,float(budget_seconds)/3))) if proto=='tcp' else deadline
  timings=[];udp=None;nonce=os.urandom(8).hex()
  tried=0;download=upload=None;download_bytes=upload_bytes=0
  def snapshot(phase='echo',status='testing'):
@@ -203,18 +241,18 @@ def measure_protocol(host,port,token,proto,budget_seconds=30,progress=None):
   raise TimeoutError('no authenticated UDP reply')
  try:
   for seq in range(SAMPLES):
-   if time.monotonic()>=deadline:break
+   if time.monotonic()>=echo_deadline:break
    if not timings and tried>=3 and time.monotonic()-started>=6:break
    tried+=1
    start=time.monotonic()
    try:
     if udp:request('echo',seq=seq);answer=response('seq',seq)
     else:
-     with tcp_request(host,port,token,'echo',seq) as conn:answer=line(conn)
+     with tcp_request(host,port,token,'echo',seq,timeout=min(1.5,max(.01,echo_deadline-time.monotonic()))) as conn:answer=line(conn)
     if answer.get('seq')==seq:timings.append((time.monotonic()-start)*1000)
    except (OSError,ValueError):pass
    snapshot()
-   time.sleep(.1)
+   time.sleep(min(.1,max(0,echo_deadline-time.monotonic())))
   if timings and time.monotonic()<deadline:
    snapshot('download')
    try:
@@ -242,29 +280,25 @@ def measure_protocol(host,port,token,proto,budget_seconds=30,progress=None):
        except (OSError,ValueError):break
      request('report');q=response('bytes');upload_bytes=min(PACKETS*1000,max(0,int(q.get('bytes',0))));upload=upload_bytes*8/max(.001,float(q.get('seconds',1)))/1e6
     else:
-     start=time.monotonic()
-     with tcp_request(host,port,token,'download') as conn:
-      end=min(deadline,time.monotonic()+8)
-      while download_bytes<BULK and time.monotonic()<end:
-       buf=conn.recv(min(65536,BULK-download_bytes))
-       if not buf:break
-       download_bytes+=len(buf)
-     download=download_bytes*8/max(.001,time.monotonic()-start)/1e6
+     # Reserve at least half the remaining time for upload; neither direction
+     # depends on the other succeeding. Keep the entire protocol within 30s.
+     start=time.monotonic();end=min(deadline,start+min(9,(deadline-start)/2))
+     try:
+      with tcp_request(host,port,token,'download',timeout=end-start) as conn:
+       while download_bytes<BULK and time.monotonic()<end:
+        conn.settimeout(max(.01,end-time.monotonic()))
+        buf=conn.recv(min(65536,BULK-download_bytes))
+        if not buf:break
+        download_bytes+=len(buf)
+     except (OSError,ValueError):pass
+     if download_bytes:download=download_bytes*8/max(.001,time.monotonic()-start)/1e6
      snapshot('upload')
-     start=time.monotonic()
-     with tcp_request(host,port,token,'upload-frames') as conn:
-      chunk=b'x'*32768
-      end=min(deadline,time.monotonic()+8)
-      for _ in range(BULK//len(chunk)):
-       if time.monotonic()>=end:break
-       conn.sendall(struct.pack('!I',len(chunk))+chunk)
-      # Explicit terminator survives proxies which do not preserve half-close.
-      conn.sendall(struct.pack('!I',0))
-      upload_bytes=min(BULK,max(0,int(line(conn).get('bytes',0))))
-     upload=upload_bytes*8/max(.001,time.monotonic()-start)/1e6
+     if time.monotonic()<deadline:
+      upload_bytes,upload=tcp_upload(host,port,token,min(deadline,time.monotonic()+10))
    except (OSError,ValueError):pass
   ok=len(timings);expected=PACKETS*1000 if udp else BULK
-  status='ok' if ok==SAMPLES and (not udp or download_bytes==expected and upload_bytes==expected) else 'unstable' if ok>0 else 'down'
+  bulk_ok=(download_bytes==expected and upload_bytes==expected) if udp else (download is not None and upload is not None)
+  status='ok' if ok==SAMPLES and bulk_ok else 'unstable' if ok>0 else 'down'
   return {**snapshot('done',status),'download_complete':download_bytes==expected,'upload_complete':upload_bytes==expected,'download_bytes':download_bytes,'upload_bytes':upload_bytes,'loss_percent':round(100*(1-ok/max(1,tried)),2),'bulk_loss_percent':round(100*(1-min(download_bytes,upload_bytes)/expected),2) if udp else None}
  finally:
   if udp:udp.close()
