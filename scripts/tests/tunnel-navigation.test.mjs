@@ -8,7 +8,7 @@ const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../..');
 const manifest=JSON.parse(readFileSync(path.join(root,'public/build/manifest.json')));
 const css=(manifest['resources/js/app.js'].css||[]).map(f=>`<link rel="stylesheet" href="/build/${f}">`).join('');
 const template=readFileSync(path.join(root,'resources/views/infrastructure.blade.php'),'utf8').replace(/^[\s\S]*?<template[^>]*>/,'').replace(/<\/template>[\s\S]*$/,'');
-const html=`<!doctype html><html lang="fa" dir="rtl"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">${css}<link rel="stylesheet" href="/speedbox/panel-controls.css"><link rel="stylesheet" href="/speedbox/branding.css"><link rel="stylesheet" href="/speedbox/infrastructure.css"><link rel="stylesheet" href="/speedbox/tunnels.css"><style>body{margin:0;background:#17171c;color:#eee}.center-box{margin-top:30px}</style><div id="app"><div class="center-box"><div class="speedbox-infrastructure" id="mount">${template}</div></div></div><link rel="stylesheet" href="/speedbox/network-tunnels.css"><script src="/speedbox/network-tunnels.js"></script><script src="/speedbox/tunnels.js"></script><script src="/speedbox/node-editor.js"></script><script src="/speedbox/infrastructure.js"></script></html>`;
+const html=`<!doctype html><html lang="fa" dir="rtl"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">${css}<link rel="stylesheet" href="/speedbox/panel-controls.css"><link rel="stylesheet" href="/speedbox/branding.css"><link rel="stylesheet" href="/speedbox/infrastructure.css"><link rel="stylesheet" href="/speedbox/tunnels.css"><style>body{margin:0;background:#17171c;color:#eee}.center-box{margin-top:30px}</style><div id="app"><div class="center-box"><div class="speedbox-infrastructure" id="mount">${template}</div></div></div><link rel="stylesheet" href="/speedbox/network-tunnels.css"><script src="/speedbox/wattunnel.js"></script><script src="/speedbox/network-tunnels.js"></script><script src="/speedbox/tunnels.js"></script><script src="/speedbox/node-editor.js"></script><script src="/speedbox/infrastructure.js"></script></html>`;
 const server=createServer((req,res)=>{const url=new URL(req.url,'http://localhost');if(url.pathname==='/'){res.setHeader('Content-Type','text/html;charset=utf-8');res.end(html);return;}const p=path.resolve(root,'public','.'+url.pathname);if(!p.startsWith(path.join(root,'public')+path.sep)||!existsSync(p)){res.writeHead(404).end();return;}res.setHeader('Content-Type',p.endsWith('.js')?'text/javascript':p.endsWith('.css')?'text/css':'application/octet-stream');res.end(readFileSync(p));});
 await new Promise(r=>server.listen(0,'127.0.0.1',r));const origin=`http://127.0.0.1:${server.address().port}`;
 const browser=await chromium.launch({executablePath:process.env.SPEEDBOX_TEST_CHROME||undefined,headless:true,args:['--no-sandbox','--disable-dev-shm-usage',...(process.env.SPEEDBOX_TEST_SWIFTSHADER?['--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader','--no-zygote','--single-process']:[])]});
@@ -98,13 +98,52 @@ async function liveCases(page,width){
  }
 }
 
+async function watCases(page,width){
+ await page.evaluate(()=>fixturePending=false);
+ await choose(page,'wattunnel');
+ check(await page.locator('[name=direction]').count()===1,'WatTunnel owns direction controls');
+ await runTest(page);
+ const gold=await page.locator('.is-recommended>button').first().evaluate(e=>({background:getComputedStyle(e).backgroundImage,color:getComputedStyle(e).color}));
+ check(gold.background.includes('linear-gradient')&&gold.color==='rgb(45, 32, 11)','recommended action is gold, with dark readable text');
+ if(process.env.SPEEDBOX_TEST_SCREENSHOT_DIR)await page.screenshot({path:path.join(process.env.SPEEDBOX_TEST_SCREENSHOT_DIR,'wat-results-'+width+'.png'),fullPage:true});
+ await page.locator('[data-select-network-result]').nth(1).click();await page.locator('[data-wat-editor]').waitFor();
+ check(await page.locator('[name=nat],[name=gre_key],[name=quota_gb]').count()===0,'WatTunnel form excludes GRE/GOST controls');
+ check(await page.locator('[name=tunnel_port]').count()===1,'UDP carrier has its own tunnel port');
+ await page.locator('[name=name]').fill('Wat browser fixture');
+ await page.locator('[name=protocol]').selectOption('both',{force:true});
+ await page.locator('[data-wat-advanced]').evaluate(e=>e.open=true);
+ check(await page.locator('[name=conns]').count()===0,'UDP carrier hides pool-only options');
+ await page.locator('[name=mtu]').fill('1400');
+ if(process.env.SPEEDBOX_TEST_SCREENSHOT_DIR)await page.screenshot({path:path.join(process.env.SPEEDBOX_TEST_SCREENSHOT_DIR,'wat-form-debug-'+width+'.png'),fullPage:true});
+ const dimensions=await page.locator('.tunnel-modal').evaluate(e=>({width:e.clientWidth,scroll:e.scrollWidth,offenders:[...e.querySelectorAll('*')].filter(x=>x.getBoundingClientRect().right>e.getBoundingClientRect().right+1||x.getBoundingClientRect().left<e.getBoundingClientRect().left-1).slice(0,15).map(x=>({tag:x.tagName,name:x.getAttribute('name'),class:x.className,width:x.getBoundingClientRect().width,left:x.getBoundingClientRect().left}))}));
+ check(dimensions.scroll<=dimensions.width+1,'Wat form fits viewport: '+JSON.stringify(dimensions));
+ if(process.env.SPEEDBOX_TEST_SCREENSHOT_DIR)await page.screenshot({path:path.join(process.env.SPEEDBOX_TEST_SCREENSHOT_DIR,'wat-form-'+width+'.png'),fullPage:true});
+ await page.locator('[data-wat-editor] button[type=submit]').click();
+ const card=page.locator('[data-tunnel-card]').filter({has:page.getByRole('heading',{name:'Wat browser fixture',exact:true})});await card.waitFor();
+ const created=await page.evaluate(()=>requests.filter(r=>r.url==='/network-tunnels'&&r.method==='POST').at(-1).payload);
+ check(created.engine==='wattunnel'&&created.transport==='udp'&&created.protocol==='both'&&!('gre_key'in created),'Wat create posts its own validated schema');
+ await action(page,card,'edit');await page.locator('[data-wat-editor]').waitFor();
+ await page.locator('[name=transport]').selectOption('tls',{force:true});await page.locator('[name=reverse]').selectOption('true',{force:true});
+ await page.locator('[data-wat-advanced]').evaluate(e=>e.open=true);
+ check(await page.locator('[name=conns],[name=sni],[name=tls_pin]').count()===3,'TLS form exposes pool and certificate settings');
+ check(await page.locator('[name=sessions]').count()===0,'reverse form never offers unsupported parallel sessions');
+ await page.locator('[data-wat-editor] button[type=submit]').click();await card.waitFor();
+ await card.locator('[data-tunnel-detail]').click();await page.locator('.tunnel-details').waitFor();
+ check((await page.locator('.tunnel-details').textContent()).includes('WatTunnel'),'WatTunnel owns details');await page.keyboard.press('Escape');
+ await card.locator('.tunnel-actions summary').click();
+ check(await card.locator('[data-tunnel-action=optimize],[data-tunnel-action=reset-quota],[data-tunnel-action=diagnose]').count()===0,'WatTunnel exposes only its supported operations');
+ await card.locator('[data-tunnel-action=stop]').click();await card.waitFor();
+ check((await card.textContent()).includes('متوقف'),'WatTunnel stop updates its card');
+ await action(page,card,'delete');await page.locator('[data-confirm-network]').click();await card.waitFor({state:'detached'});
+}
+
 try {
  for(const width of [390,1280]){
   const page=await context.newPage();await page.setViewportSize({width,height:900});await start(page);
   for(let cycle=0;cycle<3;cycle++){
    await page.locator('[data-new-tunnel]').click();
    check(await page.locator('#modalBackdrop').evaluate(e=>!e.hidden),'create opens after navigation');
-   check(await page.locator('[data-engine]').count()===3,'create shows engine choices, not a forced resumed test');
+   check(await page.locator('[data-engine]').count()===4,'create shows engine choices, not a forced resumed test');
    await page.keyboard.press('Escape');
    await page.locator('[data-reload-tunnels]').click();
    await page.locator('[data-reload-tunnels].is-refreshed').waitFor();
@@ -123,8 +162,8 @@ try {
   await page.keyboard.press('Escape');
   check(await page.locator('[data-history]').count()>=3,'closed test remains visible in the recent-test list');
   await page.locator('[data-new-tunnel]').click();
-  check(await page.locator('[data-engine]').count()===3,'new create does not force an existing test to reopen');
-  await page.keyboard.press('Escape');await liveCases(page,width);await page.evaluate(()=>session.dispose());await page.close();
+  check(await page.locator('[data-engine]').count()===4,'new create does not force an existing test to reopen');
+  await page.keyboard.press('Escape');await watCases(page,width);await liveCases(page,width);await page.evaluate(()=>session.dispose());await page.close();
  }
  console.log('PASS:',assertions,'navigation and progress assertions on mobile and desktop');
 } finally {await browser.close();await new Promise(r=>server.close(r));}

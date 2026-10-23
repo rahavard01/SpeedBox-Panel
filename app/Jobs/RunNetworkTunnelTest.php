@@ -36,19 +36,26 @@ class RunNetworkTunnelTest implements ShouldQueue,ShouldBeEncrypted
             try {
                 if($s['phase']==='ensure') {
                     $op->update(['message'=>'آماده‌سازی تست موقت روی دو سرور…','progress'=>max((int)$op->progress,5)]);
-                    $remote->ensureProbe($servers[$s['side']],$s['side']===1?$s['engine']:'gre');
+                    $remote->ensureProbe($servers[$s['side']],($s['engine']==='wattunnel'||$s['side']===1)?$s['engine']:'gre');
                     if($s['side']===0)$s['side']=1;else{$s['side']=0;$s['phase']='start';}
                 } elseif($s['phase']==='start') {
                     $this->publishRow($test,[...$row,'status'=>'testing']);
                     if(!isset($s['probe'])) {
                         $n=random_int(0,16383)*4;$s['probe']=['id'=>bin2hex(random_bytes(16)),'token'=>bin2hex(random_bytes(32)),
-                            'inner_iran'=>'10.253.'.intdiv($n,256).'.'.($n%256+1),'inner_foreign'=>'10.253.'.intdiv($n,256).'.'.($n%256+2),'gre_key'=>random_int(1,2147483647)];
+                            'inner_iran'=>'10.253.'.intdiv($n,256).'.'.($n%256+1),'inner_foreign'=>'10.253.'.intdiv($n,256).'.'.($n%256+2),'backend_port'=>random_int(33000,60000),'gre_key'=>random_int(1,2147483647)];
+                    }
+                    if($s['engine']==='wattunnel'&&empty($s['backend_reserved_checked'])) {
+                        $blocked=[...$manager->reservedPorts($servers[0]),...$manager->reservedPorts($servers[1])];
+                        for($attempt=0;in_array($s['probe']['backend_port'],$blocked,true)&&$attempt<200;$attempt++)$s['probe']['backend_port']=random_int(33000,60000);
+                        if(in_array($s['probe']['backend_port'],$blocked,true))throw new \RuntimeException('پورت آزاد برای سرویس موقت تست پیدا نشد.');
+                        $s['backend_reserved_checked']=true;
                     }
                     // Persist ownership before either remote start, including interrupted SSH replies.
                     $op->update(['payload'=>$s,'message'=>'در حال تست '.$row['label'].'…','progress'=>max((int)$op->progress,10+(int)(75*$s['index']/count($s['cases'])))]);
-                    $config=[...$row,...$s['probe'],'side'=>$s['side']===0?'foreign':'iran','peer_port'=>$s['peer_port']??null,'reserved_ports'=>$manager->reservedPorts($servers[$s['side']])];
-                    $answer=$remote->probe($servers[$s['side']],['action'=>'start','id'=>$s['probe']['id'],'config'=>$config]);
-                    if($s['side']===0){$s['peer_port']=$answer['port'];$s['side']=1;}else{$s['side']=0;$s['phase']='measure';}
+                    $startSide=($row['engine']==='wattunnel'&&!empty($row['reverse']))?1-$s['side']:$s['side'];
+                    $config=[...$row,...$s['probe'],'side'=>$startSide===0?'foreign':'iran','peer_port'=>$s['peer_port']??null,'reserved_ports'=>$manager->reservedPorts($servers[$startSide])];
+                    $answer=$remote->probe($servers[$startSide],['action'=>'start','id'=>$s['probe']['id'],'config'=>$config]);
+                    if($s['side']===0){$s['peer_port']=$answer['peer_port']??$answer['port'];$s['side']=1;}else{$s['side']=0;$s['phase']='measure';}
                 } elseif($s['phase']==='measure') {
                     $remote->probe($servers[1],['action'=>'measure-start','id'=>$s['probe']['id']]);
                     $s['phase']='measuring';
@@ -65,7 +72,7 @@ class RunNetworkTunnelTest implements ShouldQueue,ShouldBeEncrypted
                     $s['attempts']=0;
                     if($s['side']===0)$s['side']=1;
                     else {
-                        unset($s['probe'],$s['peer_port']);$s['side']=0;
+                        unset($s['probe'],$s['peer_port'],$s['backend_reserved_checked']);$s['side']=0;
                         if(!empty($s['cancelled'])||!empty($s['fatal']))$s['phase']='done';
                         else {
                             $this->publishRow($test,$s['measured']??[...$row,'status'=>'down','selectable'=>false,'reason'=>'این مدل روی مسیر انتخاب‌شده برقرار نشد.','error'=>$s['case_error']??null]);unset($s['measured'],$s['case_error'],$s['sample_progress']);$s['index']++;

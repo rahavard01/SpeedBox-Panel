@@ -1,0 +1,32 @@
+name: WatTunnel verified integration build
+on:
+  push:
+    branches: [feat/wattunnel]
+    paths: ['scripts/wattunnel/**', 'scripts/network-tunnels/wat.py', 'scripts/tests/wattunnel-host.test.py', '.github/workflows/wattunnel-integration.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.10'
+          cache-dependency-path: scripts/wattunnel/build.py
+      - run: python3 scripts/wattunnel/build.py
+      - run: python3 scripts/verify-wattunnel.py
+      - name: Real engine forwarding
+        run: sudo env SPEEDBOX_TEST_SYSTEMD=1 python3 scripts/tests/wattunnel-host.test.py
+      - name: Commit verified bundles
+        if: github.ref == 'refs/heads/feat/wattunnel'
+        run: |
+          git config user.name 'SpeedBox build'
+          git config user.email 'build@users.noreply.github.com'
+          git add wattunnel-dist
+          if ! git diff --cached --quiet; then
+            git commit -m 'build: verified WatTunnel engine for amd64 and arm64'
+            git push origin HEAD:feat/wattunnel
+          fi

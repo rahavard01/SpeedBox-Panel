@@ -12,7 +12,11 @@ class NetworkTunnelRemote
     /** Inspect the engine actually selected by this tunnel; never install during a check. */
     public function maintenanceStatus(ManagedServer $server,string $engine,string $version): array
     {
-        $expected = ['helper'=>hash_file('sha256',base_path('scripts/network-tunnels/host.py')),'binaries'=>[]];
+        $expected = ['wat_helper'=>hash_file('sha256',base_path('scripts/network-tunnels/wat.py')),'helper'=>hash_file('sha256',base_path('scripts/network-tunnels/host.py')),'binaries'=>[]];
+        if ($engine==='wattunnel') {
+            $manifest=json_decode(file_get_contents(base_path('wattunnel-dist/manifest.json')),true,32,JSON_THROW_ON_ERROR);
+            foreach($manifest['archives'] as $arch=>$entry)$expected['binaries'][$arch]=$entry['binary_sha256'];
+        }
         if ($engine==='gost') {
             $manifest=json_decode(file_get_contents(base_path('gost-dist/manifest.json')),true,32,JSON_THROW_ON_ERROR);
             foreach ($manifest['artifacts'][$version] ?? [] as $arch=>$entry) $expected['binaries'][$arch]=$entry['binary_sha256'];
@@ -26,11 +30,11 @@ def digest(path):
     with p.open('rb') as f: return hashlib.file_digest(f,'sha256').hexdigest() if hasattr(hashlib,'file_digest') else hashlib.sha256(f.read()).hexdigest()
 helper=digest('/opt/speedbox-network/host.py')
 arch={'x86_64':'amd64','aarch64':'arm64','arm64':'arm64'}.get(platform.machine(),'unsupported')
-binary=digest('/opt/speedbox-network/gost-'+version) if engine=='gost' else None
-compatible=engine!='gost' or (expected['binaries'].get(arch) is not None and binary==expected['binaries'][arch])
+binary=digest('/opt/speedbox-network/'+('wattun-' if engine=='wattunnel' else 'gost-')+version) if engine in ('gost','wattunnel') else None
+compatible=engine not in ('gost','wattunnel') or (expected['binaries'].get(arch) is not None and binary==expected['binaries'][arch])
 worker=subprocess.run(['systemctl','is-active','--quiet','speedbox-network-worker.service']).returncode==0
-current=helper==expected['helper'] and compatible and worker
-print(json.dumps({'checked_at':int(time.time()),'installed':helper is not None,'compatible':compatible,'up_to_date':current,'version':(version if compatible and binary else 'نصب نشده یا متفاوت') if engine=='gost' else ('ابزار فعلی' if helper==expected['helper'] else 'ابزار قبلی یا نصب نشده'),'target_version':version if engine=='gost' else 'ابزار همراه پنل','helper_up_to_date':helper==expected['helper'],'worker_active':worker}))
+current=helper==expected['helper'] and digest('/opt/speedbox-network/wat.py')==expected['wat_helper'] and compatible and worker
+print(json.dumps({'checked_at':int(time.time()),'installed':helper is not None,'compatible':compatible,'up_to_date':current,'version':(version if compatible and binary else 'نصب نشده یا متفاوت') if engine in ('gost','wattunnel') else ('ابزار فعلی' if helper==expected['helper'] else 'ابزار قبلی یا نصب نشده'),'target_version':version if engine in ('gost','wattunnel') else 'ابزار همراه پنل','helper_up_to_date':helper==expected['helper'],'worker_active':worker}))
 PY;
         $command=($server->ssh_user==='root'?'':'sudo -n ').'python3 -c '.escapeshellarg($script).' '
             .escapeshellarg(json_encode($expected,JSON_THROW_ON_ERROR)).' '.escapeshellarg($engine).' '.escapeshellarg($version);
@@ -44,13 +48,15 @@ PY;
         $sudo=$server->ssh_user==='root'?'':'sudo -n ';
         $this->temporary($server,function($dir)use($server,$sudo,$engine,$version){
             $this->ssh->upload($server,base_path('scripts/network-tunnels/host.py'),$dir.'/host.py');
+            $this->ssh->upload($server,base_path('scripts/network-tunnels/wat.py'),$dir.'/wat.py');
             $helperHash=hash_file('sha256',base_path('scripts/network-tunnels/host.py'));
             $script='set -eu; command -v python3 >/dev/null; command -v systemctl >/dev/null; test -d /run/systemd/system; '
                 .'install -d -m 0700 /etc/speedbox-network /var/lib/speedbox-network; install -d -m 0755 /opt/speedbox-network; '
                 .'test "$(sha256sum '.escapeshellarg($dir.'/host.py').' | cut -d " " -f 1)" = '.escapeshellarg($helperHash).'; '
+                .'test "$(sha256sum '.escapeshellarg($dir.'/wat.py').' | cut -d " " -f 1)" = '.escapeshellarg(hash_file('sha256',base_path('scripts/network-tunnels/wat.py'))).'; install -m 0600 '.escapeshellarg($dir.'/wat.py').' /opt/speedbox-network/wat.py.new; mv /opt/speedbox-network/wat.py.new /opt/speedbox-network/wat.py; '
                 .'install -m 0700 '.escapeshellarg($dir.'/host.py').' /opt/speedbox-network/host.py.new; mv /opt/speedbox-network/host.py.new /opt/speedbox-network/host.py;';
             $this->ssh->run($server,$sudo.'sh -c '.escapeshellarg($script),45);
-            if($engine==='gost')$this->installGost($server,$dir,$sudo,$version);
+            if(in_array($engine,['gost','wattunnel'],true))$this->installGost($server,$dir,$sudo,$version,$engine);
             $unit="[Unit]\nDescription=SpeedBox network tunnel monitoring\nAfter=network-online.target\nWants=network-online.target\n[Service]\nType=simple\nExecStart=/usr/bin/python3 /opt/speedbox-network/host.py daemon\nRestart=always\nRestartSec=5\nUMask=0077\n[Install]\nWantedBy=multi-user.target\n";
             $local=tempnam(storage_path('app/private'),'net-unit-');
             try {
@@ -61,14 +67,14 @@ PY;
         });
     }
 
-    private function installGost(ManagedServer $server,string $dir,string $sudo,string $version): void
+    private function installGost(ManagedServer $server,string $dir,string $sudo,string $version,string $engine='gost'): void
     {
-                $manifest=json_decode(file_get_contents(base_path('gost-dist/manifest.json')),true,32,JSON_THROW_ON_ERROR);
+                $manifest=json_decode(file_get_contents(base_path(($engine==='wattunnel'?'wattunnel':'gost').'-dist/manifest.json')),true,32,JSON_THROW_ON_ERROR);
                 $arch=match(trim($this->ssh->run($server,'uname -m',20))){'x86_64'=>'amd64','aarch64','arm64'=>'arm64',default=>throw new RuntimeException('معماری سرور پشتیبانی نمی‌شود.')};
-                $entry=$manifest['artifacts'][$version][$arch]??throw new RuntimeException('بستهٔ این نسخه موجود نیست.');
-                $local=base_path('gost-dist/'.$entry['file']);
-                if(!is_file($local)||!hash_equals($entry['sha256'],hash_file('sha256',$local)))throw new RuntimeException('صحت بسته GOST تأیید نشد.');
-                $target='/opt/speedbox-network/gost-'.$version;
+                $entry=($engine==='wattunnel'?($manifest['archives'][$arch]??null):($manifest['artifacts'][$version][$arch]??null))??throw new RuntimeException('بستهٔ این نسخه موجود نیست.');
+                $local=base_path(($engine==='wattunnel'?'wattunnel':'gost').'-dist/'.$entry['file']);
+                if(!is_file($local)||!hash_equals($entry['sha256'],hash_file('sha256',$local)))throw new RuntimeException('صحت بستهٔ موتور تأیید نشد.');
+                $target='/opt/speedbox-network/'.($engine==='wattunnel'?'wattun-':'gost-').$version;
                 $current=trim($this->ssh->run($server,$sudo.'sh -c '.escapeshellarg('if [ -f '.$target.' ]; then sha256sum '.$target.' | cut -d " " -f 1; fi'),20));
                 if($current!==''&&!hash_equals($entry['binary_sha256'],$current))throw new RuntimeException('فایل نسخه نصب‌شده با بسته بررسی‌شده متفاوت است؛ فایل موجود خودکار جایگزین نشد.');
                 if($current==='') {
@@ -81,19 +87,22 @@ PY;
                 }
     }
 
-    /** Test helper and immutable GOST artifacts only: never restart the tunnel daemon. */
+    /** Test helper and immutable engine artifacts only: never restart the tunnel daemon. */
     public function ensureProbe(ManagedServer $server,string $engine): void
     {
         $sudo=$server->ssh_user==='root'?'':'sudo -n ';
         $this->temporary($server,function($dir)use($server,$sudo,$engine){
             $source=base_path('scripts/network-tunnels/probe.py');$hash=hash_file('sha256',$source);
             $this->ssh->upload($server,$source,$dir.'/probe.py');
-            $target='/opt/speedbox-network-tests/'.$hash;
+            $this->ssh->upload($server,base_path('scripts/network-tunnels/wat.py'),$dir.'/wat.py');
+            $target='/opt/speedbox-network-tests/'.$hash.'-'.substr(hash_file('sha256',base_path('scripts/network-tunnels/wat.py')),0,16);
             $script='set -eu; command -v python3 >/dev/null; command -v systemd-run >/dev/null; test -d /run/systemd/system; '
                 .'test "$(sha256sum '.escapeshellarg($dir.'/probe.py').' | cut -d " " -f 1)" = '.escapeshellarg($hash).'; '
                 .'install -d -m 0755 /opt/speedbox-network '.escapeshellarg($target).'; install -d -m 0700 /var/lib/speedbox-network-tests; '
+                .'test "$(sha256sum '.escapeshellarg($dir.'/wat.py').' | cut -d " " -f 1)" = '.escapeshellarg(hash_file('sha256',base_path('scripts/network-tunnels/wat.py'))).'; install -m 0600 '.escapeshellarg($dir.'/wat.py').' '.escapeshellarg($target.'/wat.py').'; '
                 .'install -m 0700 '.escapeshellarg($dir.'/probe.py').' '.escapeshellarg($target.'/probe.py').';';
             $this->ssh->run($server,$sudo.'sh -c '.escapeshellarg($script),45);
+            if($engine==='wattunnel')$this->installGost($server,$dir,$sudo,\App\Support\WatTunnelRules::VERSION,'wattunnel');
             if($engine==='gost')foreach(\App\Support\NetworkTunnelRules::VERSIONS as $version)$this->installGost($server,$dir,$sudo,$version);
         });
         $this->probe($server,['action'=>'recover']);
@@ -101,7 +110,7 @@ PY;
 
     public function probe(ManagedServer $server,array $request): array
     {
-        $helper='/opt/speedbox-network-tests/'.hash_file('sha256',base_path('scripts/network-tunnels/probe.py')).'/probe.py';
+        $helper='/opt/speedbox-network-tests/'.hash_file('sha256',base_path('scripts/network-tunnels/probe.py')).'-'.substr(hash_file('sha256',base_path('scripts/network-tunnels/wat.py')),0,16).'/probe.py';
         $command=($server->ssh_user==='root'?'':'sudo -n ').'python3 '.escapeshellarg($helper).' -';
         try{$raw=$this->ssh->run($server,$command,120,json_encode($request,JSON_THROW_ON_ERROR));}
         catch(RuntimeException $error){throw new RuntimeException('اجرای تست شبکه کامل نشد؛ گزارش SSH را بررسی کنید.',0,$error);}
@@ -132,7 +141,7 @@ PY;
         $dir=trim($this->ssh->run($server,'umask 077; mktemp -d /tmp/speedbox-network.XXXXXXXX',20));
         if(!preg_match('~^/tmp/speedbox-network\.[A-Za-z0-9]+$~D',$dir))throw new RuntimeException('مسیر موقت معتبر نیست.');
         try{return $callback($dir);}finally{
-            try{$this->ssh->run($server,'rm -f -- '.implode(' ',array_map('escapeshellarg',[$dir.'/host.py',$dir.'/probe.py',$dir.'/request.json',$dir.'/binary.gz',$dir.'/worker.service'])).'; rmdir -- '.escapeshellarg($dir),20);}catch(\Throwable){}
+            try{$this->ssh->run($server,'rm -f -- '.implode(' ',array_map('escapeshellarg',[$dir.'/host.py',$dir.'/wat.py',$dir.'/probe.py',$dir.'/request.json',$dir.'/binary.gz',$dir.'/worker.service'])).'; rmdir -- '.escapeshellarg($dir),20);}catch(\Throwable){}
         }
     }
 }

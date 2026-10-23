@@ -9,7 +9,7 @@
 .speedbox-infrastructure .network-filters.segmented{justify-self:center;max-width:86%;margin-bottom:10px;direction:rtl}
 .network-choice-content{display:grid;gap:18px;min-width:0}
 .network-intro{margin:0;line-height:1.9;font-size:12px;text-align:center}
-.network-engine-picker{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin:0}
+.network-engine-picker{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin:0}
 .network-engine-choice{appearance:none;background:var(--panel-bg,rgba(120,130,160,.06));border:1px solid var(--border-color,rgba(150,160,180,.22));border-top:3px solid var(--network-color);color:inherit;border-radius:12px;padding:20px 16px;display:flex;flex-direction:column;align-items:flex-start;gap:12px;text-align:start;font:inherit;cursor:pointer;min-height:170px;transition:background .15s,border-color .15s;min-width:0}
 .network-engine-choice:hover,.network-engine-choice:focus-visible{background:rgba(120,130,180,.12);outline:2px solid var(--network-color);outline-offset:2px}
 .network-engine-choice b{font-size:21px;line-height:1.4}
@@ -209,3 +209,12 @@
  .speedbox-infrastructure-overlay .tunnel-modal .tunnel-mapping-row .field>label{font-size:10px}
  .speedbox-infrastructure-overlay .tunnel-modal .tunnel-mapping-row>.button{font-size:10px;padding:8px}
 }
+
+.network-wattunnel{--network-color:#bd9df1}.wat-map{display:grid;grid-template-columns:repeat(4,minmax(0,1fr)) auto;gap:10px;align-items:end;padding:12px;border:1px solid rgba(150,160,180,.2);border-radius:10px}.wat-mappings,.wat-test-settings{display:grid;gap:12px}.wat-carriers{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;padding:14px 0}.wat-carriers label{display:flex;gap:8px;align-items:center}.wat-editor .network-advanced-content{padding-top:16px}
+@media(max-width:640px){.wat-map{grid-template-columns:repeat(2,minmax(0,1fr))}.wat-map>button{grid-column:1/-1}.wat-carriers{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.speedbox-infrastructure-overlay .tunnel-modal .wat-editor .field{display:grid;grid-template-columns:minmax(0,1fr);gap:8px;min-width:0;max-width:100%;margin:0}
+.speedbox-infrastructure-overlay .tunnel-modal .wat-editor .field>small{grid-column:1;min-width:0;overflow-wrap:anywhere}
+.speedbox-infrastructure-overlay .tunnel-modal .wat-editor .form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.speedbox-infrastructure-overlay .tunnel-modal .wat-editor .network-section{margin-top:18px}
+@media(max-width:540px){.speedbox-infrastructure-overlay .tunnel-modal .wat-editor .form-grid{grid-template-columns:minmax(0,1fr)}.speedbox-infrastructure .tunnel-toolbar .network-filters>.seg-btn{padding:10px 5px;font-size:11px}}
+@media(min-width:769px){.speedbox-infrastructure-overlay .tunnel-modal .wat-editor select.infrastructure-native-select{width:1px!important;min-width:0!important;height:1px!important;min-height:0!important}}

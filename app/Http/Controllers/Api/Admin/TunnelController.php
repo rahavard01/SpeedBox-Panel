@@ -175,7 +175,7 @@ class TunnelController extends Controller
     {
         $ports = array_map('intval',array_column($settings['mappings'],'public_port'));
         foreach (ServerTunnel::where(fn($q)=>$q->where('iran_server_id',$iranId)->orWhere('foreign_server_id',$iranId))->where('status','!=','deleted')->when($except,fn($q)=>$q->whereKeyNot($except))->lockForUpdate()->get() as $other) {
-            $occupied=[];if((int)$other->iran_server_id===$iranId)foreach($other->settings['mappings'] as $m)$occupied=[...$occupied,...range((int)$m['public_port'],(int)($m['public_end']??$m['public_port']))];
+            $occupied=[];if($other->engine==='wattunnel')$occupied[]=(int)$other->subnet;if($other->engine==='wattunnel' && \App\Services\WatTunnelPorts::listener($other->settings)===$iranId && $other->transport!=='icmp')$occupied[]=(int)$other->settings['tunnel_port'];if((int)$other->iran_server_id===$iranId)foreach($other->settings['mappings'] as $m)$occupied=[...$occupied,...range((int)$m['public_port'],(int)($m['public_end']??$m['public_port']))];
             if($other->engine==='gost'&&$other->transport==='grpc'&&(int)$other->foreign_server_id===$iranId)$occupied[]=(int)$other->settings['tunnel_port'];
             abort_if(array_intersect($ports,$occupied), 422, 'یکی از پورت‌های ورودی در تونل دیگری روی این سرور استفاده می‌شود.');
         }

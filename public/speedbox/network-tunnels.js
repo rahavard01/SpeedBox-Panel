@@ -1,12 +1,12 @@
-/* GOST / Linux GRE forms share the authenticated infrastructure workspace. */
+/* Network engines share the authenticated workspace and keep independent forms. */
 window.SpeedboxNetworkTunnels=(()=>{
 'use strict';
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const copy=v=>JSON.parse(JSON.stringify(v));
-const engines={backpack:{name:'BackPack',text:'بررسی روش‌های اتصال و ساخت با نتیجهٔ تست'},gost:{name:'GOST',text:'اتصال مستقیم ایران و خارج؛ انتخاب نسخه، پورت‌ها و IPv4 یا IPv6'},gre:{name:'GRE',text:'اتصال شبکه بین ایران و خارج با IPv4 یا IPv6'}};
+const engines={backpack:{name:'BackPack',text:'بررسی روش‌های اتصال و ساخت با نتیجهٔ تست'},gost:{name:'GOST',text:'اتصال مستقیم ایران و خارج؛ انتخاب نسخه، پورت‌ها و IPv4 یا IPv6'},gre:{name:'GRE',text:'اتصال شبکه بین ایران و خارج با IPv4 یا IPv6'},wattunnel:{name:'WatTunnel',text:'انتقال رمز‌شدهٔ TCP و UDP؛ حامل ICMP و روش‌های TCP، TLS و HTTP'}};
 const actions=t=>[
  ['status','بررسی اتصال'],[(t.settings?.enabled===false||t.status==='stopped')?'start':'stop',(t.settings?.enabled===false||t.status==='stopped')?'شروع':'توقف'],
- ['restart','راه‌اندازی مجدد'],['logs','گزارش'],['optimize','بهینه‌سازی'],
+ ['restart','راه‌اندازی مجدد'],['logs','گزارش'],...(t.engine==='wattunnel'?[]:[['optimize','بهینه‌سازی']]),
  ['engine-update','به‌روزرسانی'],
  ...(t.engine==='gre'?[['diagnose','بررسی مسیر و MTU'],['history','تاریخچهٔ اتصال'],...(Number(t.settings?.quota_gb)>0?[['reset-quota','صفر کردن مصرف سهمیه']]:[])]:[]),
  ['edit','ویرایش'],['delete','حذف تونل']
@@ -47,12 +47,13 @@ function mount(ctx){
  const toggle=(key,title,value)=>`<div class="switch-field network-toggle"><span>${title}</span><label class="switch-line ios"><input type="checkbox" name="${key}" ${value?'checked':''} aria-label="${title}"></label></div>`;
  const servers=()=>[['','انتخاب سرور'],...data().servers.map(s=>[s.id,`${s.name} — ${s.host}`])];
  async function caps(){if(!capabilities)capabilities=(await api('/network-tunnels/capabilities')).data;return capabilities;}
+ const wat=window.SpeedboxWatTunnel?.mount({...ctx,show,body,caps,field,select,toggle,btn,testFlow,validateMappings});
  const creationDrafts=new Map();
  const testFlows=new Map();let activeTestEngine=null,testTimer=null;
  async function testFlow(engine,seed=null){
   clearTimeout(testTimer);activeTestEngine=engine;
   if(seed||!testFlows.has(engine))testFlows.set(engine,{seed:seed||{},iran:seed?.iran_server_id||'',foreign:seed?.foreign_server_id||'',test:null,operation:null});
-  const state=testFlows.get(engine);
+  const state=testFlows.get(engine);state.direction??='normal';state.carriers??=['icmp','udp','tcp','tls','ws','wss','h2','h2c','grpc'];
   const pending=()=>['queued','running'].includes(state.operation?.status);
   async function poll(){
    clearTimeout(testTimer);
@@ -71,7 +72,7 @@ function mount(ctx){
   function draw(){
    if(disposed||activeTestEngine!==engine)return;
    const opened=[...body().querySelectorAll('.network-protocol-details')].map(d=>d.open);
-   show('تست تونل '+engines[engine].name,`<form data-network-test class="tunnel-builder"><p class="tunnel-help">سرور ایران و خارج را انتخاب کنید تا ارتباط، سرعت و پایداری مسیر بررسی شود.</p><div class="form-grid">${select('iran_server_id','سرور ایران',state.iran,servers())}${select('foreign_server_id','سرور خارج',state.foreign,servers())}</div>${results()}<div class="form-actions network-navigation"><button type="submit" class="button primary" ${pending()?'disabled':''}>${pending()?'در حال تست…':state.test?'تست دوباره':'تست اتصال'}</button>${pending()?btn('توقف تست','data-cancel-network-test'):''}${btn('بازگشت','data-test-engines','network-back')}${btn('انصراف','data-close','cancel')}</div></form>`);
+   show('تست تونل '+engines[engine].name,`<form data-network-test class="tunnel-builder"><p class="tunnel-help">سرور ایران و خارج را انتخاب کنید تا ارتباط، سرعت و پایداری مسیر بررسی شود.</p><div class="form-grid">${select('iran_server_id','سرور ایران',state.iran,servers())}${select('foreign_server_id','سرور خارج',state.foreign,servers())}</div>${engine==='wattunnel'?`<div class="wat-test-settings">${select('direction','جهت‌های مورد بررسی',state.direction,[['normal','ایران به خارج'],['reverse','خارج به ایران — معکوس'],['both','هر دو جهت']])}<details class="network-section"><summary>حامل‌های مورد بررسی</summary><div class="wat-carriers">${['icmp','udp','tcp','tls','ws','wss','h2','h2c','grpc'].map(c=>`<label><input type="checkbox" name="wat_carrier" value="${c}" ${state.carriers.includes(c)?'checked':''} ${pending()?'disabled':''}><bdi dir="ltr">${c.toUpperCase()}</bdi></label>`).join('')}</div></details><p class="tunnel-muted">ICMP روی IPv4 بررسی می‌شود؛ حامل UDP حالت معکوس ندارد.</p></div>`:''}${results()}<div class="form-actions network-navigation"><button type="submit" class="button primary" ${pending()?'disabled':''}>${pending()?'در حال تست…':state.test?'تست دوباره':'تست اتصال'}</button>${pending()?btn('توقف تست','data-cancel-network-test'):''}${btn('بازگشت','data-test-engines','network-back')}${btn('انصراف','data-close','cancel')}</div></form>`);
    const f=body().querySelector('[data-network-test]');
    f.querySelectorAll('.network-protocol-details').forEach((d,i)=>d.open=opened[i]||false);
    for(const key of ['iran_server_id','foreign_server_id']){
@@ -85,19 +86,23 @@ function mount(ctx){
     const protocols=['tcp','udp'].filter(p=>['ok','unstable'].includes(row.protocols?.[p]?.status));
     clearTimeout(testTimer);activeTestEngine=null;
     await editor(null,engine,{...previous,engine,iran_server_id:Number(state.test.iran_server_id),foreign_server_id:Number(state.test.foreign_server_id),
-     version:row.version,transport:row.transport,ip_family:row.ip_family,protocol:protocols.includes(previous.protocol)?previous.protocol:protocols[0],
+     version:row.version,transport:row.transport,reverse:row.reverse,ip_family:row.ip_family,protocol:protocols.includes(previous.protocol)?previous.protocol:protocols[0],
      test_id:state.test.id,result_id:row.id,__verified:true,__resume:true,__test:{rows:state.test.results.filter(r=>r.selectable),selected:row.id}});
    }));
+   f.querySelector('[name=direction]')?.addEventListener('change',()=>{state.direction=f.elements.direction.value;});
+   if(f.elements.direction)f.elements.direction.disabled=pending();
+   f.querySelectorAll('[name=wat_carrier]').forEach(el=>el.onchange=()=>{state.carriers=[...f.querySelectorAll('[name=wat_carrier]:checked')].map(x=>x.value);});
    f.onsubmit=safe(async()=>{
+    if(engine==='wattunnel'&&!state.carriers.length)throw Error('حداقل یک حامل را انتخاب کنید.');
     if(!state.iran||!state.foreign||String(state.iran)===String(state.foreign))throw Error('دو سرور متفاوت انتخاب کنید.');
-    const answer=await api('/network-tunnel-tests',{method:'POST',body:JSON.stringify({engine,iran_server_id:Number(state.iran),foreign_server_id:Number(state.foreign)})});
+    const answer=await api('/network-tunnel-tests',{method:'POST',body:JSON.stringify({engine,iran_server_id:Number(state.iran),foreign_server_id:Number(state.foreign),...(engine==='wattunnel'?{direction:state.direction,carriers:state.carriers}:{})})});
     state.test=answer.data;state.operation=answer.operation;draw();await refresh();if(pending())testTimer=setTimeout(poll,500);
    });
   }
   draw();if(pending())testTimer=setTimeout(poll,500);
  }
  function choose(reset=true){
-  if(reset){creationDrafts.clear();testFlows.clear();}activeTestEngine=null;clearTimeout(testTimer);
+  if(reset){creationDrafts.clear();testFlows.clear();wat?.reset();}activeTestEngine=null;clearTimeout(testTimer);
   show('انتخاب نوع تونل',`<div class="network-choice-content"><p class="network-intro">نوع تونل بین سرور ایران و خارج را انتخاب کنید.</p><div class="network-engine-picker">${Object.entries(engines).map(([key,e])=>`<button type="button" class="network-engine-choice network-${key}" data-engine="${key}"><b dir="ltr">${e.name}</b><span>${e.text}</span><small>انتخاب و ادامه ←</small></button>`).join('')}</div></div><div class="form-actions network-navigation">${btn('انصراف','data-close','cancel')}</div>`);
   body().querySelectorAll('[data-engine]').forEach(b=>b.onclick=safe(async()=>{if(b.dataset.engine==='backpack'){backpack();return;}await editor(null,b.dataset.engine);}));
  }
@@ -108,6 +113,7 @@ function mount(ctx){
  }
  async function editor(t,engine,seed=null){
   if(!t&&!seed?.__verified){await testFlow(engine,seed);return;}
+  if(engine==='wattunnel'){await wat.editor(t,seed);return;}
   const cap=await caps();if(disposed)return;
   const gre=engine==='gre',saved=!t&&(!seed||seed.__resume)?creationDrafts.get(engine):null;
   let draft=copy(saved?.draft||{...cap.defaults,...(t?.settings||{}),engine,name:t?.name||'',iran_server_id:t?.iran_server_id||null,foreign_server_id:t?.foreign_server_id||null});
@@ -237,6 +243,7 @@ function mount(ctx){
  function stamp(n){if(!n)return '—';const d=new Date(n*1000);return `<time class="tunnel-time-value" dir="rtl" datetime="${d.toISOString()}"><bdi dir="ltr">${d.toLocaleTimeString('fa-IR',{hour:'2-digit',minute:'2-digit',hour12:false,timeZone:'Asia/Tehran'})}</bdi><span aria-hidden="true">—</span><bdi dir="ltr">${d.toLocaleDateString('fa-IR',{timeZone:'Asia/Tehran'})}</bdi></time>`;}
  const volume=n=>n===null||n===undefined?'—':(n/1073741824).toLocaleString('fa-IR',{maximumFractionDigits:3})+' GiB';
  function details(t){
+  if(t.engine==='wattunnel'){wat.details(t);appendNodeOptions(t);return;}
   const s=t.settings,quota=Number(s.quota_gb)>0&&t.engine==='gre',snapshots=Object.values(t.remote_status||{}),exhausted=snapshots.some(r=>r?.quota_exhausted),known=snapshots.some(r=>typeof r?.quota_exhausted==='boolean'),used=snapshots.filter(r=>r?.traffic_available&&r.quota_used).map(r=>s.quota_direction==='rx'?Number(r.quota_used.rx)||0:s.quota_direction==='tx'?Number(r.quota_used.tx)||0:(Number(r.quota_used.rx)||0)+(Number(r.quota_used.tx)||0));
   show('جزئیات تونل '+label(t),`<div class="tunnel-details"><section class="tunnel-detail-summary"><header><h3>${esc(t.name)}</h3><span class="tunnel-badge tunnel-${esc(t.status)}">${esc({connected:'متصل',offline:'قطع',stopped:'متوقف',degraded:'نیازمند بررسی',needs_review:'نیازمند بررسی',failed:'خطا',queued:'در صف',running:'در حال اجرا'}[t.status]||'در حال بررسی')}</span></header>${t.message?`<p class="tunnel-muted">${esc(t.message)}</p>`:''}<dl><dt>سرور ایران</dt><dd>${esc(t.iran?.name)}</dd><dt>سرور خارج</dt><dd>${esc(t.foreign?.name)}</dd><dt>${t.engine==='gost'?'نسخهٔ GOST':'مدل GRE'}</dt><dd><bdi dir="ltr">${esc(t.engine==='gost'?s.version:t.transport.toUpperCase())}</bdi></dd><dt>ترافیک عبوری</dt><dd><bdi dir="ltr">${esc((s.protocol||'tcp').toUpperCase())}</bdi></dd><dt>آدرس کاربران</dt><dd>${s.mappings.map(m=>`<bdi class="tunnel-detail-endpoint" dir="ltr">${esc(endpoint(s.public_host,m.public_port,m.public_end))}</bdi>`).join('')}</dd><dt>پورت‌های خارج</dt><dd>${s.mappings.map(m=>`<bdi class="tunnel-detail-endpoint" dir="ltr">${esc(rangeText(m.target_port,m.target_end))}</bdi>`).join('')}</dd></dl></section><div class="tunnel-end-status">${[['iran','سرور ایران'],['foreign','سرور خارج']].map(([key,title])=>{const r=t.remote_status?.[key],noService=key==='foreign'&&t.engine==='gost'&&t.transport!=='grpc';return `<section><h4>${title}</h4><p>${r?.error?esc(r.error):noService?'فوروارد GOST روی ایران اجرا می‌شود':!r?'هنوز بررسی نشده':r.active?'سرویس روشن است':'سرویس متوقف است'}</p><dl><dt>وضعیت ارتباط</dt><dd>${r?.connected===true?'برقرار':r?.connected===false?'قطع':'تأیید نشده'}</dd><dt>دریافت / ارسال</dt><dd><bdi dir="ltr">${r?.traffic_available?volume(r.totals?.rx)+' / '+volume(r.totals?.tx):'—'}</bdi></dd><dt>آخرین بررسی</dt><dd>${stamp(r?.checked_at)}</dd></dl></section>`;}).join('')}</div>${quota?`<section class="network-quota-summary ${exhausted?'tunnel-warning':''}"><h4>سقف ترافیک</h4><p>${exhausted?(s.quota_mode==='enforce'?'سقف مصرف پر شده و توقف تونل درخواست شده است.':'سقف مصرف پر شده است؛ این حالت تونل را خودکار متوقف نمی‌کند.'):known?'مصرف این دوره به سقف نرسیده است.':'مصرف این دوره هنوز بررسی نشده است.'}</p><dl><dt>مصرف این دوره</dt><dd><bdi dir="ltr">${used.length?volume(Math.max(...used)):'—'}</bdi></dd><dt>سقف این دوره</dt><dd><bdi dir="ltr">${s.quota_gb} GiB</bdi></dd><dt>پس از رسیدن به سقف</dt><dd>${s.quota_mode==='enforce'?'توقف تونل':'هشدار در کارت و جزئیات'}</dd></dl></section>`:''}</div>`);
   appendNodeOptions(t);

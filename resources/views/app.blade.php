@@ -25,6 +25,7 @@
 
   <script src="/speedbox/node-editor.js?v={{ filemtime(public_path('speedbox/node-editor.js')) }}"></script>
   <script src="/speedbox/emergency-configs.js?v={{ filemtime(public_path('speedbox/emergency-configs.js')) }}"></script>
+  <script src="/speedbox/wattunnel.js?v={{ filemtime(public_path('speedbox/wattunnel.js')) }}"></script>
   <script src="/speedbox/network-tunnels.js?v={{ filemtime(public_path('speedbox/network-tunnels.js')) }}"></script>
   <script src="/speedbox/tunnels.js?v={{ filemtime(public_path('speedbox/tunnels.js')) }}"></script>
   <script src="/speedbox/infrastructure.js?v={{ filemtime(public_path('speedbox/infrastructure.js')) }}"></script>

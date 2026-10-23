@@ -24,9 +24,10 @@ final class NetworkTunnelManager
     public function prepare(Request $request, ?ServerTunnel $existing=null): array
     {
         $alerts = app(TunnelAlertSettings::class)->resolve($request,$existing);
-        $request->replace([...$this->defaults(),...$request->all()]);
+        $wat=$request->input('engine')==='wattunnel';
+        $request->replace([...($wat?\App\Support\WatTunnelRules::defaults():$this->defaults()),...$request->all()]);
         $request->validate([
-            'engine'=>['required',\Illuminate\Validation\Rule::in(['gost','gre'])],
+            'engine'=>['required',\Illuminate\Validation\Rule::in(['gost','gre','wattunnel'])],
             'iran_server_id'=>'required|integer|different:foreign_server_id|exists:speedbox_managed_servers,id',
             'foreign_server_id'=>'required|integer|exists:speedbox_managed_servers,id',
             'address_source'=>['sometimes',\Illuminate\Validation\Rule::in(['servers','custom'])],
@@ -38,14 +39,15 @@ final class NetworkTunnelManager
             $family=$request->input('ip_family') ?: 'ipv4';
             $iran=$servers[(int)$request->input('iran_server_id')];
             $foreign=$servers[(int)$request->input('foreign_server_id')];
-            $values=['ip_family'=>$family,'public_host'=>trim($iran->host),
+            $values=['ip_family'=>$family,'public_host'=>$wat&&$request->filled('public_host')?$request->input('public_host'):trim($iran->host),
                 'peer_host'=>$this->serverAddress($foreign,$family,'foreign_server_id')];
-            if ($request->input('engine')==='gre') {
+            if (in_array($request->input('engine'),['gre','wattunnel'],true)) {
                 $values['local_endpoint']=$this->serverAddress($iran,$family,'iran_server_id');
             }
             $request->merge($values);
         }
-        $data=NetworkTunnelRules::normalize($request,$existing);
+        $data=$wat?\App\Support\WatTunnelRules::normalize($request,$existing):NetworkTunnelRules::normalize($request,$existing);
+        if($wat && $existing)$data['metrics_port']=(int)$existing->subnet;
         $data['telegram_alerts']=$alerts;
         $data['enabled']=$existing?(bool)($existing->settings['enabled']??true):true;
         $this->assertPorts($data,(int)$data['iran_server_id'],(int)$data['foreign_server_id'],$existing?->id);
@@ -77,12 +79,15 @@ final class NetworkTunnelManager
     public function assertPorts(array $settings,int $iran,int $foreign,?int $except=null): void
     {
         $wanted=[];
+        if(($settings['engine']??'')==='wattunnel')\App\Services\WatTunnelPorts::assertAvailable($settings,$iran,$foreign,$except);
         foreach($settings['mappings'] as $map) $wanted=[...$wanted,...range((int)$map['public_port'],(int)($map['public_end']??$map['public_port']))];
         foreach(ManagedServer::whereIn('id',[$iran,$foreign])->get() as $server) {
             if($server->id===$iran && in_array((int)$server->ssh_port,$wanted,true)) NetworkTunnelRules::fail('mappings','پورت SSH سرور ایران قابل استفاده نیست.');
         }
         $all=ServerTunnel::where('status','!=','deleted')->when($except,fn($q)=>$q->whereKeyNot($except))->lockForUpdate()->get();
         foreach($all as $other) {
+            if($other->engine==='wattunnel' && in_array((int)$other->subnet,$wanted,true) && in_array($iran,[(int)$other->iran_server_id,(int)$other->foreign_server_id],true))NetworkTunnelRules::fail('mappings','پورت برای پایش WatTunnel رزرو است.');
+            if($other->engine==='wattunnel' && \App\Services\WatTunnelPorts::listener($other->settings)===$iran && in_array((int)$other->settings['tunnel_port'],$wanted,true) && $other->transport!=='icmp')NetworkTunnelRules::fail('mappings','پورت ورودی با ارتباط WatTunnel دیگری تداخل دارد.');
             if($other->engine==='gost'&&$other->transport==='grpc'&&(int)$other->foreign_server_id===$iran&&in_array((int)($other->settings['tunnel_port']??0),$wanted,true))NetworkTunnelRules::fail('mappings','ورودی با پورت ارتباط GOST دیگری تداخل دارد.');
             if($other->engine==='backpack'){
                 $listener=($other->kind==='reverse'||$other->orientation==='swapped')?(int)$other->iran_server_id:(int)$other->foreign_server_id;
@@ -100,6 +105,7 @@ final class NetworkTunnelManager
             $server=ManagedServer::findOrFail($foreign);
             if($port===(int)$server->ssh_port) NetworkTunnelRules::fail('tunnel_port','پورت SSH خارج قابل استفاده نیست.');
             foreach($all as $other) {
+                if($other->engine==='wattunnel'&&(((int)$other->iran_server_id===$foreign||(int)$other->foreign_server_id===$foreign)&&(int)$other->subnet===$port||\App\Services\WatTunnelPorts::listener($other->settings)===$foreign&&$other->transport!=='icmp'&&(int)$other->settings['tunnel_port']===$port))NetworkTunnelRules::fail('tunnel_port','پورت با WatTunnel دیگری تداخل دارد.');
                 if($other->engine==='backpack'){ $listener=($other->kind==='reverse'||$other->orientation==='swapped')?(int)$other->iran_server_id:(int)$other->foreign_server_id; if($listener===$foreign&&(int)($other->settings['tunnel_port']??0)===$port)NetworkTunnelRules::fail('tunnel_port','پورت ارتباط با بک‌پک تداخل دارد.');}
                 if((int)$other->foreign_server_id===$foreign&&$other->engine==='gost'&&$other->transport==='grpc'&&(int)($other->settings['tunnel_port']??0)===$port) NetworkTunnelRules::fail('tunnel_port','این پورت ارتباط روی خارج رزرو است.');
                 if((int)$other->iran_server_id===$foreign)foreach($other->settings['mappings']??[] as $map)if($port>=$map['public_port']&&$port<=($map['public_end']??$map['public_port'])) NetworkTunnelRules::fail('tunnel_port','پورت ارتباط با ورودی اتصال دیگری تداخل دارد.');
@@ -109,6 +115,7 @@ final class NetworkTunnelManager
 
     public function allocate(array $data, int $subnet): array
     {
+        if($data['engine']==='wattunnel'){$data['metrics_port']=$subnet;return $data;}
         if($data['engine']!=='gre')return $data;
         if(!$data['inner_iran']&&!$data['inner_foreign']) {
             $base=ip2long('10.224.0.0')+$subnet*4;
@@ -137,10 +144,11 @@ final class NetworkTunnelManager
     {
         $iran=$snapshots['iran']??[];$foreign=$snapshots['foreign']??[];
         $status=!($tunnel->settings['enabled']??true)?'stopped':
-            ((empty($iran['active'])||(($tunnel->engine==='gre'||$tunnel->transport==='grpc')&&empty($foreign['active'])))?'offline':
+            ((empty($iran['active'])||((in_array($tunnel->engine,['gre','wattunnel'],true)||$tunnel->transport==='grpc')&&empty($foreign['active'])))?'offline':
                 (($iran['connected']??null)===true?'connected':'degraded'));
         $message=match($status){'connected'=>'سرویس و دسترسی TCP مقصد بررسی شد؛ اتصال پروتکل نود را با کلاینت هم آزمایش کنید.',
             'stopped'=>'اتصال متوقف است.','offline'=>'سرویس یکی از سمت‌ها فعال نیست.',default=>'سرویس بررسی شد؛ ارتباط کامل هنوز تأیید نشده است.'};
+        if($tunnel->engine==='wattunnel'&&$status==='connected')$message='ارتباط رمز‌شدهٔ دو سرور برقرار است؛ دسترسی سرویس مقصد را با کلاینت هم آزمایش کنید.';
         if($tunnel->engine==='gre' && (int)($tunnel->settings['quota_gb']??0)>0 && (!empty($iran['quota_exhausted'])||!empty($foreign['quota_exhausted']))) {
             $stopped=($tunnel->settings['quota_mode']??'warn')==='enforce';
             if(!$stopped && $status==='connected')$status='degraded';

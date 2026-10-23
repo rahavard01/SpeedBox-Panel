@@ -65,6 +65,8 @@ jobs:
           node-version: '22'
       - name: Network tunnel engines and form regressions
         run: |
+          python3 scripts/verify-wattunnel.py
+          python3 scripts/tests/wattunnel-host.test.py
           node scripts/verify-gost.mjs
           node scripts/tests/network-tunnel-form.test.mjs
           python3 scripts/tests/network-host.test.py

@@ -1,0 +1,25 @@
+{
+  "protocol": 1,
+  "upstream_commit": "7c30c59a65f962ceb6763daf23952ecbc5e7de91",
+  "upstream_version": "2.10.9",
+  "version": "2.10.9-sb1",
+  "go_version": "1.26.10",
+  "source_archive_sha256": "0b2e0440ebed1e22b86503339ede9254b769ba3065ea1eb4d04acca10c1fb24b",
+  "integration_sources": {
+    "build.py": "956c019a7fe23a12bf6e9c52719eb7a2bfefb81200f8e36b0ef88ae20153502c",
+    "udp_reply_linux.go": "196f0636853d51068f345751a0dd9c3bfdf1d16a84725d2e3aa66335ad991efc",
+    "udp_reply_test.go": "c487156c1e6a527d862d94d263870500554e0ee4c7489ea3a9af26c110247d1d"
+  },
+  "archives": {
+    "amd64": {
+      "file": "wattun-linux-amd64.gz",
+      "sha256": "b74f079ea8bafb3f6a14c616bc0924e3c01b3d13c82e4a44cb17d72c15f9b53f",
+      "binary_sha256": "ddd52b8f22581aa86430a46376af410e280e52cad6e27a8688efd72063eaee69"
+    },
+    "arm64": {
+      "file": "wattun-linux-arm64.gz",
+      "sha256": "b69a6247c0d4b7513512e220afe06d169b61906ccadefe97a19fa77d900e47da",
+      "binary_sha256": "2353ebc49601beeb2a5b3e984ec2c405ea13d6c47b935ae9dd2cbec121031e6d"
+    }
+  }
+}

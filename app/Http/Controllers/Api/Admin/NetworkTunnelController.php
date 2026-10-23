@@ -13,19 +13,20 @@ final class NetworkTunnelController extends Controller
 {
     public function capabilities(NetworkTunnelManager $network)
     {
-        return response()->json(['data'=>['defaults'=>$network->defaults(),'engines'=>['gost','gre'],
-            'versions'=>NetworkTunnelRules::VERSIONS,'gre_types'=>NetworkTunnelRules::GRE,'max_ports'=>256,
+        return response()->json(['data'=>['defaults'=>$network->defaults(),'engines'=>['gost','gre','wattunnel'],
+            'wat_defaults'=>\App\Support\WatTunnelRules::defaults(),'wat_carriers'=>\App\Support\WatTunnelRules::CARRIERS,'versions'=>NetworkTunnelRules::VERSIONS,'gre_types'=>NetworkTunnelRules::GRE,'max_ports'=>256,
             'profiles'=>RuntimeSetting::get('network_tunnel_profiles',['pools'=>[],'sources'=>[]])]]);
     }
 
     public function test(Request $request,NetworkTunnelManager $network,TunnelManager $manager,NetworkTunnelTest $tester)
     {
-        $data=$request->validate(['engine'=>['required',Rule::in(['gost','gre'])],
+        $data=$request->validate(['engine'=>['required',Rule::in(['gost','gre','wattunnel'])],
             'iran_server_id'=>'required|integer|different:foreign_server_id|exists:speedbox_managed_servers,id',
-            'foreign_server_id'=>'required|integer|exists:speedbox_managed_servers,id']);
+            'foreign_server_id'=>'required|integer|exists:speedbox_managed_servers,id',
+            'direction'=>['sometimes',Rule::in(['normal','reverse','both'])],'carriers'=>'sometimes|array|min:1|max:9','carriers.*'=>['required','distinct',Rule::in(\App\Support\WatTunnelRules::CARRIERS)]]);
         [$test,$op]=DB::transaction(function()use($data,$network,$manager,$tester){
             $servers=\App\Models\ManagedServer::whereIn('id',[$data['iran_server_id'],$data['foreign_server_id']])->orderBy('id')->lockForUpdate()->get()->keyBy('id');
-            $cases=$tester->candidates($data['engine'],$servers[$data['iran_server_id']],$servers[$data['foreign_server_id']],$network);
+            $cases=$tester->candidates($data['engine'],$servers[$data['iran_server_id']],$servers[$data['foreign_server_id']],$network,$data);
             $test=\App\Models\TunnelConnectionTest::create(['iran_server_id'=>$data['iran_server_id'],'foreign_server_id'=>$data['foreign_server_id'],'results'=>array_map(fn($row)=>[...$row,'status'=>'queued'],$cases)]);
             return [$test,$manager->queue('network-test',null,$test,['engine'=>$data['engine'],'cases'=>$cases])];
         });
@@ -42,12 +43,16 @@ final class NetworkTunnelController extends Controller
         [$tunnel,$op]=DB::transaction(function()use($request,$network,$manager){
             $data=$network->prepare($request);
             app(NetworkTunnelTest::class)->assertSelection($request,$data);
+            $blocked=$data['engine']==='wattunnel'?[...$manager->reservedPorts(\App\Models\ManagedServer::findOrFail($data['iran_server_id'])),...$manager->reservedPorts(\App\Models\ManagedServer::findOrFail($data['foreign_server_id'])),(int)$data['tunnel_port']]:[];
+            if($data['engine']==='wattunnel')foreach($data['mappings'] as $m)$blocked=[...$blocked,...range($m['public_port'],$m['public_end']),...range($m['target_port'],$m['target_end'])];
             $subnet=random_int(32768,65500);
-            for($i=0;ServerTunnel::where('subnet',$subnet)->exists()&&$i<200;$i++)$subnet=random_int(32768,65500);
+            for($i=0;(ServerTunnel::where('subnet',$subnet)->exists()||in_array($subnet,$blocked,true))&&$i<200;$i++)$subnet=random_int(32768,65500);
+            abort_if(ServerTunnel::where('subnet',$subnet)->exists()||in_array($subnet,$blocked,true),422,'پورت داخلی آزاد پیدا نشد؛ دوباره تلاش کنید.');
             $data=$network->allocate($data,$subnet);
+            if($data['engine']==='wattunnel')\App\Services\WatTunnelPorts::assertAvailable($data,(int)$data['iran_server_id'],(int)$data['foreign_server_id'],null);
             $tunnel=ServerTunnel::create(['engine'=>$data['engine'],'name'=>$data['name'],'remote_name'=>'sb-'.bin2hex(random_bytes(16)),
                 'iran_server_id'=>$data['iran_server_id'],'foreign_server_id'=>$data['foreign_server_id'],
-                'kind'=>'direct','transport'=>$data['transport'],'orientation'=>'normal','subnet'=>$subnet,
+                'kind'=>!empty($data['reverse'])?'reverse':'direct','transport'=>$data['transport'],'orientation'=>'normal','subnet'=>$subnet,
                 'settings'=>$data,'secret'=>bin2hex(random_bytes(32))]);
             return [$tunnel,$manager->queue('apply',$tunnel,null)];
         });
@@ -68,6 +73,7 @@ final class NetworkTunnelController extends Controller
     public function action(Request $request,ServerTunnel $tunnel,TunnelManager $manager)
     {
         $this->owned($tunnel);
+        abort_if($tunnel->engine==='wattunnel' && in_array($request->input('action'),['optimize','reset-quota','diagnose'],true),422,'این عملیات برای WatTunnel در دسترس نیست.');
         $data=$request->validate(['action'=>['required',Rule::in(['status','logs','start','stop','restart','reapply','delete','preview','diagnose','history','reset-quota','optimize','engine-update','maintenance-status'])],
             'kind'=>['sometimes',Rule::in(['ping','traceroute','mtu','connections','analyze'])]]);
         if(in_array($data['action'],['delete','reset-quota','optimize','engine-update'],true))$request->validate(['confirm'=>'accepted']);
@@ -106,6 +112,6 @@ final class NetworkTunnelController extends Controller
 
     private function owned(ServerTunnel $tunnel): void
     {
-        abort_unless(in_array($tunnel->engine,['gost','gre'],true)&&$tunnel->status!=='deleted',422,'این عملیات برای یک اتصال GOST یا GRE فعال در فهرست است.');
+        abort_unless(in_array($tunnel->engine,['gost','gre','wattunnel'],true)&&$tunnel->status!=='deleted',422,'این عملیات برای یک اتصال شبکهٔ فعال در فهرست است.');
     }
 }

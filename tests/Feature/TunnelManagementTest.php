@@ -19,7 +19,7 @@ class TunnelManagementTest extends TestCase
         config(['app.key'=>'base64:'.base64_encode(str_repeat('t',32)), 'queue.default'=>'database', 'cache.default'=>'array']);
         Queue::fake();
         Schema::create('panel_users',function(Blueprint $t){$t->id();$t->string('name');$t->string('email');$t->string('password');$t->integer('role');$t->boolean('banned')->default(false);$t->timestamps();});
-        foreach(['2025_01_01_000000_create_speedbox_core_tables.php','2026_10_08_000001_create_speedbox_infrastructure_tables.php','2026_10_18_000001_add_node_warp_egress.php','2026_10_18_000002_create_speedbox_tunnels.php','2026_10_18_000003_create_speedbox_tunnel_host_status.php','2026_10_23_000001_add_reverse_ssh_route.php'] as $file)(require database_path('migrations/'.$file))->up();
+        foreach(['2025_01_01_000000_create_speedbox_core_tables.php','2026_10_08_000001_create_speedbox_infrastructure_tables.php','2026_10_18_000001_add_node_warp_egress.php','2026_10_18_000002_create_speedbox_tunnels.php','2026_10_18_000003_create_speedbox_tunnel_host_status.php','2026_10_20_000001_add_network_tunnel_engines.php','2026_10_23_000001_add_reverse_ssh_route.php'] as $file)(require database_path('migrations/'.$file))->up();
         foreach(['iran'=>'192.0.2.1','foreign'=>'192.0.2.2'] as $side=>$host){
             $machine=ServerMachine::create(['name'=>$side,'token'=>$side.'-token','is_active'=>true]);
             $this->$side=ManagedServer::create(['name'=>$side,'host'=>$host,'ssh_port'=>22,'ssh_user'=>'root','auth_type'=>'password','password'=>'private-password','machine_id'=>$machine->id,'status'=>'ready']);
@@ -195,5 +195,76 @@ class TunnelManagementTest extends TestCase
         $response=$this->withToken($this->token)->postJson('/api/admin/infrastructure/servers',$body)->assertCreated();
         $response->assertJsonPath('data.host','192.0.2.90')->assertJsonMissingPath('data.reverse_ssh_port')->assertJsonMissingPath('data.password');
         $this->assertNull(ManagedServer::where('host','192.0.2.90')->first()->getRawOriginal('reverse_ssh_port'));
+    }
+
+    private function watFixture(array $changes=[]): array
+    {
+        if(!Schema::hasColumn('speedbox_tunnels','engine'))(require database_path('migrations/2026_10_20_000001_add_network_tunnel_engines.php'))->up();
+        $tester=app(\App\Services\NetworkTunnelTest::class);
+        $rows=$tester->candidates('wattunnel',$this->iran,$this->foreign,app(\App\Services\NetworkTunnelManager::class),['carriers'=>['tcp']]);
+        $rows=array_map(fn($r)=>[...$r,'status'=>'ok','selectable'=>true,'protocols'=>['tcp'=>['status'=>'ok'],'udp'=>['status'=>'ok']]],$rows);
+        $test=TunnelConnectionTest::create(['iran_server_id'=>$this->iran->id,'foreign_server_id'=>$this->foreign->id,'status'=>'completed','results'=>$rows]);
+        $test->operations()->create(['action'=>'network-test','status'=>'succeeded','payload'=>['engine'=>'wattunnel'],'deadline'=>now()->addMinutes(40)]);
+        return [...\App\Support\WatTunnelRules::defaults(),'iran_server_id'=>$this->iran->id,'foreign_server_id'=>$this->foreign->id,
+            'name'=>'Wat fixture','transport'=>'tcp','test_id'=>$test->id,'result_id'=>$rows[0]['id'],...$changes];
+    }
+
+    public function test_wattunnel_has_independent_schema_and_requires_matching_measurement(): void
+    {
+        $d=$this->watFixture(['public_host'=>'ir.example.test']);$this->withToken($this->token);
+        $this->postJson('/api/admin/infrastructure/network-tunnels',[...$d,'reverse'=>true])->assertUnprocessable();
+        $this->postJson('/api/admin/infrastructure/network-tunnels',[...$d,'transport'=>'udp','reverse'=>true])->assertUnprocessable();
+        $answer=$this->postJson('/api/admin/infrastructure/network-tunnels',$d)->assertAccepted();
+        $t=ServerTunnel::findOrFail($answer->json('data.id'));
+        $this->assertSame('wattunnel',$t->engine);$this->assertSame('direct',$t->kind);
+        $this->assertSame('ir.example.test',$t->settings['public_host']);
+        $this->assertArrayNotHasKey('nat',$t->settings);$this->assertArrayNotHasKey('gre_key',$t->settings);
+        $this->assertSame((int)$t->subnet,$t->settings['metrics_port']);
+        $this->assertStringNotContainsString($t->secret,$answer->getContent());
+        $this->postJson('/api/admin/infrastructure/network-tunnels/'.$t->id.'/actions',['action'=>'reset-quota','confirm'=>true])->assertUnprocessable();
+        $this->postJson('/api/admin/infrastructure/network-tunnels/'.$t->id.'/actions',['action'=>'optimize','confirm'=>true,'sides'=>['iran']])->assertUnprocessable();
+        Queue::assertPushed(\App\Jobs\RunNetworkTunnelOperation::class);
+    }
+
+    public function test_wattunnel_candidates_respect_carrier_direction_and_ipv4_icmp(): void
+    {
+        $this->watFixture();$this->withToken($this->token);
+        $answer=$this->postJson('/api/admin/infrastructure/network-tunnel-tests',['engine'=>'wattunnel','iran_server_id'=>$this->iran->id,'foreign_server_id'=>$this->foreign->id,'direction'=>'both','carriers'=>['icmp','udp','tcp']])->assertAccepted();
+        $rows=$answer->json('data.results');$this->assertCount(5,$rows);
+        $this->assertCount(2,array_filter($rows,fn($r)=>$r['reverse']));
+        foreach($rows as $r)$this->assertSame('ipv4',$r['ip_family']);
+        Queue::assertPushed(\App\Jobs\RunNetworkTunnelTest::class);
+    }
+
+    public function test_wattunnel_reserves_normal_reverse_and_private_metrics_ports(): void
+    {
+        $d=$this->watFixture();$manager=app(\App\Services\NetworkTunnelManager::class);
+        $request=\Illuminate\Http\Request::create('/','POST',$d);
+        $prepared=$manager->prepare($request);$prepared=$manager->allocate($prepared,50001);
+        $t=ServerTunnel::create(['engine'=>'wattunnel','name'=>'Existing Wat','remote_name'=>'sb-'.str_repeat('f',32),'iran_server_id'=>$this->iran->id,'foreign_server_id'=>$this->foreign->id,'kind'=>'direct','transport'=>'tcp','orientation'=>'normal','subnet'=>50001,'secret'=>str_repeat('a',64),'settings'=>$prepared]);
+        foreach([[$this->foreign->id,$prepared['tunnel_port']],[$this->iran->id,50001],[$this->foreign->id,50001]] as [$id,$port])$this->assertContains($port,app(TunnelManager::class)->reservedPorts(ManagedServer::findOrFail($id)));
+        $this->withToken($this->token)->postJson('/api/admin/infrastructure/network-tunnels',[...$d,'mappings'=>[['public_port'=>50001,'target_port'=>8443]]])->assertUnprocessable();
+        $this->postJson('/api/admin/infrastructure/network-tunnels',[...$d,'tunnel_port'=>22,'mappings'=>[['public_port'=>8443,'target_port'=>5790]]])->assertUnprocessable();
+        $t->update(['kind'=>'reverse','settings'=>[...$prepared,'reverse'=>true]]);
+        $this->assertContains($prepared['tunnel_port'],app(TunnelManager::class)->reservedPorts($this->iran));
+    }
+
+    public function test_wattunnel_two_host_apply_rolls_back_after_second_host_failure(): void
+    {
+        $d=$this->watFixture();$s=app(\App\Services\NetworkTunnelManager::class)->prepare(\Illuminate\Http\Request::create('/','POST',$d));
+        $s=app(\App\Services\NetworkTunnelManager::class)->allocate($s,50002);
+        $t=ServerTunnel::create(['engine'=>'wattunnel','name'=>'Wat fixture','remote_name'=>'sb-'.str_repeat('d',32),'iran_server_id'=>$this->iran->id,'foreign_server_id'=>$this->foreign->id,'kind'=>'direct','transport'=>'tcp','orientation'=>'normal','subnet'=>50002,'secret'=>str_repeat('b',64),'settings'=>$s]);
+        $op=app(TunnelManager::class)->queue('apply',$t,null,['settings'=>[...$s,'conns'=>4]]);$rolled=[];
+        $remote=\Mockery::mock(\App\Services\NetworkTunnelRemote::class);
+        $remote->shouldReceive('ensure')->andReturnNull();
+        $remote->shouldReceive('call')->andReturnUsing(function($server,$q)use(&$rolled){
+            if($q['action']==='prepare')return ['checks'=>[]];
+            if($q['action']==='apply'&&$q['config']['side']==='iran')throw new \RuntimeException('simulated second host failure');
+            if($q['action']==='rollback')$rolled[]=$q['config']['side'];
+            return ['active'=>true,'connected'=>true];
+        });
+        for($i=0;$i<20&&in_array($op->fresh()->status,['queued','running']);$i++)(new \App\Jobs\RunNetworkTunnelOperation($op->id))->handle($remote,app(\App\Services\NetworkTunnelManager::class),app(TunnelManager::class));
+        $this->assertSame('failed',$op->fresh()->status);$this->assertSame(8,$t->fresh()->settings['conns']);
+        $this->assertEqualsCanonicalizing(['iran','foreign'],$rolled);$this->assertSame(0,DB::table('speedbox_tunnel_leases')->count());
     }
 }

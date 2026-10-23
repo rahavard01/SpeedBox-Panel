@@ -31,3 +31,7 @@ manifest. Upstreams: https://github.com/ginuerzh/gost and
 https://github.com/go-gost/gost. Linux GRE uses the operating system's `ip`
 and `nft` tools. No code, web panel or binary from DrSaeedHub/Tunnel-Panel
 or masoudgb/Gost-ip6 is redistributed or executed.
+
+## WatTunnel
+
+WatTunnel (MIT), JohnWatsoon/WatTunnel, pinned commit `7c30c59a65f962ceb6763daf23952ecbc5e7de91` (2.10.9). The panel bundles only Linux engine binaries built with Go 1.26.10 and the documented UDP reply overlay, integration version `2.10.9-sb1`. Upstream managers/installers are not run. License: `wattunnel-dist/LICENSE`. Reproduction: `python3 scripts/wattunnel/build.py`; verification: `python3 scripts/verify-wattunnel.py`. Dependency licenses remain those of the pinned upstream Go modules.

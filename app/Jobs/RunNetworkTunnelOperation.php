@@ -81,6 +81,11 @@ class RunNetworkTunnelOperation implements ShouldQueue,ShouldBeEncrypted
                         $this->advance($state,$mutating?'verify':'done');break;
                     case 'verify':
                         $state['snapshots'][$side]=$op->action==='delete'?['deleted'=>true,'checked_at'=>time()]:$remote->call($server,['action'=>'status','config'=>$config]);
+                        if($tunnel->engine==='wattunnel'&&$op->action!=='delete'&&($settings['enabled']??true)&&empty($state['snapshots'][$side]['connected'])) {
+                            $state['verify_attempts'][$side]=($state['verify_attempts'][$side]??0)+1;
+                            if($state['verify_attempts'][$side]<10){$op->update(['message'=>'در انتظار تأیید ارتباط رمز‌شدهٔ WatTunnel…']);break;}
+                            throw new \RuntimeException('ارتباط رمز‌شدهٔ WatTunnel سمت '.$side.' تأیید نشد؛ تنظیمات قبلی بازگردانده می‌شود.');
+                        }
                         if($op->action==='engine-update')$state['maintenance'][$side]=['name'=>$server->name,'status'=>$remote->maintenanceStatus($server,$tunnel->engine,$settings['version'])];
                         if($op->action!=='delete'&&($settings['enabled']??true)&&!($state['snapshots'][$side]['active']??false))throw new \RuntimeException('سرویس سمت '.$side.' فعال نشد.');
                         $this->advance($state,'commit');break;
@@ -88,7 +93,7 @@ class RunNetworkTunnelOperation implements ShouldQueue,ShouldBeEncrypted
                         // Persist only after both hosts were applied and structurally verified.
                         if($state['side']===0 && empty($state['database_committed'])) {
                             if($op->action==='delete')$tunnel->update(['status'=>'deleted','message'=>'اتصال از دو سرور حذف شد.']);
-                            else {$tunnel->update(['settings'=>$settings,'name'=>$state['name']??$tunnel->name,'transport'=>$settings['transport']]);$network->saveSnapshot($tunnel->fresh(),$state['snapshots']);}
+                            else {$tunnel->update(['settings'=>$settings,'name'=>$state['name']??$tunnel->name,'kind'=>!empty($settings['reverse'])?'reverse':'direct','transport'=>$settings['transport']]);$network->saveSnapshot($tunnel->fresh(),$state['snapshots']);}
                             $state['database_committed']=true;$op->update(['payload'=>$state]);
                         }
                         try{$remote->call($server,['action'=>'commit','revision'=>$state['revision'],'config'=>$config]);}catch(Throwable $cleanup){$state['cleanup_errors'][$side]=$cleanup->getMessage();}

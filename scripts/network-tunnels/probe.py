@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """Bounded, authenticated engine tests. No global routes, firewall or sysctl edits."""
-import contextlib,hmac,ipaddress,json,os,re,shutil,socket,statistics,struct,subprocess,sys,threading,time
+import contextlib,hmac,ipaddress,json,os,re,shutil,socket,statistics,struct,subprocess,sys,threading,time,urllib.request
 from pathlib import Path
 ROOT=Path('/var/lib/speedbox-network-tests')
 GOST=Path('/opt/speedbox-network')
+sys.path.insert(0,str(Path(__file__).resolve().parent))
+import wat
 SAMPLES=20
 BULK=8*1024*1024
 PACKETS=256
@@ -19,12 +21,18 @@ def atomic(path,value):
 def read(path):return json.loads(path.read_text())
 def validate(c):
  identity(c['id'])
- if c['engine'] not in ('gost','gre') or c['side'] not in ('iran','foreign'):raise ValueError('invalid engine or side')
+ if c['engine'] not in ('gost','gre','wattunnel') or c['side'] not in ('iran','foreign'):raise ValueError('invalid engine or side')
  if not re.fullmatch('[a-f0-9]{64}',c['token']):raise ValueError('invalid test token')
  family=6 if c['ip_family']=='ipv6' else 4 if c['ip_family']=='ipv4' else 0
  if not family or ipaddress.ip_address(c['peer_host']).version!=family:raise ValueError('invalid peer address family')
  if c['engine']=='gost':
   if c['version'] not in ('2.11.5','3.0.0') or c['transport']!='tcp':raise ValueError('invalid GOST method')
+ elif c['engine']=='wattunnel':
+  if c['version']!=wat.VERSION or c['transport'] not in wat.CARRIERS or type(c.get('reverse')) is not bool:raise ValueError('invalid WatTunnel method')
+  if c['transport']=='icmp' and family!=4:raise ValueError('ICMP is IPv4 only')
+  if c['transport']=='udp' and c['reverse']:raise ValueError('UDP cannot reverse')
+  if ipaddress.ip_address(c['local_endpoint']).version!=family:raise ValueError('invalid Iran endpoint')
+  if type(c.get('backend_port')) is not int or not 33000<=c['backend_port']<=60000:raise ValueError('invalid test backend port')
  else:
   if c['transport'] not in ('gre','gretap','ip6gre','ip6gretap') or c['transport'].startswith('ip6')!=(family==6):raise ValueError('invalid GRE method')
   if ipaddress.ip_address(c['local_endpoint']).version!=family:raise ValueError('invalid local address')
@@ -32,7 +40,7 @@ def validate(c):
    if ipaddress.ip_address(c[key]).version!=4:raise ValueError('invalid test subnet')
   a=ipaddress.ip_address(c['inner_iran']);b=ipaddress.ip_address(c['inner_foreign']);block=ipaddress.ip_network('10.253.0.0/16')
   if a==b or a not in block or b not in block or int(a)//4!=int(b)//4 or not 1<=int(c['gre_key'])<=4294967295:raise ValueError('invalid test key or subnet')
- if c['side']=='iran' and not 1<=int(c['peer_port'])<=65535:raise ValueError('invalid peer port')
+ if c['side']=='iran' and not (c['engine']=='wattunnel' and c['reverse']) and not 1<=int(c['peer_port'])<=65535:raise ValueError('invalid peer port')
  return c
 
 def iface(c):return 'sbt'+c['id'][:11]
@@ -262,7 +270,7 @@ def measure_protocol(host,port,token,proto,budget_seconds=30,progress=None):
   if udp:udp.close()
 
 def measure(c,state,progress=None):
- host='127.0.0.1' if c['engine']=='gost' else c['inner_foreign'];port=state['port']
+ host='127.0.0.1' if c['engine'] in ('gost','wattunnel') else c['inner_foreign'];port=state['port']
  results={}
  for proto in ('tcp','udp'):
   def update(value):
@@ -280,8 +288,70 @@ def measure_worker(c):
  except Exception as error:
   atomic(base/'measurement.json',{'state':'failed','error':str(error)[:400],'started':started,'updated':time.time()});raise
 
+def free_wat_port(c,excluded):
+ for _ in range(60):
+  with socket.socket() as tcp,socket.socket(type=socket.SOCK_DGRAM) as udp:
+   tcp.bind(('127.0.0.1',0));port=tcp.getsockname()[1]
+   if port in excluded or port in c.get('reserved_ports',[]) or not 32768<=port<=65500:continue
+   try:udp.bind(('127.0.0.1',port))
+   except OSError:continue
+   return port
+ raise RuntimeError('no free WatTunnel test port')
+
+def serve_wat(c):
+ base=folder(c['id']);echo=None;proc=None
+ try:
+  if c['backend_port'] in c.get('reserved_ports',[]):raise ValueError('temporary backend overlaps reserved port')
+  metrics=free_wat_port(c,{c['backend_port'],c.get('peer_port')})
+  forward=free_wat_port(c,{metrics,c['backend_port'],c.get('peer_port')})
+  listener=(c['side']=='iran')==c['reverse']
+  transport=free_wat_port(c,{metrics,c['backend_port'],forward}) if listener else c['peer_port']
+  s={'version':wat.VERSION,'transport':c['transport'],'ip_family':c['ip_family'],'reverse':c['reverse'],
+     'peer_host':c['peer_host'],'local_endpoint':c['local_endpoint'],'protocol':'both','tunnel_port':transport,
+     'metrics_port':metrics,'mtu':0,'conns':4,'sessions':1,'lanes':4,'icmp_type':'echo','fec':'off','max_mbps':0,
+     'tcp_cc':'system','path':'/wat','sni':'','tls_pin':'','fingerprint':'go','host_header':'','tls_small_ch':False,
+     'tls_frag':0,'hedge':False,'ping_every':2,'udp_idle':60,'monitor':True,'monitor_interval':15,'restart_hours':0,
+     'mappings':[{'public_port':forward,'public_end':forward,'target_port':c['backend_port'],'target_end':c['backend_port']}]}
+  engine={'id':'sb-'+c['id'],'engine':'wattunnel','settings':s,'subnet':metrics,'side':c['side'],'secret':c['token']}
+  wat.validate(engine)
+  key=base/'credential';key.write_text(c['token']+'\n');key.chmod(0o600)
+  args=wat.arguments(engine,key)
+  if c['side']=='iran':args[args.index('-bind')+1]='127.0.0.1'
+  if c['side']=='foreign':
+   echo=Echo('127.0.0.1',c['token'],c['backend_port']);echo.start()
+  proc=subprocess.Popen([str(GOST/('wattun-'+wat.VERSION)),*args],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+  time.sleep(.25)
+  if proc.poll() is not None:raise RuntimeError('temporary WatTunnel process exited')
+  if not listener:
+   # The first host can only announce its listener. The dialing second host
+   # waits for authenticated engine liveness before the measured samples start.
+   opener=urllib.request.build_opener(urllib.request.ProxyHandler({}));ready=False;end=time.monotonic()+8
+   while time.monotonic()<end:
+    if proc.poll() is not None:raise RuntimeError('temporary WatTunnel process exited')
+    try:
+     with opener.open('http://127.0.0.1:'+str(metrics)+'/stats',timeout=.5) as reply:ready=bool(json.load(reply).get('alive'))
+    except (OSError,ValueError):pass
+    if ready:break
+    time.sleep(.05)
+   if not ready:raise RuntimeError('temporary WatTunnel handshake did not complete')
+  atomic(base/'state.json',{'state':'ready','port':forward if c['side']=='iran' else transport,'peer_port':transport})
+  deadline=time.monotonic()+200
+  while time.monotonic()<deadline:
+   if proc.poll() is not None:raise RuntimeError('temporary WatTunnel process stopped')
+   time.sleep(.25)
+ except BaseException as error:
+  atomic(base/'state.json',{'state':'failed','error':str(error)[:400]});raise
+ finally:
+  if echo:echo.close()
+  if proc and proc.poll() is None:
+   proc.terminate()
+   with contextlib.suppress(subprocess.TimeoutExpired):proc.wait(timeout=3)
+
+
 def serve(c):
- validate(c);base=folder(c['id']);echo=None;proc=None
+ validate(c)
+ if c['engine']=='wattunnel':return serve_wat(c)
+ base=folder(c['id']);echo=None;proc=None
  try:
   if c['engine']=='gre':setup_gre(c)
   if c['side']=='foreign':

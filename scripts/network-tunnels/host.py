@@ -30,6 +30,13 @@ IDENTITY = re.compile(r'^sb-[a-f0-9]{32}$')
 VERSION = '1.0.0'
 
 
+# Import next to this versioned helper, including importlib-based isolated tests.
+sys.path.insert(0,str(Path(__file__).resolve().parent))
+import wat
+class _Host:
+    def __getattr__(self,key):return globals()[key]
+def _host():return _Host()
+
 def run(argv, timeout=20, check=True, stdin=None):
     result = subprocess.run([str(x) for x in argv], input=stdin, capture_output=True, text=True, timeout=timeout)
     if check and result.returncode:
@@ -89,6 +96,7 @@ def endpoint(host, number):
 
 
 def validate(config):
+    if config.get('engine')=='wattunnel': return wat.validate(config)
     valid_id(config.get('id'))
     if not isinstance(config,dict) or not isinstance(config.get('settings'),dict): raise ValueError('invalid configuration')
     if config.get('engine') not in ('gost', 'gre') or config.get('side') not in ('iran', 'foreign'):
@@ -296,6 +304,7 @@ def nft_rules(config, health=None):
 
 
 def service_text(config, health=None):
+    if config['engine']=='wattunnel': return wat.service_text(_host(),config)
     p=paths(config['id']);s=config['settings']
     if config['engine']=='gost':
         argv=gost_arguments(config,health)
@@ -393,6 +402,7 @@ def down(config):
 def install(config, health=None):
     validate(config)
     p=paths(config['id']);text=service_text(config,health)
+    if config['engine']=='wattunnel':wat.prepare_files(_host(),config)
     if p['unit'].exists() and '# speedbox-network:managed=1' not in p['unit'].read_text(): raise RuntimeError('unit is not owned by SpeedBox')
     if text:
         atomic(p['unit'],text,0o600)
@@ -419,6 +429,7 @@ def remove(config):
         raise RuntimeError('unit is not owned by SpeedBox')
     run(['systemctl','disable','--now',p['unit'].name],check=False)
     down(config)
+    if config['engine']=='wattunnel':p['config'].with_suffix('.key').unlink(missing_ok=True)
     for key in ('config','unit','timer','runtime'):
         p[key].unlink(missing_ok=True)
     run(['systemctl','daemon-reload'])
@@ -475,6 +486,7 @@ def period_key(settings, now):
 
 
 def snapshot(config, probe=True):
+    if config['engine']=='wattunnel':return wat.snapshot(_host(),config,probe)
     p=paths(config['id']);s=config['settings'];now=int(time.time())
     previous=read(p['runtime'],{})
     health=previous.get('destinations',{})
@@ -539,7 +551,7 @@ def daemon_tick(config):
         return
     result=snapshot(config,probe=config['settings']['monitor'])
     s=config['settings']
-    if s['failover'] and config['side']=='iran':
+    if s.get('failover') and config['side']=='iran':
         before={k:v.get('healthy') for k,v in old.get('destinations',{}).items()}
         after={k:v.get('healthy') for k,v in result['destinations'].items()}
         if before!=after:
@@ -593,6 +605,7 @@ def diagnostics(config, kind):
 
 
 def preflight(config):
+    if config['engine']=='wattunnel':return wat.preflight(_host(),config)
     s=config['settings'];checks=[]
     for program in (['ip','systemctl','nft','ping'] if config['engine']=='gre' else ['systemctl','ss']):
         checks.append({'name':program,'ok':shutil.which(program) is not None})
@@ -650,7 +663,7 @@ def dispatch(request):
         atomic(backup,{'old':current,'runtime':read(p['runtime']), 'active':active_unit(config)})
         return {'prepared':True,'checks':[] if request.get('operation') in ('delete','stop') else preflight(config)}
     if action=='preview':
-        return {'checks':preflight(config),'commands':gre_commands(config) if config['engine']=='gre' else ['GOST '+config['settings']['version']+' with validated forwarding configuration'], 'rules':nft_rules(config) if config['engine']=='gre' and config['side']=='iran' else None}
+        return {'checks':preflight(config),'commands':gre_commands(config) if config['engine']=='gre' else [config['engine']+' '+config['settings']['version']+' with validated forwarding configuration'], 'rules':nft_rules(config) if config['engine']=='gre' and config['side']=='iran' else None}
     if action=='rollback':
         saved=read(backup)
         if saved is None: raise RuntimeError('rollback snapshot is missing')
@@ -660,6 +673,8 @@ def dispatch(request):
         else: remove(config)
         return {'restored':True}
     if action=='commit':
+        if config['engine']=='wattunnel' and not p['config'].exists():
+            for suffix in ('.crt','.tls-key'):p['config'].with_suffix(suffix).unlink(missing_ok=True)
         backup.unlink(missing_ok=True)
         return {'committed':True}
     if action in ('apply','start','stop','restart','reapply'):

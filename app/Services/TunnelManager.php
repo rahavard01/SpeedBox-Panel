@@ -89,6 +89,8 @@ class TunnelManager
         foreach(ServerTunnel::where('status','!=','deleted')->where(fn($q)=>$q->where('iran_server_id',$server->id)->orWhere('foreign_server_id',$server->id))->get() as $t) {
             $iran=(int)$t->iran_server_id===(int)$server->id;
             if($t->engine!=='backpack') {
+                if($t->engine==='wattunnel')$ports[]=(int)$t->subnet;
+                if($t->engine==='wattunnel' && \App\Services\WatTunnelPorts::listener($t->settings)===(int)$server->id && $t->transport!=='icmp')$ports[]=(int)$t->settings['tunnel_port'];
                 if(!$iran && $t->engine==='gost' && $t->transport==='grpc')$ports[]=(int)$t->settings['tunnel_port'];
                 foreach($t->settings['mappings'] as $map)$ports=[...$ports,...range((int)$map[$iran?'public_port':'target_port'],(int)($map[$iran?'public_end':'target_end']??$map[$iran?'public_port':'target_port']))];
                 continue;
