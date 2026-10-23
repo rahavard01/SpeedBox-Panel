@@ -46,6 +46,11 @@ class NodeControlService
     public function configFor(ProxyServer $node): array
     {
         $settings = $node->protocol_settings ?: [];
+        $trustedOrigin = TrustedTunnelOrigin::required($node);
+        $networkSettings = (array) data_get($settings, 'network_settings', []);
+        // Wat already authenticates the origin over its private broker. A
+        // legacy TCP-level PROXY switch would re-enable a public header parser.
+        if ($trustedOrigin) unset($networkSettings['acceptProxyProtocol']);
         $tlsSettings = data_get($settings, 'tls_settings');
         $tlsObject = data_get($settings, 'tls');
         if (is_array($tlsObject) && !empty($settings['alpn'])) $tlsObject['alpn'] = is_array($settings['alpn']) ? $settings['alpn'] : [$settings['alpn']];
@@ -56,9 +61,9 @@ class NodeControlService
             'listen_ip' => data_get($settings, 'listen_address', '0.0.0.0'),
             'server_port' => (int) $node->server_port,
             'network' => data_get($settings, 'network'),
-            'networkSettings' => (object) data_get($settings, 'network_settings', []),
-            'trusted_tunnel_origin' => TrustedTunnelOrigin::required($node),
-            'accept_proxy_protocol' => (bool) data_get($settings, 'network_settings.acceptProxyProtocol', false),
+            'networkSettings' => (object) $networkSettings,
+            'trusted_tunnel_origin' => $trustedOrigin,
+            'accept_proxy_protocol' => !$trustedOrigin && (bool) data_get($settings, 'network_settings.acceptProxyProtocol', false),
             'kernel_type' => $node->kernel ?: 'singbox',
             'warp_enabled' => (bool) $node->warp_enabled,
             'kernel_log_level' => data_get($settings, 'kernel_log_level', 'warn'),

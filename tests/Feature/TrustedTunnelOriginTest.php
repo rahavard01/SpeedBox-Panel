@@ -83,4 +83,22 @@ class TrustedTunnelOriginTest extends TestCase
         $this->assertFalse($tunnel->fresh()->settings['enabled']);
         $this->assertSame('stopped',$tunnel->fresh()->status);
     }
+    public function test_trusted_origin_removes_legacy_proxy_parser_only_from_mapped_nodes(): void
+    {
+        [$servers,$tunnel]=$this->pair();
+        $tunnel->update(['settings'=>TrustedTunnelOrigin::upgrade($tunnel,$tunnel->settings)]);
+        $settings=['network'=>'tcp','network_settings'=>['acceptProxyProtocol'=>true,'header'=>['type'=>'none']]];
+        $node=new ProxyServer(['machine_id'=>$servers['foreign']->machine_id,'server_port'=>2087,'type'=>'vless','kernel'=>'xray','protocol_settings'=>$settings]);
+        $mapped=app(NodeControlService::class)->configFor($node);
+        $this->assertTrue($mapped['trusted_tunnel_origin']);
+        $this->assertFalse($mapped['accept_proxy_protocol']);
+        $this->assertArrayNotHasKey('acceptProxyProtocol',(array)$mapped['networkSettings']);
+        $this->assertSame(['type'=>'none'],((array)$mapped['networkSettings'])['header']);
+        $this->assertSame($settings,$node->protocol_settings);
+        $node->server_port=443;
+        $direct=app(NodeControlService::class)->configFor($node);
+        $this->assertFalse($direct['trusted_tunnel_origin']);
+        $this->assertTrue($direct['accept_proxy_protocol']);
+        $this->assertTrue(((array)$direct['networkSettings'])['acceptProxyProtocol']);
+    }
 }
