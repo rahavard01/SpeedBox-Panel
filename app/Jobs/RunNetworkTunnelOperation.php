@@ -29,6 +29,10 @@ class RunNetworkTunnelOperation implements ShouldQueue,ShouldBeEncrypted
             $state=$op->payload??[];
             if(!isset($state['phase']))$state=[...$state,'phase'=>$op->action==='engine-update'?'inspect-update':'ensure','side'=>0,'revision'=>bin2hex(random_bytes(16)),
                 'old_settings'=>$tunnel->settings,'old_name'=>$tunnel->name,'old_status'=>$tunnel->status,'old_message'=>$tunnel->message,'prepared'=>[],'hosts'=>[]];
+            if($tunnel->engine==='wattunnel' && !isset($state['origin_upgraded']) && in_array($op->action,['apply','start','restart','reapply','engine-update'],true)) {
+                $state['settings']=\App\Services\TrustedTunnelOrigin::upgrade($tunnel,$state['settings']??$tunnel->settings);
+                $state['origin_upgraded']=true;
+            }
             if($op->deadline->isPast()&&!in_array($state['phase'],['rollback','failed','commit','done'],true)){
                 $state['error']='مهلت عملیات تمام شد.';$state['phase']='rollback';$state['side']=0;
             }
@@ -44,7 +48,7 @@ class RunNetworkTunnelOperation implements ShouldQueue,ShouldBeEncrypted
                     case 'inspect-update':
                         $state['maintenance'][$side]=['name'=>$server->name,'status'=>$remote->maintenanceStatus($server,$tunnel->engine,$settings['version'])];
                         $this->advance($state,'ensure');
-                        if($state['phase']==='ensure' && !empty($state['maintenance']['iran']['status']['up_to_date']) && !empty($state['maintenance']['foreign']['status']['up_to_date'])) {
+                        if($state['phase']==='ensure' && $settings===$state['old_settings'] && !empty($state['maintenance']['iran']['status']['up_to_date']) && !empty($state['maintenance']['foreign']['status']['up_to_date'])) {
                             $state['phase']='done';$state['already_current']=true;
                         }
                         break;
@@ -148,3 +152,4 @@ class RunNetworkTunnelOperation implements ShouldQueue,ShouldBeEncrypted
         self::dispatch($op->id)->delay(now()->addSeconds(5));
     }
 }
+

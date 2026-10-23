@@ -2,7 +2,7 @@ package singbox
 
 import (
 	"context"
- "errors"
+	"errors"
 	"io"
 	"net"
 	"sync"
@@ -16,7 +16,8 @@ import (
 	"golang.org/x/time/rate"
 
 	"github.com/cedar2025/xboard-node/internal/admission"
- "github.com/cedar2025/xboard-node/internal/nlog"
+	"github.com/cedar2025/xboard-node/internal/nlog"
+	"github.com/cedar2025/xboard-node/internal/origin"
 )
 
 // ipPool caches ipSnapshot maps to reduce allocations.
@@ -123,13 +124,15 @@ func (u *userStats) aliveIPList() map[string]bool {
 //   - Close callback to decrement IP refcounts
 //   - Per-connection rate limit token accumulation (amortized WaitN)
 type ConnTracker struct {
-	usersMu sync.RWMutex
-	users   map[int]*userStats  // userID → stats
-	uuidMap map[string]int      // UUID → userID (for lookup in RoutedConnection)
-	connMap map[string]net.Conn // connID → conn (only for force-close support)
+	originPolicy    origin.Policy
+	originTransport string
+	usersMu         sync.RWMutex
+	users           map[int]*userStats  // userID → stats
+	uuidMap         map[string]int      // UUID → userID (for lookup in RoutedConnection)
+	connMap         map[string]net.Conn // connID → conn (only for force-close support)
 
 	admission atomic.Pointer[admission.AcquireFunc]
- idCounter atomic.Int64
+	idCounter atomic.Int64
 
 	// speedLimitFunc resolves a user UUID to a *rate.Limiter.
 	speedLimitFunc atomic.Pointer[func(uuid string) *rate.Limiter]
@@ -212,15 +215,22 @@ func (t *ConnTracker) RoutedConnection(
 	_ adapter.Rule, _ adapter.Outbound,
 ) net.Conn {
 	uuid := metadata.User
-	sourceIP := metadata.Source.Addr.String()
+	sourceIP, sourceErr := t.sourceIdentity(conn, metadata)
+	if sourceErr != nil {
+		conn.Close()
+		return conn
+	}
 
 	t.usersMu.RLock()
 	uid := t.uuidMap[uuid]
 	us := t.users[uid]
 	t.usersMu.RUnlock()
 
- ticket,err:=t.reserve(uuid,uid,us,sourceIP)
- if err!=nil{conn.Close();return conn}
+	ticket, err := t.reserve(uuid, uid, us, sourceIP)
+	if err != nil {
+		conn.Close()
+		return conn
+	}
 
 	connID := t.nextID()
 
@@ -229,7 +239,7 @@ func (t *ConnTracker) RoutedConnection(
 		lim = (*slf)(uuid)
 	}
 
-	tracked:=&trackedConn{
+	tracked := &trackedConn{
 		Conn:     conn,
 		tracker:  t,
 		us:       us,
@@ -238,10 +248,13 @@ func (t *ConnTracker) RoutedConnection(
 		sourceIP: sourceIP,
 		limiter:  lim,
 		ctx:      ctx,
-  ticket: ticket,
+		ticket:   ticket,
 	}
- t.usersMu.Lock();t.connMap[connID]=tracked;t.usersMu.Unlock()
- ticket.Bind(func(){tracked.Close()});return tracked
+	t.usersMu.Lock()
+	t.connMap[connID] = tracked
+	t.usersMu.Unlock()
+	ticket.Bind(func() { tracked.Close() })
+	return tracked
 }
 
 // RoutedPacketConnection wraps UDP with per-user counting (UDP not in connMap).
@@ -254,15 +267,22 @@ func (t *ConnTracker) RoutedPacketConnection(
 	_ adapter.Rule, _ adapter.Outbound,
 ) N.PacketConn {
 	uuid := metadata.User
-	sourceIP := metadata.Source.Addr.String()
+	sourceIP, sourceErr := t.sourceIdentity(conn, metadata)
+	if sourceErr != nil {
+		conn.Close()
+		return conn
+	}
 
 	t.usersMu.RLock()
 	uid := t.uuidMap[uuid]
 	us := t.users[uid]
 	t.usersMu.RUnlock()
 
- ticket,err:=t.reserve(uuid,uid,us,sourceIP)
- if err!=nil{conn.Close();return conn}
+	ticket, err := t.reserve(uuid, uid, us, sourceIP)
+	if err != nil {
+		conn.Close()
+		return conn
+	}
 
 	connID := t.nextID()
 
@@ -271,7 +291,7 @@ func (t *ConnTracker) RoutedPacketConnection(
 		lim = (*slf)(uuid)
 	}
 
-	tracked:=&trackedPacketConn{
+	tracked := &trackedPacketConn{
 		PacketConn: conn,
 		tracker:    t,
 		us:         us,
@@ -280,48 +300,79 @@ func (t *ConnTracker) RoutedPacketConnection(
 		sourceIP:   sourceIP,
 		limiter:    lim,
 		ctx:        ctx,
-  ticket: ticket,
+		ticket:     ticket,
 	}
- ticket.Bind(func(){tracked.Close()});return tracked
+	ticket.Bind(func() { tracked.Close() })
+	return tracked
 }
 
 // reserve registers the connection atomically with the admission check.
-func (t *ConnTracker) reserve(uuid string, uid int, us *userStats, ip string) (*admission.Ticket,error) {
- var ticket *admission.Ticket
- if fn:=t.admission.Load();fn!=nil{
-  var err error;ticket,err=(*fn)(uid,ip);if err!=nil{return nil,err}
- }
- limit:=0
- if t.admission.Load()==nil {if fn:=t.deviceLimitFunc.Load();fn!=nil{limit,_=(*fn)(uuid)}}
- if us!=nil{
-  us.mu.Lock()
-  all:=make(map[string]bool,len(us.ips))
-  if limit>0 && us.ips[ip]==0 {
-   for key:=range us.ips{all[key]=true}
-   t.globalMu.RLock()
-   if time.Since(t.globalLastUpdate)<=60*time.Second{for key:=range t.globalDevices[uid]{all[key]=true}}
-   t.globalMu.RUnlock()
-   if !all[ip] && len(all)>=limit{us.mu.Unlock();ticket.Release();return nil,errors.New("connection limit exceeded")}
-  }
-  us.ips[ip]++;us.connCount++;us.mu.Unlock()
- }
- return ticket,nil
+func (t *ConnTracker) reserve(uuid string, uid int, us *userStats, ip string) (*admission.Ticket, error) {
+	var ticket *admission.Ticket
+	if fn := t.admission.Load(); fn != nil {
+		var err error
+		ticket, err = (*fn)(uid, ip)
+		if err != nil {
+			return nil, err
+		}
+	}
+	limit := 0
+	if t.admission.Load() == nil {
+		if fn := t.deviceLimitFunc.Load(); fn != nil {
+			limit, _ = (*fn)(uuid)
+		}
+	}
+	if us != nil {
+		us.mu.Lock()
+		all := make(map[string]bool, len(us.ips))
+		if limit > 0 && us.ips[ip] == 0 {
+			for key := range us.ips {
+				all[key] = true
+			}
+			t.globalMu.RLock()
+			if time.Since(t.globalLastUpdate) <= 60*time.Second {
+				for key := range t.globalDevices[uid] {
+					all[key] = true
+				}
+			}
+			t.globalMu.RUnlock()
+			if !all[ip] && len(all) >= limit {
+				us.mu.Unlock()
+				ticket.Release()
+				return nil, errors.New("connection limit exceeded")
+			}
+		}
+		us.ips[ip]++
+		us.connCount++
+		us.mu.Unlock()
+	}
+	return ticket, nil
 }
-func (t *ConnTracker) SetConnectionAdmission(fn admission.AcquireFunc){t.admission.Store(&fn)}
+func (t *ConnTracker) SetConnectionAdmission(fn admission.AcquireFunc) { t.admission.Store(&fn) }
 
 // Compatibility view for legacy panels. Admission in reserve is atomic;
 // periodic global snapshots alone cannot guarantee a cross-node limit.
 func (t *ConnTracker) checkDeviceGate(us *userStats, uid int, ip string, limit int) bool {
- if us==nil || limit<=0{return false}
- us.mu.RLock();defer us.mu.RUnlock()
- if us.ips[ip]>0{return false}
- all:=make(map[string]bool,len(us.ips))
- for key:=range us.ips{all[key]=true}
- t.globalMu.RLock();defer t.globalMu.RUnlock()
- if time.Since(t.globalLastUpdate)<=60*time.Second{
-  for key:=range t.globalDevices[uid]{all[key]=true}
- }
- return !all[ip] && len(all)>=limit
+	if us == nil || limit <= 0 {
+		return false
+	}
+	us.mu.RLock()
+	defer us.mu.RUnlock()
+	if us.ips[ip] > 0 {
+		return false
+	}
+	all := make(map[string]bool, len(us.ips))
+	for key := range us.ips {
+		all[key] = true
+	}
+	t.globalMu.RLock()
+	defer t.globalMu.RUnlock()
+	if time.Since(t.globalLastUpdate) <= 60*time.Second {
+		for key := range t.globalDevices[uid] {
+			all[key] = true
+		}
+	}
+	return !all[ip] && len(all) >= limit
 }
 
 func (t *ConnTracker) nextID() string {
@@ -498,7 +549,7 @@ type trackedConn struct {
 	limiter  *rate.Limiter
 	ctx      context.Context
 	closed   atomic.Bool
- ticket *admission.Ticket
+	ticket   *admission.Ticket
 }
 
 func (c *trackedConn) Read(b []byte) (int, error) {
@@ -564,14 +615,14 @@ func (c *trackedConn) Write(b []byte) (int, error) {
 }
 
 func (c *trackedConn) Close() error {
- err:=c.Conn.Close()
+	err := c.Conn.Close()
 	if c.closed.CompareAndSwap(false, true) {
 
 		if c.us != nil {
 			c.us.removeConn(c.sourceIP)
 		}
 		c.tracker.removeConnRef(c.connID)
- c.ticket.Release()
+		c.ticket.Release()
 	}
 	return err
 }
@@ -631,7 +682,7 @@ type trackedPacketConn struct {
 	limiter  *rate.Limiter
 	ctx      context.Context
 	closed   atomic.Bool
- ticket *admission.Ticket
+	ticket   *admission.Ticket
 }
 
 func (c *trackedPacketConn) ReadPacket(buffer *buf.Buffer) (singM.Socksaddr, error) {
@@ -691,14 +742,14 @@ func (c *trackedPacketConn) WritePacket(buffer *buf.Buffer, dest singM.Socksaddr
 }
 
 func (c *trackedPacketConn) Close() error {
- err:=c.PacketConn.Close()
+	err := c.PacketConn.Close()
 	if c.closed.CompareAndSwap(false, true) {
 
 		if c.us != nil {
 			c.us.removeConn(c.sourceIP)
 		}
 		c.tracker.removeConnRef(c.connID)
- c.ticket.Release()
+		c.ticket.Release()
 	}
 	return err
 }

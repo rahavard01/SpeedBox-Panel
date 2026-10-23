@@ -16,9 +16,9 @@ import (
 	"github.com/xtls/xray-core/common/protocol"
 	"github.com/xtls/xray-core/common/uuid"
 	xrayCore "github.com/xtls/xray-core/core"
+	featurebandwidth "github.com/xtls/xray-core/features/bandwidth"
 	"github.com/xtls/xray-core/features/inbound"
 	"github.com/xtls/xray-core/features/stats"
-	featurebandwidth "github.com/xtls/xray-core/features/bandwidth"
 	"github.com/xtls/xray-core/infra/conf/serial"
 	xrayProxy "github.com/xtls/xray-core/proxy"
 	"github.com/xtls/xray-core/proxy/shadowsocks"
@@ -31,11 +31,12 @@ import (
 	_ "github.com/xtls/xray-core/main/distro/all"
 
 	"github.com/cedar2025/xboard-node/internal/admission"
- "github.com/cedar2025/xboard-node/internal/config"
+	"github.com/cedar2025/xboard-node/internal/config"
 	"github.com/cedar2025/xboard-node/internal/kernel"
 	"github.com/cedar2025/xboard-node/internal/kernel/geodata"
-	"github.com/cedar2025/xboard-node/internal/nlog"
 	"github.com/cedar2025/xboard-node/internal/model"
+	"github.com/cedar2025/xboard-node/internal/nlog"
+	"github.com/cedar2025/xboard-node/internal/origin"
 )
 
 const (
@@ -70,7 +71,7 @@ type Xray struct {
 	lastKernelHash  string
 	cumTraffic      map[int][2]int64
 	speedLimitFunc  func(string) *rate.Limiter
- admissionFunc admission.AcquireFunc
+	admissionFunc   admission.AcquireFunc
 
 	// running is set after a successful Start and cleared before shutdown.
 	// Atomic so IsRunning / GetConnections never block.
@@ -140,6 +141,10 @@ func (x *Xray) Start(nodeConfig *model.NodeSpec, users []model.UserSpec, tls ker
 		return fmt.Errorf("create xray: %w", err)
 	}
 
+	if ld != nil {
+		ld.originPolicy = origin.Policy{Required: nodeConfig.TrustedTunnelOrigin, Port: uint16(nodeConfig.ServerPort)}
+	}
+
 	// ── Phase 3: Start new (no lock, potentially slow) ──────────────────
 	if err := startWithTimeout(inst, startTimeout); err != nil {
 		inst.Close()
@@ -152,7 +157,9 @@ func (x *Xray) Start(nodeConfig *model.NodeSpec, users []model.UserSpec, tls ker
 	oldLD := x.limitDispatcher
 	x.instance = inst
 	x.limitDispatcher = ld
- if ld!=nil && x.admissionFunc!=nil{ld.SetConnectionAdmission(x.admissionFunc)}
+	if ld != nil && x.admissionFunc != nil {
+		ld.SetConnectionAdmission(x.admissionFunc)
+	}
 	x.users = users
 	x.nodeConfig = nodeConfig
 	x.tls = tls
@@ -679,6 +686,14 @@ func closeOld(inst *xrayCore.Instance, ld *LimitDispatcher) {
 	if inst == nil {
 		return
 	}
+	// Stop admission on the retired configuration before waiting for existing
+	// links. Otherwise SO_REUSEPORT keeps routing new clients into old identity
+	// and routing policies for the entire drain period.
+	if manager, ok := inst.GetFeature(inbound.ManagerType()).(inbound.Manager); ok {
+		if err := manager.Close(); err != nil {
+			nlog.Core().Warn("xray: retire inbound listeners", "error", err)
+		}
+	}
 	go func() {
 		// 1. Drain connections gracefully (best effort, e.g. 5 minutes)
 		// We use a much longer timeout here than the default Stop() because
@@ -813,7 +828,10 @@ func (x *Xray) updateDispatcherLimits(users []model.UserSpec) {
 var xrayCreationMu sync.Mutex
 
 func (x *Xray) SetConnectionAdmission(fn admission.AcquireFunc) {
- x.mu.Lock();defer x.mu.Unlock();x.admissionFunc=fn
- if x.limitDispatcher!=nil{x.limitDispatcher.SetConnectionAdmission(fn)}
+	x.mu.Lock()
+	defer x.mu.Unlock()
+	x.admissionFunc = fn
+	if x.limitDispatcher != nil {
+		x.limitDispatcher.SetConnectionAdmission(fn)
+	}
 }
-

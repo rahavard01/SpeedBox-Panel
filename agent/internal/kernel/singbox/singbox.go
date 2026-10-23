@@ -23,6 +23,7 @@ import (
 	"github.com/cedar2025/xboard-node/internal/kernel"
 	"github.com/cedar2025/xboard-node/internal/model"
 	"github.com/cedar2025/xboard-node/internal/nlog"
+	"github.com/cedar2025/xboard-node/internal/origin"
 )
 
 // drainTimeout is how long stop() waits for in-flight connections to finish
@@ -143,6 +144,8 @@ func (s *SingBox) Start(nodeConfig *model.NodeSpec, users []model.UserSpec, tls 
 
 	// Fresh tracker on full restart.
 	s.connTracker = NewConnTracker(0)
+	s.connTracker.originTransport = nodeConfig.Network
+	s.connTracker.originPolicy = origin.Policy{Required: nodeConfig.TrustedTunnelOrigin, Port: uint16(nodeConfig.ServerPort)}
 	if s.admissionFunc != nil {
 		s.connTracker.SetConnectionAdmission(s.admissionFunc)
 	}

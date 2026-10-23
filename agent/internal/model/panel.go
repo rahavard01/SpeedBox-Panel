@@ -87,6 +87,7 @@ func NodeSpecFromPanel(nc *panel.NodeConfig) *NodeSpec {
 	}
 
 	return &NodeSpec{
+		TrustedTunnelOrigin: nc.TrustedTunnelOrigin,
 		Protocol:            nc.Protocol,
 		ListenIP:            nc.ListenIP,
 		ServerPort:          nc.ServerPort,

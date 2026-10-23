@@ -26,7 +26,9 @@ func (s *StringOrArray) UnmarshalJSON(data []byte) error {
 
 // HandshakeResponse is the response from POST /api/v2/server/handshake
 type HandshakeResponse struct {
- ConnectionLimits struct{Enabled bool `json:"enabled"`} `json:"connection_limits"`
+	ConnectionLimits struct {
+		Enabled bool `json:"enabled"`
+	} `json:"connection_limits"`
 	WebSocket WSConfig `json:"websocket"`
 	Settings  Settings `json:"settings"`
 }
@@ -85,6 +87,7 @@ type MachineBaseConfig struct {
 
 // NodeConfig is the response from GET /api/v1/server/UniProxy/config
 type NodeConfig struct {
+	TrustedTunnelOrigin bool `json:"trusted_tunnel_origin,omitempty"`
 	// NodeID is populated in machine-mode WS events for routing.
 	NodeID          int                    `json:"node_id,omitempty"`
 	Protocol        string                 `json:"protocol"`

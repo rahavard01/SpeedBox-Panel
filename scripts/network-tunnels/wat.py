@@ -1,14 +1,18 @@
 """WatTunnel engine adapter. No upstream installer, firewall or kernel tuning."""
 import hashlib,ipaddress,json,re,socket,ssl,time,urllib.request
 
-VERSION='2.10.9-sb1'
+VERSION='2.10.9-sb2'
+SUPPORTED_VERSIONS=('2.10.9-sb1',VERSION)
 CARRIERS=('icmp','udp','tcp','tls','ws','wss','h2','h2c','grpc')
 
 def validate(c):
     if c.get('engine')!='wattunnel' or c.get('side') not in ('iran','foreign') or not re.fullmatch(r'sb-[a-f0-9]{32}',c.get('id','')):raise ValueError('invalid WatTunnel identity')
     if not re.fullmatch('[a-f0-9]{64}',c.get('secret','')):raise ValueError('invalid WatTunnel credential')
     s=c['settings']
-    if s.get('version')!=VERSION or s.get('transport') not in CARRIERS or s.get('protocol') not in ('tcp','udp','both'):raise ValueError('invalid WatTunnel method')
+    if s.get('version') not in SUPPORTED_VERSIONS or s.get('transport') not in CARRIERS or s.get('protocol') not in ('tcp','udp','both'):raise ValueError('invalid WatTunnel method')
+    origin=c.get('origin_ports',[])
+    if not isinstance(origin,list) or len(origin)>256 or any(type(p) is not int or not 1<=p<=65535 for p in origin):raise ValueError('invalid trusted origin ports')
+    if origin and s['version']!=VERSION:raise ValueError('origin metadata requires matching WatTunnel peers')
     family={'ipv4':4,'ipv6':6}.get(s.get('ip_family'))
     if not family or any(ipaddress.ip_address(s[k]).version!=family for k in ('peer_host','local_endpoint')):raise ValueError('WatTunnel address family mismatch')
     for k,lo,hi in [('tunnel_port',1,65535),('metrics_port',32768,65500),('mtu',0,16384),('conns',1,64),('sessions',1,16),('lanes',1,16),('tls_frag',0,16384),('ping_every',1,300),('udp_idle',5,3600),('monitor_interval',5,300),('restart_hours',0,168)]:
@@ -40,6 +44,8 @@ def validate(c):
             used.add(p)
         if m['target_port']<=s['metrics_port']<=m['target_end'] or (s['transport']!='icmp' and not s['reverse'] and m['target_port']<=s['tunnel_port']<=m['target_end']):raise ValueError('target overlaps engine listener')
     if len(used)>256 or s['metrics_port'] in used or s['metrics_port']==s['tunnel_port'] or (s['reverse'] and s['transport']!='icmp' and s['tunnel_port'] in used):raise ValueError('internal/public port collision')
+    targets={p for m in maps for p in range(m['target_port'],m['target_end']+1)}
+    if any(p not in targets for p in origin):raise ValueError('origin port is outside mappings')
     return c
 
 def endpoint(host,port):return ('['+host+']' if ':' in host else host)+':'+str(port)
@@ -50,6 +56,7 @@ def arguments(c,key_file):
           '-metrics','127.0.0.1:'+str(s['metrics_port']),'-mtu',str(s['mtu']),'-conns',str(s['conns']),
           '-lanes',str(s['lanes']),'-icmp-type',s['icmp_type'],'-fec',s['fec'],'-max-mbps',str(s['max_mbps']),
           '-tcp-cc',s['tcp_cc'],'-path',s['path'],'-ping-every',str(s['ping_every']),'-udp-idle',str(s['udp_idle'])+'s']
+    if c.get('origin_ports'):args+=['-speedbox-origin-ports',','.join(str(p) for p in c['origin_ports'])]
     if s['reverse']:args+=['-reverse']
     listener=iran==s['reverse']
     if s['transport']=='icmp':
@@ -76,7 +83,7 @@ def arguments(c,key_file):
 
 def service_text(h,c):
     p=h.paths(c['id']);key=p['config'].with_suffix('.key');s=c['settings']
-    argv=[str(h.OPT/('wattun-'+VERSION)),*arguments(c,key)]
+    argv=[str(h.OPT/('wattun-'+s['version'])),*arguments(c,key)]
     if s['transport'] in ('tls','wss','h2','grpc') and (c['side']=='iran')==s['reverse']:
         argv+=['-tls-cert',str(p['config'].with_suffix('.crt')),'-tls-key',str(p['config'].with_suffix('.tls-key'))]
     caps='CAP_NET_BIND_SERVICE'+(' CAP_NET_RAW' if s['transport']=='icmp' else '')
@@ -99,7 +106,7 @@ def snapshot(h,c,probe=True):
     state='stopped' if not c.get('enabled',True) else 'offline' if not running else 'connected' if connected else 'degraded'
     certificate=p['config'].with_suffix('.crt')
     fingerprint=hashlib.sha256(ssl.PEM_cert_to_DER_cert(certificate.read_text())).hexdigest() if certificate.is_file() else None
-    result={'certificate_sha256':fingerprint,'checked_at':now,'active':running,'connected':connected,'state':state,'version':VERSION,'helper_version':h.VERSION,
+    result={'certificate_sha256':fingerprint,'checked_at':now,'active':running,'connected':connected,'state':state,'version':s['version'],'helper_version':h.VERSION,
             'traffic_available':known,'raw':raw,'totals':totals,'destinations':{},'quota_exhausted':False,'quota_stopped':False,
             'last_restart':old.get('last_restart',now),'engine_stats':{k:st.get(k) for k in ('srtt_ms','loss_pct','streams','sessions','dgram_flows','retrans','fec_recovered','dgram_dropped_size','dgram_dropped_queue','pool_conns')}}
     h.atomic(p['runtime'],result);return result
@@ -107,7 +114,14 @@ def snapshot(h,c,probe=True):
 def preflight(h,c):
     import shutil
     s=c['settings'];p=h.paths(c['id']);checks=[{'name':x,'ok':shutil.which(x) is not None} for x in ('systemctl','ss')]
-    checks.append({'name':'pinned WatTunnel '+VERSION,'ok':(h.OPT/('wattun-'+VERSION)).is_file()})
+    checks.append({'name':'pinned WatTunnel '+s['version'],'ok':(h.OPT/('wattun-'+s['version'])).is_file()})
+    if c['side']=='foreign' and c.get('origin_ports'):
+        ok=False
+        try:
+            with socket.socket(socket.AF_UNIX,socket.SOCK_STREAM) as broker:
+                broker.settimeout(2);broker.connect('/run/speedbox-origin/broker.sock');broker.sendall(b'{"version":1,"operation":"ping"}\n');ok=broker.recv(32)==b'ORIGIN1\n'
+        except OSError:pass
+        checks.append({'name':'trusted node origin broker','ok':ok})
     wanted={s['metrics_port']}
     if c['side']=='iran':wanted.update(p for m in s['mappings'] for p in range(m['public_port'],m['public_end']+1))
     if s['transport']!='icmp' and (c['side']=='iran')==s['reverse']:wanted.add(s['tunnel_port'])
@@ -137,3 +151,4 @@ def prepare_files(h,c):
         key_tmp.chmod(0o600);cert_tmp.chmod(0o600);key_tmp.replace(key);cert_tmp.replace(cert)
     finally:
         key_tmp.unlink(missing_ok=True);cert_tmp.unlink(missing_ok=True)
+

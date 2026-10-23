@@ -57,6 +57,7 @@ class NodeControlService
             'server_port' => (int) $node->server_port,
             'network' => data_get($settings, 'network'),
             'networkSettings' => (object) data_get($settings, 'network_settings', []),
+            'trusted_tunnel_origin' => TrustedTunnelOrigin::required($node),
             'accept_proxy_protocol' => (bool) data_get($settings, 'network_settings.acceptProxyProtocol', false),
             'kernel_type' => $node->kernel ?: 'singbox',
             'warp_enabled' => (bool) $node->warp_enabled,
@@ -274,4 +275,5 @@ class NodeControlService
         DB::table('v2_stat_server')->where($where)->incrementEach(['u' => $up, 'd' => $down], ['updated_at' => $now]);
     }
 }
+
 

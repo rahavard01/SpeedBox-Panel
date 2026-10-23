@@ -25,7 +25,7 @@ and inspection/update to the compatible bundle supplied with the panel.
 
 ## Engine supply and security
 
-Integration version `2.10.9-sb1` is built from upstream commit
+Integration version `2.10.9-sb2` is built from upstream commit
 `7c30c59a65f962ceb6763daf23952ecbc5e7de91` with patched Go 1.26.10. It replaces
 the upstream 4096-byte UDP reply read with full datagram buffers borrowed only
 after a socket becomes readable. Idle flows do not each retain 64 KiB.
@@ -65,3 +65,51 @@ on the privileged build runner. Local performance is not an Iran–foreign
 benchmark or proof of superiority over another engine.
 
 No database migration is introduced by this integration.
+
+
+
+## Trusted source identity (sb2)
+
+WatTunnel's local forwarding sockets otherwise hide the client's address behind
+`127.0.0.1`. Global per-account IP admission must never treat this proxy address
+as the client, or alias every connection sharing one account into one device.
+
+For managed destination machines, both Wat peers use a versioned source envelope
+inside their existing authenticated encrypted session. Iran obtains it from the
+accepted TCP socket or UDP sender, not from a public forwarding header. Foreign
+strips it before delivering protocol data and registers the original IP over
+`/run/speedbox-origin/broker.sock` (directory 0700, socket 0600). Registration is
+acknowledged before TCP connects or UDP sends. A reserved local tuple identifies
+one target port; TCP/UDP collisions are rejected and retried on a fresh socket.
+Records last exactly as long as their forwarding control connection. Broker loss
+closes affected sockets; required but missing metadata is rejected. UDP removes
+revoked flows on a failed write, so continued packets can register a new socket
+after the broker restarts instead of keeping a dead flow alive.
+
+Xray and sing-box resolve this private registration before their existing
+admission and online accounting. Real direct peers keep their own address.
+Xray disables public forwarding-header overrides on these managed destination
+nodes. sing-box gRPC requires the actual gRPC transport peer through supported
+wrappers; absent transport identity is rejected, never trusted from HTTP headers.
+On an Xray policy reload, retired inbound listeners stop accepting new requests
+before existing links drain, so a previous identity policy cannot receive new
+connections through a reused listener port.
+The central distinct-IP policy, per-account database lock, traffic byte counters
+and quota rates are unchanged. IPv4-mapped addresses are normalized.
+
+Update the panel, then `php scripts/update-uuid-nodes.php --apply-all`, then
+`php scripts/update-tunnel-origins.php --apply-all`. The last command upgrades
+existing Wat pairs using the normal durable operation queue and paired rollback;
+its prerequisites check the destination broker before either peer is changed.
+Stopped tunnels stay stopped. Old sb1 binaries/configurations remain available
+for rollback. The deployments queue must be running. No manual node-port or
+firewall changes are part of this migration.
+
+The identity mechanism covers these managed Wat forwards. Other forwarding tools
+must independently preserve a trusted source address. An IP-based limit cannot
+identify physical devices behind one NAT, or equate unrelated public IPv4/IPv6
+addresses. Subscription `Online` labels remain a snapshot from their last refresh.
+
+The recorded origin is the socket peer accepted by the Iran forwarder. If a CDN
+or another proxy fronts that port, that hop must separately preserve a verified
+client identity; opaque TCP forwarding cannot infer it from encrypted payloads.

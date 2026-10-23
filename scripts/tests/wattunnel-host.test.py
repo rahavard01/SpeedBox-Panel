@@ -37,7 +37,7 @@ class Echo:
     def close(self):self.closed=True;self.tcp.close();self.udp.close()
 class Validation(unittest.TestCase):
     def test_reject_invalid_combinations(self):
-        for change in [dict(transport='udp',reverse=True),dict(transport='icmp',ip_family='ipv6'),dict(transport='icmp',sessions=2),dict(transport='udp',mtu=16000),dict(path='/x;id'),dict(conns=65),dict(tls_pin='bad')]:
+        for change in [dict(transport='udp',reverse=True),dict(transport='icmp',ip_family='ipv6'),dict(transport='icmp',sessions=2),dict(transport='udp',mtu=16000),dict(path='/x;id'),dict(conns=65),dict(tls_pin='bad'),dict(mappings=[dict(public_port=50001,public_end=50001,target_port=12345,target_end=10**9)])]:
             with self.subTest(change=change):
                 c=config({**settings(),**change})
                 with self.assertRaises((ValueError,TypeError)):h.validate(c)
@@ -47,6 +47,16 @@ class Validation(unittest.TestCase):
         self.assertEqual(args[args.index('-allow-ports')+1],'12345,12345/udp');self.assertNotIn(c['secret'],' '.join(args))
         text=h.service_text(c);self.assertIn('NoNewPrivileges=true',text);self.assertNotIn('CAP_NET_ADMIN',text);self.assertNotIn('CAP_NET_RAW',text)
         c['settings']['transport']='icmp';self.assertIn('CAP_NET_RAW',h.service_text(c))
+    def test_trusted_origin_flags_and_legacy_rollback(self):
+        s=settings();c=config(s,'foreign');c['origin_ports']=[12345];h.validate(c)
+        args=h.wat.arguments(c,'/private/key')
+        self.assertEqual(args[args.index('-speedbox-origin-ports')+1],'12345')
+        c['origin_ports']=[12346]
+        with self.assertRaises(ValueError):h.validate(c)
+        c['origin_ports']=[12345];c['settings']['version']='2.10.9-sb1'
+        with self.assertRaises(ValueError):h.validate(c)
+        c['origin_ports']=[];h.validate(c)
+        self.assertIn('wattun-2.10.9-sb1',h.service_text(c))
     def test_lifecycle_and_transaction(self):
         c=config(settings());calls=[]
         with tempfile.TemporaryDirectory() as td,patch.object(h,'ETC',Path(td)/'etc'),patch.object(h,'ROOT',Path(td)/'state'),patch.object(h,'UNITS',Path(td)/'units'),patch.object(h,'active_unit',return_value=True),patch.object(h,'run',side_effect=lambda args,**kw:(calls.append(args) or subprocess.CompletedProcess(args,0,'',''))),patch.object(h,'snapshot',return_value={'active':True}),patch.object(h,'preflight',return_value=[]):
@@ -196,3 +206,4 @@ class RealEngine(unittest.TestCase):
             for reverse in ([False] if carrier=='udp' else [False,True]):
                 with self.subTest(carrier=carrier,reverse=reverse):self.pair(carrier,reverse,'ipv6',pin=carrier in ('tls','wss','h2','grpc'))
 if __name__=='__main__':unittest.main()
+

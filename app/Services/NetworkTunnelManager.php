@@ -48,6 +48,7 @@ final class NetworkTunnelManager
         }
         $data=$wat?\App\Support\WatTunnelRules::normalize($request,$existing):NetworkTunnelRules::normalize($request,$existing);
         if($wat && $existing)$data['metrics_port']=(int)$existing->subnet;
+        if($wat)$data['source_identity']=(bool)$servers[(int)$data['foreign_server_id']]->machine_id;
         $data['telegram_alerts']=$alerts;
         $data['enabled']=$existing?(bool)($existing->settings['enabled']??true):true;
         $this->assertPorts($data,(int)$data['iran_server_id'],(int)$data['foreign_server_id'],$existing?->id);
@@ -131,6 +132,7 @@ final class NetworkTunnelManager
     {
         $settings=$settings??$tunnel->settings;
         return ['id'=>$tunnel->remote_name,'engine'=>$tunnel->engine,'side'=>$side,'secret'=>$tunnel->secret,
+            'origin_ports'=>$tunnel->engine==='wattunnel'?TrustedTunnelOrigin::ports($settings):[],
             'enabled'=>($settings['enabled']??true),'subnet'=>(int)$tunnel->subnet,'settings'=>$settings];
     }
 
@@ -160,3 +162,4 @@ final class NetworkTunnelManager
         DB::table('speedbox_network_samples')->where('tunnel_id',$tunnel->id)->where('taken_at','<',time()-31*86400)->delete();
     }
 }
+

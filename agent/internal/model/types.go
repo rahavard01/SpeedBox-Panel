@@ -3,12 +3,13 @@ package model
 import "github.com/cedar2025/xboard-node/internal/config"
 
 type NodeSpec struct {
-	Protocol        string
-	ListenIP        string
-	ServerPort      int
-	Network         string
-	NetworkSettings map[string]any
-	Routes          []RouteRule
+	TrustedTunnelOrigin bool
+	Protocol            string
+	ListenIP            string
+	ServerPort          int
+	Network             string
+	NetworkSettings     map[string]any
+	Routes              []RouteRule
 
 	KernelType       string
 	WarpEnabled      bool
@@ -87,6 +88,9 @@ type UserSpec struct {
 
 func (n *NodeSpec) GetProxyProtocol() bool {
 	if n == nil {
+		return false
+	}
+	if n.TrustedTunnelOrigin {
 		return false
 	}
 	if n.AcceptProxyProtocol {

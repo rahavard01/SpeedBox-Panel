@@ -3,6 +3,7 @@ package xray
 import (
 	"context"
 	"errors"
+	"net/netip"
 	"reflect"
 	"sync"
 	"sync/atomic"
@@ -18,6 +19,7 @@ import (
 
 	"github.com/cedar2025/xboard-node/internal/admission"
 	"github.com/cedar2025/xboard-node/internal/nlog"
+	"github.com/cedar2025/xboard-node/internal/origin"
 )
 
 // Access xray's internal config creator registry so we can replace the
@@ -66,8 +68,9 @@ func limitDispatcherFactory(ctx context.Context, config interface{}) (interface{
 // intact, so the dispatcher is limited to gate-keeping and safe connection
 // lifecycle bookkeeping.
 type LimitDispatcher struct {
-	inner     interface{}        // original DefaultDispatcher (Feature + Dispatcher)
-	innerDisp routing.Dispatcher // same object, typed as Dispatcher
+	originPolicy origin.Policy
+	inner        interface{}        // original DefaultDispatcher (Feature + Dispatcher)
+	innerDisp    routing.Dispatcher // same object, typed as Dispatcher
 
 	// limitedUsers: users with device limit > 0, protected by mu.
 	// Admission and refcount changes use the same lock.
@@ -146,7 +149,23 @@ func (d *LimitDispatcher) admit(ctx context.Context) (email, ip string, ticket *
 		return "", "", nil, nil
 	}
 	email = si.User.Email
-	ip = si.Source.Address.IP().String()
+	source := si.Source
+	// Mux metadata may describe a logical source. Quota identity always comes
+	// from the outer authenticated connection when origin restoration is required.
+	if d.originPolicy.Required && si.Conn != nil {
+		source = net.DestinationFromAddr(si.Conn.RemoteAddr())
+	}
+	if source.Address == nil {
+		return "", "", nil, errors.New("missing inbound source")
+	}
+	addr, ok := netip.AddrFromSlice(source.Address.IP())
+	if !ok {
+		return "", "", nil, errors.New("invalid inbound source IP")
+	}
+	ip, err = d.originPolicy.Resolve(addr, uint16(source.Port))
+	if err != nil {
+		return "", "", nil, err
+	}
 	if fn := d.admission.Load(); fn != nil {
 		d.mu.RLock()
 		uid := d.emailToUID[email]

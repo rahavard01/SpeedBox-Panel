@@ -659,6 +659,17 @@ func applyStreamSettings(base M, nc *model.NodeSpec, tc kernel.TLSCert) {
 		ss["sockopt"] = sockopt
 	}
 
+	if nc.TrustedTunnelOrigin {
+		sockopt, ok := ss["sockopt"].(M)
+		if !ok {
+			sockopt = M{}
+		}
+		// NUL is not a legal HTTP header name. Disable Xray's default public
+		// X-Forwarded-For override: identities arrive through the private broker.
+		sockopt["trustedXForwardedFor"] = []string{"\x00"}
+		delete(sockopt, "acceptProxyProtocol")
+		ss["sockopt"] = sockopt
+	}
 	base["streamSettings"] = ss
 }
 

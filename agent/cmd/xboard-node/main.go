@@ -17,6 +17,7 @@ import (
 	"github.com/cedar2025/xboard-node/internal/config"
 	"github.com/cedar2025/xboard-node/internal/machine"
 	"github.com/cedar2025/xboard-node/internal/nlog"
+	"github.com/cedar2025/xboard-node/internal/origin"
 	"github.com/cedar2025/xboard-node/internal/service"
 )
 
@@ -51,6 +52,13 @@ func main() {
 	// Apply runtime memory tuning before anything else allocates.
 	applyRuntimeConfig(instances[0].Runtime)
 
+	broker, err := origin.Listen(origin.SocketPath)
+	if err != nil {
+		nlog.Core().Warn("trusted tunnel origin broker unavailable", "error", err)
+	} else {
+		origin.SetDefault(broker)
+		defer broker.Close()
+	}
 	runWithReload(rootCfg, *configPath)
 }
 

@@ -40,7 +40,7 @@ jobs:
           python3 scripts/tests/node-warp-host.test.py
       - name: Tunnel API, paired rollback and artifact verification
         run: |
-          php artisan test --filter=TunnelManagementTest
+          php artisan test --filter='TunnelManagementTest|TrustedTunnelOriginTest'
           python3 scripts/verify-backpack.py
           php scripts/tests/tunnel-alerts-and-tags.test.php
           php scripts/tests/tunnel-runtime.test.php
@@ -118,6 +118,12 @@ jobs:
         with:
           go-version-file: agent/go.mod
           cache-dependency-path: agent/go.sum
+      - name: Use the verified bundled WatTunnel in source-identity tests
+        run: |
+          python3 ../scripts/verify-wattunnel.py
+          gzip -dc ../wattunnel-dist/wattun-linux-amd64.gz > "$RUNNER_TEMP/speedbox-wattun"
+          chmod 700 "$RUNNER_TEMP/speedbox-wattun"
+          echo "SPEEDBOX_TEST_WATTUN=$RUNNER_TEMP/speedbox-wattun" >> "$GITHUB_ENV"
       - run: go test ./internal/...
       - run: make build-all
       - uses: actions/upload-artifact@v4
@@ -143,4 +149,5 @@ jobs:
       - uses: softprops/action-gh-release@v2
         with:
           files: dist/*
+
 
