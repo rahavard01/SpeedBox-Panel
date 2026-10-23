@@ -128,7 +128,14 @@ async function watCases(page,width){
  check(await page.locator('[name=nat],[name=gre_key],[name=quota_gb]').count()===0,'WatTunnel form excludes GRE/GOST controls');
  check(await page.locator('[name=tunnel_port]').count()===1,'UDP carrier has its own tunnel port');
  check(await page.locator('[data-port=public_end],[data-port=target_end]').count()===0,'Wat form has no redundant range-end fields');
- await page.locator('[name=wat_ports]').fill('۲۴۴۳، ۲۴۴۴، ۸۴۴۳');
+ check(await page.locator('[data-wat-map]').count()===1&&await page.locator('[data-wat-add]').count()===1,'Wat paired port rows and add action are visible immediately');
+ check(await page.locator('[data-wat-custom],[name=wat_ports]').count()===0,'Wat has no extra port-mode step');
+ check((await page.locator('.tunnel-selected-copy b').textContent())==='WatTunnel · Direct · UDP · IPv4','Wat selection uses the common method pattern');
+ await page.locator('[data-wat-map="0"] [data-port=public]').fill('۲۴۴۳،۲۴۴۴');
+ await page.locator('[data-wat-map="0"] [data-port=target]').fill('۹۴۴۳،۹۴۴۴');
+ await page.locator('[data-wat-add]').click();
+ await page.locator('[data-wat-map="1"] [data-port=public]').fill('۸۴۴۳');
+ await page.locator('[data-wat-map="1"] [data-port=target]').fill('۸۴۴۳');
  await page.locator('[name=name]').fill('Wat browser fixture');
  await page.locator('[name=protocol]').selectOption('both',{force:true});
  await page.locator('[data-wat-advanced]').evaluate(e=>e.open=true);
@@ -146,8 +153,6 @@ async function watCases(page,width){
  const scrollAfter=await page.evaluate(()=>[document.querySelector('#modalBackdrop'),document.querySelector('.tunnel-modal'),document.querySelector('#modalBody'),document.querySelector('#modalBody .modal-fields')].map(e=>e.scrollTop));
  check(scrollBefore.some(n=>n>0)&&scrollAfter.every((n,i)=>Math.abs(n-scrollBefore[i])<=1),'Wat setting redraw preserves modal scroll');
  check(await page.locator('[data-wat-advanced]').evaluate(e=>e.open),'advanced settings stay open after redraw');
- await page.locator('[data-wat-custom]').click();
- await page.locator('[data-wat-map="0"] [data-port=target]').fill('۹۴۴۳،۹۴۴۴');
  await page.locator('[data-wat-add]').click();
  check(await page.locator('[data-wat-map]').count()===3,'Wat comma groups support adding ports');
  const removeColor=await page.locator('[data-wat-remove]').last().evaluate(e=>getComputedStyle(e).backgroundColor);
@@ -158,6 +163,12 @@ async function watCases(page,width){
  const dimensions=await page.locator('.tunnel-modal').evaluate(e=>({width:e.clientWidth,scroll:e.scrollWidth,offenders:[...e.querySelectorAll('*')].filter(x=>x.getBoundingClientRect().right>e.getBoundingClientRect().right+1||x.getBoundingClientRect().left<e.getBoundingClientRect().left-1).slice(0,15).map(x=>({tag:x.tagName,name:x.getAttribute('name'),class:x.className,width:x.getBoundingClientRect().width,left:x.getBoundingClientRect().left}))}));
  check(dimensions.scroll<=dimensions.width+1,'Wat form fits viewport: '+JSON.stringify(dimensions));
  if(process.env.SPEEDBOX_TEST_SCREENSHOT_DIR)await page.screenshot({path:path.join(process.env.SPEEDBOX_TEST_SCREENSHOT_DIR,'wat-form-'+width+'.png'),fullPage:true});
+ await page.locator('[data-wat-map="1"] [data-port=public]').fill('8443, 8444');
+ const postsBefore=await page.evaluate(()=>requests.filter(r=>r.url==='/network-tunnels'&&r.method==='POST').length);
+ await page.locator('[data-wat-editor] button[type=submit]').click();
+ await page.waitForFunction(()=>messages.at(-1)?.includes('تعداد پورت‌های ایران و خارج'));
+ check(await page.evaluate(()=>requests.filter(r=>r.url==='/network-tunnels'&&r.method==='POST').length)===postsBefore,'mismatched paired lists never reach the create API');
+ await page.locator('[data-wat-map="1"] [data-port=public]').fill('8443');
  await page.locator('[data-wat-editor] button[type=submit]').click();
  const card=page.locator('[data-tunnel-card]').filter({has:page.getByRole('heading',{name:'Wat browser fixture',exact:true})});await card.waitFor();
  const created=await page.evaluate(()=>requests.filter(r=>r.url==='/network-tunnels'&&r.method==='POST').at(-1).payload);
@@ -181,6 +192,21 @@ async function watCases(page,width){
  const cancellation=await page.locator('.tunnel-modal [data-close]').evaluate(e=>getComputedStyle(e).backgroundColor);
  check(deletion.kind.includes('server-delete-confirm')&&deletion.color!==cancellation,'network delete confirmation uses the same distinct shared style as server and plan deletion');
  await page.locator('[data-confirm-network]').click();await card.waitFor({state:'detached'});
+}
+
+async function summaryCases(page){
+ for(const [id,form,expected] of [
+  [601,'[data-tunnel-setup]','BackPack · Reverse · WSS'],
+  [605,'[data-network-editor]','GOST 3 · Direct · TCP · IPv4'],
+  [606,'[data-network-editor]','GRE · Direct · GRE · IPv4']
+ ]){
+  await action(page,page.locator(`[data-tunnel-card="${id}"]`),'edit');await page.locator(form).waitFor();
+  check(await page.locator('.tunnel-selected-copy b').textContent()===expected,'shared selected-method heading '+expected);
+  check(await page.locator('.tunnel-selected-copy>span').textContent().then(t=>t.includes(' / ')),'every editor shows its server pair below the method');
+  await page.keyboard.press('Escape');
+ }
+ const historyTitles=await page.locator('.tunnel-history-row>span:first-child').allTextContents();
+ check(historyTitles.length>0&&historyTitles.every(t=>/^(BackPack|WatTunnel|GOST|GRE) — /.test(t)),'all history rows include the engine, including legacy BackPack: '+JSON.stringify(historyTitles));
 }
 
 try {
@@ -210,6 +236,7 @@ try {
   await page.locator('[data-reload-tunnels].is-refreshed').waitFor();
   await page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));
   check(await page.evaluate(top=>Math.abs(window.scrollY-top)<=1,pageTop),'card refresh retains page scroll when content remains '+JSON.stringify({pageTop,after:await page.evaluate(()=>window.scrollY)}));
+  await summaryCases(page);
   await page.evaluate(()=>fixturePending=true);
   await choose(page,'gre');await page.locator('[data-network-test] button[type=submit]').click();
   await page.locator('.network-test-results .deployment-progress .progress-value').waitFor();

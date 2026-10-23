@@ -6,11 +6,22 @@ import {fileURLToPath} from 'node:url';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../..');
 const code=readFileSync(path.join(root,'public/speedbox/network-tunnels.js'),'utf8');
 const context=vm.createContext({window:{}});
-vm.runInContext(code.replace('return {mount,label,actions};','return {mount,label,actions,parsePorts,validateMappings,portsText,endpoint};'),context);
-const {parsePorts,validateMappings,portsText,endpoint,actions}=context.window.SpeedboxNetworkTunnels;
+vm.runInContext(code.replace('return {mount,label,actions,methodLabel,methodSummary};','return {mount,label,actions,methodLabel,methodSummary,parsePorts,validateMappings,portsText,endpoint};'),context);
+const {parsePorts,validateMappings,portsText,endpoint,actions,methodLabel,methodSummary,label}=context.window.SpeedboxNetworkTunnels;
 let checks=0;
 const check=(value,message)=>{assert.ok(value,message);checks++;};
 const reject=(fn,message)=>{assert.throws(fn,{name:'Error'},message);checks++;};
+for(const [method,expected] of [
+ [{kind:'reverse',transport:'tcp'},'BackPack · Reverse · TCP'],
+ [{engine:'backpack',kind:'direct',transport:'quic',orientation:'swapped'},'BackPack · Direct · QUIC · Swapped'],
+ [{engine:'gost',version:'2.11.5',transport:'tcp',ip_family:'ipv4'},'GOST 2 · Direct · TCP · IPv4'],
+ [{engine:'gost',settings:{version:'3.0.0',transport:'grpc',ip_family:'ipv6'}},'GOST 3 · Direct · GRPC · IPv6'],
+ [{engine:'gre',transport:'ip6gretap'},'GRE · Direct · IP6GRETAP · IPv6'],
+ [{engine:'wattunnel',transport:'icmp',reverse:false,ip_family:'ipv4'},'WatTunnel · Direct · ICMP · IPv4'],
+ [{engine:'wattunnel',transport:'wss',settings:{reverse:true,ip_family:'ipv6'}},'WatTunnel · Reverse · WSS · IPv6']
+])check(methodLabel(method)===expected,'uniform method name '+expected);
+check(label({})==='BackPack'&&label({engine:'backpack'})==='BackPack','old and explicit BackPack history records have an engine name');
+check(methodSummary({kind:'reverse',transport:'tcp'},['<Iran>','Foreign']).includes('&lt;Iran&gt; / Foreign'),'shared method summary escapes server names');
 let maps=parsePorts('8444,443،۲۰۵۳ ٨٤٤٣');
 check(JSON.stringify(maps)===JSON.stringify([{public_port:443,public_end:443,target_port:443,target_end:443,destinations:[]},{public_port:2053,public_end:2053,target_port:2053,target_end:2053,destinations:[]},{public_port:8443,public_end:8444,target_port:8443,target_end:8444,destinations:[]}]),'mixed Persian/Arabic/Latin input normalizes to ordered bounded mappings');
 check(portsText(maps)==='443, 2053, 8443, 8444','range expands for editing without losing ports');

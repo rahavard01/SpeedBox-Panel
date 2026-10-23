@@ -36,6 +36,19 @@ function validateMappings(maps){
  }
 }
 const label=t=>engines[t.engine||'backpack']?.name||'BackPack';
+function methodLabel(t){
+ const s=t.settings||t,engine=t.engine||s.engine||'backpack';
+ const transport=String(t.transport||s.transport||'').toUpperCase(),kind=t.kind||s.kind;
+ const version=String(t.version||s.version||'');
+ const name=engine==='gost'&&version?`GOST ${version.split('.')[0]}`:label({engine});
+ const direction=engine==='backpack'?({reverse:'Reverse',direct:'Direct'}[kind]):engine==='wattunnel'?((t.reverse??s.reverse)?'Reverse':'Direct'):'Direct';
+ const family=t.ip_family||s.ip_family||(engine==='gre'?(transport.startsWith('IP6')?'ipv6':'ipv4'):null);
+ return [name,direction,transport,family==='ipv6'?'IPv6':family==='ipv4'?'IPv4':null,engine==='backpack'&&(t.orientation||s.orientation)==='swapped'?'Swapped':null].filter(Boolean).join(' · ');
+}
+function methodSummary(method,pair,actions=''){
+ return `<div class="tunnel-selected-method"><div class="tunnel-selected-copy"><b dir="ltr">${esc(methodLabel(method))}</b><span>${pair.map(esc).join(' / ')}</span></div>${actions}</div>`;
+}
+
 function mount(ctx){
  const {api,openModal,modalBody,closeModal,toast,refresh,data,safe,progress,backpack,enhanceControls,openNode,openMaintenance}=ctx;
  let capabilities=null,disposed=false,watch=null,watchTimer=null;
@@ -47,7 +60,7 @@ function mount(ctx){
  const toggle=(key,title,value)=>`<div class="switch-field network-toggle"><span>${title}</span><label class="switch-line ios"><input type="checkbox" name="${key}" ${value?'checked':''} aria-label="${title}"></label></div>`;
  const servers=()=>[['','انتخاب سرور'],...data().servers.map(s=>[s.id,`${s.name} — ${s.host}`])];
  async function caps(){if(!capabilities)capabilities=(await api('/network-tunnels/capabilities')).data;return capabilities;}
- const wat=window.SpeedboxWatTunnel?.mount({...ctx,show,body,caps,field,select,toggle,btn,testFlow,validateMappings,parsePorts,portsText});
+ const wat=window.SpeedboxWatTunnel?.mount({...ctx,show,body,caps,field,select,toggle,btn,testFlow,validateMappings,parsePorts,portsText,methodSummary});
  const creationDrafts=new Map();
  const testFlows=new Map();let activeTestEngine=null,testTimer=null;
  async function testFlow(engine,seed=null){
@@ -216,7 +229,7 @@ function mount(ctx){
   function draw(){
    if(disposed)return;
    const unstable=selectedRow()&&(draft.protocol==='both'?['tcp','udp']:[draft.protocol]).some(p=>selectedRow().protocols?.[p]?.status==='unstable');
-   show((t?'ویرایش تونل ':'ساخت تونل ')+engines[engine].name,`<form data-network-editor data-engine="${engine}">${selectedRow()?`<div class="tunnel-selected-method"><b dir="ltr">${esc(selectedRow().label)}</b><span>نتیجهٔ تست انتخاب‌شده</span></div>`:''}${(gre?greFields():gostFields())+`<section class="network-port-section">${mapFields()}</section>`+advancedFields()}${unstable?`<label class="tunnel-check tunnel-warning"><input type="checkbox" name="accept_unstable" data-setting required ${draft.accept_unstable?'checked':''}>ناپایداری این پروتکل را در نتیجهٔ تست دیدم و استفاده از آن را تأیید می‌کنم.</label>`:''}<div class="form-actions network-navigation"><button class="button primary" type="submit">${t?'ذخیره و اعمال':'ساخت تونل'}</button>${!t?btn('بازگشت','data-back-test','network-back'):''}${btn('انصراف','data-close','cancel')}</div></form>`);
+   show((t?'ویرایش تونل ':'ساخت تونل ')+engines[engine].name,`<form data-network-editor data-engine="${engine}">${methodSummary(draft,[server(draft.iran_server_id)?.name||'',server(draft.foreign_server_id)?.name||''])}${(gre?greFields():gostFields())+`<section class="network-port-section">${mapFields()}</section>`+advancedFields()}${unstable?`<label class="tunnel-check tunnel-warning"><input type="checkbox" name="accept_unstable" data-setting required ${draft.accept_unstable?'checked':''}>ناپایداری این پروتکل را در نتیجهٔ تست دیدم و استفاده از آن را تأیید می‌کنم.</label>`:''}<div class="form-actions network-navigation"><button class="button primary" type="submit">${t?'ذخیره و اعمال':'ساخت تونل'}</button>${!t?btn('بازگشت','data-back-test','network-back'):''}${btn('انصراف','data-close','cancel')}</div></form>`);
    const f=body().querySelector('[data-network-editor]');
    f.elements.name.dir='auto';
    const alertInput=f.elements.telegram_alerts;
@@ -270,6 +283,6 @@ function mount(ctx){
  async function submit(t,action,extra={}){const answer=await api(`/network-tunnels/${t.id}/actions`,{method:'POST',body:JSON.stringify({action,...extra})});toast(answer.message);await refresh();if(['logs','preview','diagnose','history','optimize','engine-update'].includes(action)){show('در حال دریافت نتیجه',`<p data-network-progress>${esc(answer.data.message)}</p><p class="tunnel-muted">با بستن پنجره، عملیات در صف ادامه پیدا می‌کند.</p>`);watch={id:answer.data.id,t};watchTimer=setTimeout(()=>safe(poll)(),1500);}else closeModal();}
  return {choose,resumeTest,editor,details,action,dispose(){disposed=true;clearTimeout(watchTimer);clearTimeout(testTimer);}};
 }
-return {mount,label,actions};
+return {mount,label,actions,methodLabel,methodSummary};
 })();
 
