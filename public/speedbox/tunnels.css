@@ -79,12 +79,13 @@
 .tunnel-results { border-top: 1px solid rgba(255,255,255,.1); padding-top: 18px; display: grid; gap: 14px; }
 .tunnel-result-heading h3 { font-size: 13px; }
 .tunnel-result-heading p { color: var(--tunnel-muted); font-size: 11px; font-weight: 400; line-height: 1.9; margin: 6px 0 0; }
-.tunnel-recommendation { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; background: rgba(80,169,129,.07); border: 1px solid rgba(125,203,166,.2); border-radius: 9px; padding: 12px; }
-.tunnel-recommendation>span { font-size: 11px; color: #99ddbf; }
+.tunnel-recommendation { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; background: linear-gradient(135deg,rgba(190,132,39,.14),rgba(243,199,106,.06)); border: 1px solid rgba(231,181,82,.34); border-radius: 9px; padding: 12px; }
+.tunnel-recommendation>span { font-size: 11px; color: #f3d394; }
 .tunnel-recommendation>b { font-size: 12px; }
 .tunnel-recommendation>small { font-size: 10px; color: var(--tunnel-muted); margin-inline-start: auto; font-weight: 400; }
 .tunnel-result-filters { display: flex; gap: 7px; flex-wrap: wrap; }
-.tunnel-pick { display: block; color: #99ddbf; font-size: 10px; margin-top: 5px; }
+.tunnel-pick { display:inline-flex;align-items:center;gap:4px;padding:2px 7px;border:1px solid rgba(238,190,88,.5);border-radius:7px;background:linear-gradient(135deg,rgba(183,120,29,.32),rgba(255,219,142,.16));color:#ffe2a7;font-size:10px;line-height:1.5;box-shadow:inset 0 1px 0 rgba(255,238,191,.14),0 0 10px rgba(220,166,57,.1); }
+.tunnel-pick::before { content:"✦";font-size:10px;line-height:1;color:#f6ca72; }
 .tunnel-row-note { display: block; max-width: 210px; color: var(--tunnel-muted); font-size: 10px; line-height: 1.8; margin-top: 6px; }
 .tunnel-test-progress { display: flex; gap: 12px; align-items: center; }
 .tunnel-workspace progress { width: 100%; height: 5px; accent-color: #99ddbf; }
@@ -201,12 +202,12 @@
 .speedbox-infrastructure-overlay .tunnel-modal .button { box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;gap:7px;height:36px;min-height:36px;margin:0;padding:0 14px;font-size:11px;line-height:1.6;white-space:nowrap; }
 .tunnel-result-list { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;min-width:0; }
 .tunnel-result-row { display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:8px;padding:8px;border:1px solid rgba(255,255,255,.12);border-radius:10px;min-width:0; }
-.tunnel-result-row.is-recommended { background:rgba(80,169,129,.07);border-color:rgba(125,203,166,.24); }
+.tunnel-result-row.is-recommended { background:linear-gradient(135deg,rgba(190,132,39,.12),rgba(243,199,106,.04));border-color:rgba(231,181,82,.38); }
 .tunnel-result-method { display:grid;gap:4px;min-width:0; }
 .tunnel-result-method .tunnel-badge { padding:2px 6px;line-height:1.5; }
 .tunnel-result-method>b { font-size:12px;text-align:right;overflow-wrap:anywhere; }
 .tunnel-result-method>div { display:flex;align-items:center;gap:6px;flex-wrap:wrap; }
-.tunnel-result-method .tunnel-pick { display:inline;margin:0; }
+.tunnel-result-method .tunnel-pick { display:inline-flex;margin:0; }
 .tunnel-orientation { color:var(--muted);font-size:10px; }
 .tunnel-result-metrics { grid-column:1/-1;grid-row:2;padding-top:7px;border-top:1px solid rgba(255,255,255,.08);display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:0;text-align:center; }
 .tunnel-result-metrics>div { display:grid;gap:4px;min-width:0; }
@@ -319,3 +320,4 @@
 /* Reuse server-operation percentage and meter inside tunnel test dialogs. */
 .tunnel-test-progress .deployment-progress{flex:1;min-width:0}
 .tunnel-roundtrip-metrics{grid-template-columns:repeat(3,minmax(0,1fr))}
+
