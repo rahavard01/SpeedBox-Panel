@@ -93,7 +93,8 @@ class TunnelManager
                 foreach($t->settings['mappings'] as $map)$ports=[...$ports,...range((int)$map[$iran?'public_port':'target_port'],(int)($map[$iran?'public_end':'target_end']??$map[$iran?'public_port':'target_port']))];
                 continue;
             }
-            $listenerIran=$t->kind==='reverse'||$t->orientation==='swapped';
+            $listenerIran=$t->kind==='reverse'?$t->orientation==='normal':$t->orientation==='swapped';
+            if($t->kind==='reverse'&&$t->orientation==='swapped')$ports[]=40000+(int)$t->subnet;
             if($iran===$listenerIran)$ports[]=(int)$t->settings['tunnel_port'];
             foreach($t->settings['mappings'] as $map)$ports[]=(int)$map[$iran?'public_port':'target_port'];
         }
@@ -114,19 +115,15 @@ class TunnelManager
             $kind = $r['k'] ?? ''; $transport = $r['t'] ?? '';
             if (!in_array($kind, ['reverse','direct'], true) || !is_string($transport)) continue;
             $supported = in_array($transport, $kind === 'reverse' ? self::REVERSE : self::DIRECT, true);
-            // A reversed reverse tunnel exposes ports abroad. It cannot silently be
-            // relabelled as an Iran-entry tunnel. Reversed L3 is handled by the bridge.
-            if ($orientation === 'swapped' && $kind === 'reverse') $supported = false;
+            // Swapped carriers keep Iran ingress via the bridge's private L3 adapter.
             $status = in_array($r['s'] ?? '', ['ok','unstable','down','skipped','testing'], true) ? $r['s'] : 'down';
             $rows[] = ['id' => $orientation.':'.$kind.':'.$transport, 'kind' => $kind, 'transport' => $transport,
                 'label' => ($kind === 'reverse' ? 'Reverse ' : 'Direct ').strtoupper($transport), 'orientation' => $orientation,
                 'status' => $status, 'selectable' => $supported && in_array($status, ['ok','unstable'], true),
-                'reason' => !$supported ? ($orientation === 'swapped' && $kind === 'reverse'
-                    ? 'این نتیجه ورود کاربران از سرور خارج را آزمایش کرده است؛ برای ورود از ایران قابل استفاده نیست.'
-                    : 'ساخت خودکار این روش به تنظیمات تکمیلی نیاز دارد و در این نسخه فعال نیست.')
+                'reason' => !$supported ? 'ساخت خودکار این روش به تنظیمات تکمیلی نیاز دارد و در این نسخه فعال نیست.'
                     : ($status === 'skipped' ? 'این روش روی دو سرور آمادهٔ آزمایش نبود.' : ''),
                 'ok' => max(0, (int) ($r['o'] ?? 0)), 'total' => max(0, (int) ($r['z'] ?? $r['n'] ?? 0)),
-                'rtt' => max(0, (int) ($r['r'] ?? 0)), 'download' => max(0, (float) ($r['m'] ?? 0)), 'upload' => max(0, (float) ($r['upload_mbps'] ?? 0)),
+                'rtt' => max(0, (int) ($r['r'] ?? 0)), 'speed' => max(0, (float) ($r['m'] ?? 0)), 'download' => max(0, (float) ($r['m'] ?? 0)), 'measurement'=>'round_trip_1mib',
                 'recommended' => false];
         }
         return $rows;
@@ -135,7 +132,7 @@ class TunnelManager
     public function recommend(array $rows): array
     {
         $eligible = array_filter($rows, fn ($r) => $r['selectable'] && $r['status'] === 'ok');
-        usort($eligible, fn ($a,$b) => ($a['rtt'] ?: PHP_INT_MAX) <=> ($b['rtt'] ?: PHP_INT_MAX) ?: $b['download'] <=> $a['download']);
+        usort($eligible, fn ($a,$b) => $b['download'] <=> $a['download'] ?: ($a['rtt'] ?: PHP_INT_MAX) <=> ($b['rtt'] ?: PHP_INT_MAX));
         $id = $eligible[0]['id'] ?? null;
         return array_map(fn ($r) => [...$r, 'recommended' => $r['id'] === $id], $rows);
     }

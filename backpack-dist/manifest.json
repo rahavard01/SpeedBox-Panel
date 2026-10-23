@@ -1,22 +1,24 @@
 {
   "protocol": 1,
-  "upstream_commit": "132467bfdfb2698d74ada2992413e75bfccbfbd3",
-  "upstream_version": "v1.9.0",
-  "source_sha256": "3420eb1ee7f7057a08d2fe5159158664525869475958ff708148f258cd443886",
+  "upstream_commit": "ff86354bcafbd054e7888e48343145323c9b2207",
+  "upstream_version": "v1.8.5",
+  "upstream_release": "v1.8.5",
+  "speed_measurement": "round_trip_1mib",
+  "source_sha256": "e11b3f81f8cfb485a01491db523a1947c1d0c02f740ecc8d98d8a4ab4116b491",
   "integration_sources": {
     "speedbox.go": "8db2a1eeca9dd3095e7638c18c0ae7fbfd9f5f51094042a2d7d6f167c0daa7bf",
-    "bridge.go": "8742727ed88ecd691593b79774dd60095531e085751a3140550b6938572d5e74",
-    "bridge_test.go": "974b3b93065061d5b9c664ec02ee6726888fd8283279414848a0aa016f9edbc4",
-    "build.py": "def2d26e49377917e494bba24a8f50add25ffd5c11627c0a73310fb7364029b3"
+    "bridge.go": "430518524aeb44c6ef3593b8f0144fe268d47c60be040bf57d7d235d708aae97",
+    "bridge_test.go": "0909c64220d1e8eb3161730abbf36303081bb5dd327d6f4e15f877f16c427dd4",
+    "build.py": "f7ec6b4ea50fffb784f863566bf6d85b5ad2eb3036a3ae214c5c0c1c596a3271"
   },
   "archives": {
     "amd64": {
-      "sha256": "eb788b6c7a49b19cdbbd83791ebc3f648ed162efcd0c6107338029f222a406fd",
-      "binary_sha256": "3a6b54f056b724f86716f6ae12a4e05b0f8ed6b11de8158be6b56b7e12a251af"
+      "sha256": "1afe25287ba61ac5d5b917c11cdf5e79f7a2df6475f0fa36c7c2211e9c69f79f",
+      "binary_sha256": "566ab515c66a9e781b4a706ba59c30541893c66dcdcca13dc0487eb9eeaba653"
     },
     "arm64": {
-      "sha256": "3002823f9fd6d9e2e93786127ede432b8f8460d834fb190bbaae179b57b44db0",
-      "binary_sha256": "0ef1cc3cb8daaa5172fd63dc1672e84fc1ebc374faee3ca14e53ec1772e5c780"
+      "sha256": "e7e53e3bc9d4f90978b54f29b063fe84ffd6745daa74c3db02b34d18a67a6f6f",
+      "binary_sha256": "7f0111d3bf6f5aa9c7124620cdca4b4bfe057d651e907f9cba3de48042710de7"
     }
   }
 }

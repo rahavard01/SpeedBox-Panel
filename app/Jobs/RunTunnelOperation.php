@@ -31,7 +31,7 @@ class RunTunnelOperation implements ShouldQueue, ShouldBeEncrypted
             if (isset($op)) {
                 $message = 'عملیات کامل نشد؛ اتصال SSH، آزاد بودن پورت‌ها و گزارش دو سمت را بررسی کنید.';
                 if ($op->test_id) {
-                    $this->cleanupTest($op,$remote);
+                    if(!$this->cleanupTest($op,$remote,$manager))return;
                     TunnelConnectionTest::whereKey($op->test_id)->update(['status'=>'failed','message'=>$message]);
                 }
                 if ($op->tunnel_id) ServerTunnel::whereKey($op->tunnel_id)->update(['status'=>'needs_review','message'=>$message]);
@@ -45,7 +45,7 @@ class RunTunnelOperation implements ShouldQueue, ShouldBeEncrypted
         $test = TunnelConnectionTest::findOrFail($op->test_id);
         $iran = ManagedServer::findOrFail($test->iran_server_id); $foreign = ManagedServer::findOrFail($test->foreign_server_id);
         if ($op->cancel_requested || $op->deadline->isPast()) {
-            $this->cleanupTest($op,$remote);
+            if(!$this->cleanupTest($op,$remote,$manager))return;
             $test->update(['status'=>'cancelled','message'=>'بررسی اتصال متوقف شد.']);
             $manager->finish($op,'cancelled','بررسی اتصال متوقف شد.'); return;
         }
@@ -54,47 +54,87 @@ class RunTunnelOperation implements ShouldQueue, ShouldBeEncrypted
         $host = $orientation === 'normal' ? $iran : $foreign;
         $peer = $orientation === 'normal' ? $foreign : $iran;
         if (!isset($payload['test_id'])) {
-            $op->update(['progress'=>5,'message'=>'در حال آماده‌سازی BackPack روی دو سرور…']);
-            $remote->ensure($iran); $remote->ensure($foreign);
+            $op->update(['progress'=>max((int)$op->progress,$orientation==='normal'?5:50),'message'=>'در حال آماده‌سازی BackPack روی دو سرور…']);
+            // Artifact transfer is preparation, not part of the handshake budget.
+            $remote->call($iran,['action'=>'test-ready']);$remote->call($foreign,['action'=>'test-ready']);
             $id = bin2hex(random_bytes(16));
             // Persist the id before starting either side, so cancellation can always clean up.
-            $payload = [...$payload,'test_id'=>$id,'orientation'=>$orientation,'peer_started'=>false];
+            $payload = [...$payload,'test_id'=>$id,'orientation'=>$orientation,'peer_started'=>false,'phase_started_at'=>now()->timestamp];
             $op->update(['payload'=>$payload]);
             $remote->call($host,['action'=>'spawn-host','id'=>$id,'host'=>$host->host]);
-            $test->update(['status'=>'running','message'=>$orientation === 'normal' ? 'در حال بررسی روش‌های اتصال…' : 'در حال بررسی حالت برعکس…']);
+            $test->update(['status'=>'running','message'=>'در حال برقراری ارتباط اولیهٔ تست…']);
         }
         $answer = $remote->call($host,['action'=>'test-state','id'=>$payload['test_id']]);
         if (!empty($answer['link']) && !$payload['peer_started']) {
             $remote->call($peer,['action'=>'spawn-peer','id'=>$payload['test_id'],'link'=>$answer['link']]);
-            $payload['peer_started']=true; $op->update(['payload'=>$payload]);
+            $payload['peer_started']=true; $payload['peer_requested_at']=now()->timestamp; $op->update(['payload'=>$payload]);
+        }
+        if (!in_array($answer['state'] ?? '', ['completed','failed'], true)) {
+            if (!empty($payload['peer_started'])) {
+                $peerState=$remote->call($peer,['action'=>'test-state','id'=>$payload['test_id'],'side'=>'peer']);
+                if (($peerState['state']??'')==='failed') {
+                    $answer['state']='failed';$answer['error']=$peerState['error']??'test peer stopped';
+                }
+            }
+            if (in_array($answer['state']??'',['starting','waiting'],true)
+                && now()->timestamp-($payload['peer_requested_at']??$payload['phase_started_at']??$op->created_at->timestamp)>=65) {
+                $answer['state']='failed';$answer['error']='initial test handshake timed out';
+            }
         }
         $existing = array_values(array_filter($test->results ?? [],fn($r)=>$r['orientation']!==$orientation));
         $rows = [...$existing,...$manager->rows($answer['rows'] ?? [],$orientation)];
         $test->update(['results'=>$rows]);
-        $op->update(['progress'=>$orientation==='normal'?35:75,'message'=>$test->message]);
+        $rawRows=$answer['rows']??[];
+        $done=array_sum(array_map(fn($row)=>in_array($row['s']??'',['ok','unstable','down','skipped'],true)?1:
+            min(.99,max(0,(int)($row['n']??0))/max(1,(int)($row['z']??60))),$rawRows));
+        $total=max(count($rawRows),(int)($answer['total']??19),1);
+        $base=$orientation==='normal'?10:55;
+        $message=($answer['state']??'')==='running'?'در حال بررسی روش‌های اتصال…':'در حال برقراری ارتباط اولیهٔ تست…';
+        $progress=max((int)$op->progress,$base+(int)(40*$done/$total));
+        $test->update(['message'=>$message]);
+        $op->update(['progress'=>min(95,$progress),'message'=>$message]);
         if (in_array($answer['state'] ?? '',['completed','failed'])) {
-            $this->cleanupTest($op,$remote);
+            if(!$this->cleanupTest($op,$remote,$manager))return;
+            $payload=$op->payload??$payload;
             $usable = collect($rows)->contains(fn($r)=>$r['selectable'] && $r['status']==='ok');
             if ($orientation==='normal' && ($test->compare_both || !$usable)) {
-                $payload['orientation']='swapped'; unset($payload['test_id']); $payload['peer_started']=false;
+                $payload['orientation']='swapped'; unset($payload['test_id'],$payload['peer_requested_at'],$payload['phase_started_at']); $payload['peer_started']=false;
                 $op->update(['payload'=>$payload]);
             } else {
                 $test->update(['status'=>'completed','results'=>$manager->recommend($rows),
                     'message'=>count($rows) ? 'بررسی تمام شد؛ روش موردنظر را انتخاب کنید.' : 'هماهنگی تست بین دو سرور برقرار نشد؛ روش‌های تونل اندازه‌گیری نشدند.']);
-                $manager->finish($op,'succeeded',$test->message); return;
+                if(!count($rows))$test->update(['status'=>'failed']);
+                $manager->finish($op,count($rows)?'succeeded':'failed',$test->message); return;
             }
         }
         // A durable continuation leaves the queue worker free while engines test.
         self::dispatch($op->id)->delay(now()->addSeconds(5));
     }
 
-    private function cleanupTest(TunnelOperation $op, BackpackRemote $remote): void
+    private function cleanupTest(TunnelOperation $op, BackpackRemote $remote, TunnelManager $manager): bool
     {
-        $id = $op->payload['test_id'] ?? null; if (!$id) return;
-        $test = TunnelConnectionTest::find($op->test_id); if (!$test) return;
-        foreach ([$test->iran_server_id,$test->foreign_server_id] as $serverId) {
-            try { $remote->call(ManagedServer::findOrFail($serverId),['action'=>'test-stop','id'=>$id]); } catch (Throwable) { /* systemd RuntimeMaxSec bounds disconnected cleanup */ }
+        $payload=$op->payload??[];$id=$payload['test_id']??null;if(!$id)return true;
+        $test=TunnelConnectionTest::find($op->test_id);if(!$test)return true;
+        $failed=[];
+        foreach(['iran'=>$test->iran_server_id,'foreign'=>$test->foreign_server_id] as $side=>$serverId) {
+            try {
+                $answer=$remote->call(ManagedServer::findOrFail($serverId),['action'=>'test-stop','id'=>$id]);
+                if(empty($answer['stopped']))$failed[]=$side;
+            } catch(Throwable) {$failed[]=$side;}
         }
+        if(!$failed) {
+            unset($payload['cleanup_attempts']);$op->update(['payload'=>$payload]);return true;
+        }
+        $payload['cleanup_attempts']=($payload['cleanup_attempts']??0)+1;
+        $message='توقف تست موقت روی یکی از سرورها تأیید نشد؛ در حال تلاش دوباره…';
+        $op->update(['payload'=>$payload,'message'=>$message,'result'=>['cleanup_pending'=>$failed]]);
+        if($payload['cleanup_attempts']<3)self::dispatch($op->id)->delay(now()->addSeconds(5));
+        else {
+            $message='پاک‌سازی تست موقت تأیید نشد؛ اتصال سرورها را بررسی کنید و تست را دوباره اجرا کنید.';
+            $test->update(['status'=>'failed','message'=>$message]);
+            $manager->finish($op,'failed',$message,['cleanup_pending'=>$failed]);
+        }
+        return false;
     }
 
     private function tunnel(TunnelOperation $op, BackpackRemote $remote, TunnelManager $manager): void
@@ -113,7 +153,8 @@ class RunTunnelOperation implements ShouldQueue, ShouldBeEncrypted
                     $snapshots[$side]=$server;
                 }
                 // Start the listening end first; both configs remain independently recoverable.
-                $order = $t->kind === 'reverse' || $t->orientation === 'swapped' ? ['iran','foreign'] : ['foreign','iran'];
+                $listenerIran=$t->kind==='reverse'?$t->orientation==='normal':$t->orientation==='swapped';
+                $order=$listenerIran?['iran','foreign']:['foreign','iran'];
                 foreach ($order as $side) {
                     $op->update(['progress'=>$side===$order[0]?35:70,'message'=>'در حال اعمال تنظیمات سمت '.($side==='iran'?'ایران':'خارج').'…']);
                     $this->refreshReservations($servers[$side],$remote,$manager,$settings);
@@ -132,7 +173,7 @@ class RunTunnelOperation implements ShouldQueue, ShouldBeEncrypted
             foreach ($servers as $side=>$server) {
                 try {
                     $result[$side]=$remote->call($server,['action'=>$op->action,'name'=>$t->remote_name,
-                        'target_ports'=>$side==='foreign'?array_column($settings['mappings'],'target_port'):[], 'udp'=>(bool)$settings['accept_udp']]);
+                        'target_ports'=>$side==='foreign'?array_column($settings['mappings'],'target_port'):[], 'udp'=>(bool)($settings['accept_udp']??false)]);
                     if ($op->action === 'logs' && isset($result[$side]['text'])) {
                         $result[$side]['text'] = preg_replace('~backpack://[^\s]+~', '[setup-link]', str_replace($t->secret, '[secret]', $result[$side]['text']));
                     }
@@ -172,14 +213,15 @@ class RunTunnelOperation implements ShouldQueue, ShouldBeEncrypted
     public function applyRequest(ServerTunnel $t, array $settings, string $side): array
     {
         $normal = $t->orientation === 'normal';
-        $listeningIran = $t->kind === 'reverse' || !$normal;
-        $peerHost = $settings['peer_host'] ?: ($listeningIran ? $t->iran->host : $t->foreign->host);
+        $listeningIran = $t->kind === 'reverse' ? $normal : !$normal;
+        $peerHost = ($settings['peer_host']??'') ?: ($listeningIran ? $t->iran->host : $t->foreign->host);
         $n = (int)$t->subnet * 4; $a='10.203.'.intdiv($n,256).'.'.($n%256+1); $b='10.203.'.intdiv($n,256).'.'.($n%256+2);
         // /30 allocation is confined to 10.203/16, bounded by the allocator.
         $maps=implode(',',array_map(fn($m)=>$m['public_port'].'='.$m['target_port'],$settings['mappings']));
         return ['action'=>'apply','name'=>$t->remote_name,'kind'=>$t->kind,'transport'=>$t->transport,'token'=>$t->secret,
+            'bridge_port'=>40000+(int)$t->subnet,
             'role'=>$t->kind==='reverse'?($side==='iran'?'server':'client'):($side==='iran'?'iran':'kharej'),
-            'swapped'=>!$normal,'host'=>$peerHost,'port'=>$settings['tunnel_port'],'ports'=>$maps,'udp'=>(bool)$settings['accept_udp'],
+            'swapped'=>!$normal,'host'=>$peerHost,'port'=>$settings['tunnel_port'],'ports'=>$maps,'udp'=>(bool)($settings['accept_udp']??false),
             'local_ip'=>($side==='iran'?$a:$b).'/30','peer_ip'=>$side==='iran'?$b:$a];
     }
 
@@ -199,8 +241,11 @@ class RunTunnelOperation implements ShouldQueue, ShouldBeEncrypted
     public function failed(?Throwable $e): void
     {
         $op=TunnelOperation::find($this->operationId);if(!$op||!in_array($op->status,['queued','running']))return;
+        if($op->test_id) {
+            $op->update(['cancel_requested'=>true,'message'=>'اجرای تست قطع شد؛ در حال جمع‌آوری منابع موقت…']);
+            self::dispatch($op->id)->delay(now()->addSeconds(5));return;
+        }
         app(TunnelManager::class)->finish($op,'failed','اجرای عملیات قطع شد؛ وضعیت دو سرور را بررسی کنید.');
         if($op->tunnel_id)ServerTunnel::whereKey($op->tunnel_id)->update(['status'=>'needs_review']);
-        if($op->test_id)TunnelConnectionTest::whereKey($op->test_id)->update(['status'=>'failed']);
     }
 }

@@ -32,7 +32,7 @@ class RunNetworkTunnelTest implements ShouldQueue,ShouldBeEncrypted
             $row=$s['cases'][$s['index']]??null;
             try {
                 if($s['phase']==='ensure') {
-                    $op->update(['message'=>'آماده‌سازی تست موقت روی دو سرور…','progress'=>5]);
+                    $op->update(['message'=>'آماده‌سازی تست موقت روی دو سرور…','progress'=>max((int)$op->progress,5)]);
                     $remote->ensureProbe($servers[$s['side']],$s['side']===1?$s['engine']:'gre');
                     if($s['side']===0)$s['side']=1;else{$s['side']=0;$s['phase']='start';}
                 } elseif($s['phase']==='start') {
@@ -41,7 +41,7 @@ class RunNetworkTunnelTest implements ShouldQueue,ShouldBeEncrypted
                             'inner_iran'=>'10.253.'.intdiv($n,256).'.'.($n%256+1),'inner_foreign'=>'10.253.'.intdiv($n,256).'.'.($n%256+2),'gre_key'=>random_int(1,2147483647)];
                     }
                     // Persist ownership before either remote start, including interrupted SSH replies.
-                    $op->update(['payload'=>$s,'message'=>'در حال تست '.$row['label'].'…','progress'=>10+(int)(75*$s['index']/count($s['cases']))]);
+                    $op->update(['payload'=>$s,'message'=>'در حال تست '.$row['label'].'…','progress'=>max((int)$op->progress,10+(int)(75*$s['index']/count($s['cases'])))]);
                     $config=[...$row,...$s['probe'],'side'=>$s['side']===0?'foreign':'iran','peer_port'=>$s['peer_port']??null,'reserved_ports'=>$manager->reservedPorts($servers[$s['side']])];
                     $answer=$remote->probe($servers[$s['side']],['action'=>'start','id'=>$s['probe']['id'],'config'=>$config]);
                     if($s['side']===0){$s['peer_port']=$answer['port'];$s['side']=1;}else{$s['side']=0;$s['phase']='measure';}
@@ -54,7 +54,7 @@ class RunNetworkTunnelTest implements ShouldQueue,ShouldBeEncrypted
                     $row['status']=collect($usable)->contains(fn($v)=>$v['status']==='ok')?'ok':($usable?'unstable':'down');
                     $best=$answer['tcp']??$answer['udp']??[];
                     if(($best['status']??'down')==='down')$best=$answer['udp']??[];
-                    foreach(['ok','total','rtt','jitter','download','upload'] as $key)$row[$key]=is_numeric($best[$key]??null)?max(0,(float)$best[$key]):0;
+                    foreach(['ok','total','rtt','jitter','download','upload'] as $key)$row[$key]=is_numeric($best[$key]??null)?max(0,(float)$best[$key]):(in_array($key,['download','upload'],true)?null:0);
                     $s['measured']=$row;$s['phase']='cleanup';$s['side']=0;
                 } elseif($s['phase']==='cleanup') {
                     if(isset($s['probe']))$remote->probe($servers[$s['side']],['action'=>'stop','id'=>$s['probe']['id'],'engine'=>$s['engine']]);
@@ -73,13 +73,16 @@ class RunNetworkTunnelTest implements ShouldQueue,ShouldBeEncrypted
             } catch(Throwable $error) {
                 if($s['phase']==='cleanup') {
                     $s['attempts']++;
-                    if($s['attempts']>=3){$s['fatal']='پاک‌سازی یکی از سرورها تأیید نشد؛ گزارش تست را بررسی کنید.';$s['cleanup_error']=$error->getMessage();$s['phase']='done';}
+                    if($s['attempts']>=3){$s['fatal']='پاک‌سازی تست روی یکی از سرورها تأیید نشد؛ رابط موقت برای جلوگیری از حذف اتصال دیگر حفظ شد.';$s['cleanup_error']=$error->getMessage();$s['cleanup_failures'][$s['side']]=$error->getMessage();$s['attempts']=0;if($s['side']===0)$s['side']=1;else $s['phase']='done';}
                 } else {
                     if($s['phase']==='ensure')$s['fatal']='آماده‌سازی تست روی دو سرور کامل نشد.';
                     $s['case_error']=$error->getMessage();$s['phase']='cleanup';$s['side']=0;
                 }
             }
-            $op->update(['payload'=>$s]);
+            $weights=['ensure'=>2,'start'=>10,'measure'=>45,'cleanup'=>80,'done'=>100];
+            $count=max(1,count($s['cases']??[]));
+            $percent=5+(int)(90*(($s['index']??0)+($weights[$s['phase']]??0)/100)/$count);
+            $op->update(['payload'=>$s,'progress'=>min(99,max((int)$op->progress,$percent))]);
             if($s['phase']==='done') {
                 $status=!empty($s['fatal'])?'failed':(!empty($s['cancelled'])?'cancelled':'completed');
                 $rows=$test->results??[];$eligible=array_values(array_filter($rows,fn($r)=>($r['selectable']??false)&&$r['status']==='ok'));

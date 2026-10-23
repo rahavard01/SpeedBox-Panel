@@ -1,9 +1,20 @@
 #!/usr/bin/env python3
 """Reproducible integration build; source is pinned, archived and kept with the patch."""
-import gzip,hashlib,json,os,pathlib,shutil,subprocess,tarfile,tempfile
+import gzip,hashlib,io,json,os,pathlib,shutil,subprocess,sys,tarfile,tempfile,urllib.request
 ROOT=pathlib.Path(__file__).resolve().parents[2]
-PIN='132467bfdfb2698d74ada2992413e75bfccbfbd3'
+PIN='ff86354bcafbd054e7888e48343145323c9b2207'
 HERE=pathlib.Path(__file__).resolve().parent
+if '--refresh-source' in sys.argv:
+    # The release's immutable commit, never a floating development branch.
+    raw=urllib.request.urlopen('https://codeload.github.com/AminMGMT/BackPack/tar.gz/'+PIN,timeout=120).read()
+    buf=io.BytesIO()
+    with tarfile.open(fileobj=io.BytesIO(raw),mode='r:gz') as incoming,tarfile.open(fileobj=buf,mode='w') as outgoing:
+        for entry in incoming.getmembers():
+            parts=pathlib.PurePosixPath(entry.name).parts[1:]
+            if not parts:continue
+            entry.name=str(pathlib.PurePosixPath('BackPack',*parts));entry.uid=entry.gid=entry.mtime=0;entry.uname=entry.gname=''
+            outgoing.addfile(entry,incoming.extractfile(entry) if entry.isfile() else None)
+    (HERE/'upstream-source.tar.gz').write_bytes(gzip.compress(buf.getvalue(),mtime=0))
 def sha(p):
     raw=p.read_bytes()
     if p.suffix in ['.go','.py']:raw=raw.replace(b'\r\n',b'\n')
@@ -34,7 +45,7 @@ with tempfile.TemporaryDirectory(prefix='speedbox-backpack-build-') as work:
     p.write_text(s)
     for src,dst in [('speedbox.go','speedbox.go'),('bridge.go','internal/manage/speedbox_bridge.go'),('bridge_test.go','internal/manage/speedbox_bridge_test.go')]:shutil.copy2(HERE/src,source/dst)
     subprocess.run(['go','test','./internal/manage','-run','^TestSpeedbox','-count=1'],cwd=source,check=True)
-    manifest={'protocol':1,'upstream_commit':PIN,'upstream_version':'v1.9.0','source_sha256':sha(HERE/'upstream-source.tar.gz'),
+    manifest={'protocol':1,'upstream_commit':PIN,'upstream_version':'v1.8.5','upstream_release':'v1.8.5','speed_measurement':'round_trip_1mib','source_sha256':sha(HERE/'upstream-source.tar.gz'),
               'integration_sources':{f:sha(HERE/f) for f in ['speedbox.go','bridge.go','bridge_test.go','build.py']},'archives':{}}
     for arch in ['amd64','arm64']:
         binary=work/('backpack-linux-'+arch)

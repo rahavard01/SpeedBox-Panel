@@ -63,12 +63,16 @@ class TunnelController extends Controller
         $row = collect($test->results)->firstWhere('id', $selection['result_id']);
         abort_unless($row && $row['selectable'], 422, 'یک روش قابل استفاده از نتیجهٔ تست انتخاب کنید.');
         abort_if($row['status'] === 'unstable' && !$request->boolean('accept_unstable'), 422, 'این روش ناپایدار بود؛ انتخاب آن را تأیید کنید.');
-        $settings = $this->settings($request, $row['kind'], $row['transport']);
+        $settings = $this->settings($request, $row['kind'], $row['transport'],null,$row['orientation']);
         [$tunnel,$op] = DB::transaction(function () use ($request,$test,$row,$settings,$manager) {
             $this->lockServers($test->iran_server_id, $test->foreign_server_id);
             $this->portsAvailable($test->iran_server_id, $settings);
-            $subnet = random_int(1024, 16000);
-            for ($i=0; ServerTunnel::where('subnet',$subnet)->exists() && $i<100; $i++) $subnet = random_int(1024,16000);
+            $blocked=[...$manager->reservedPorts(ManagedServer::findOrFail($test->iran_server_id)),...$manager->reservedPorts(ManagedServer::findOrFail($test->foreign_server_id)),(int)$settings['tunnel_port'],...array_map('intval',array_column($settings['mappings'],'public_port')),...array_map('intval',array_column($settings['mappings'],'target_port'))];
+            for($i=0;$i<200;$i++) {
+                $subnet=random_int(1024,16000);
+                if(!ServerTunnel::where('subnet',$subnet)->exists()&&!in_array(40000+$subnet,$blocked,true))break;
+            }
+            abort_if($i===200,409,'پورت داخلی آزاد برای این تونل پیدا نشد؛ دوباره تلاش کنید.');
             $tunnel = ServerTunnel::create(['name' => $request->input('name'), 'remote_name' => 'sb-'.bin2hex(random_bytes(16)),
                 'iran_server_id' => $test->iran_server_id, 'foreign_server_id' => $test->foreign_server_id,
                 'kind' => $row['kind'], 'transport' => $row['transport'], 'orientation' => $row['orientation'],
@@ -99,10 +103,10 @@ class TunnelController extends Controller
                 abort_unless($row && ($row['selectable']??false) && in_array($row['status']??'',['ok','unstable'],true),422,'یک روش قابل استفاده از نتیجهٔ تست انتخاب کنید.');
                 abort_if($row['status']==='unstable' && !$request->boolean('accept_unstable'),422,'انتخاب روش ناپایدار را تأیید کنید.');
                 $supported=($row['kind']??'')==='reverse'?TunnelManager::REVERSE:(($row['kind']??'')==='direct'?TunnelManager::DIRECT:[]);
-                abort_unless(in_array($row['transport']??'',$supported,true) && in_array($row['orientation']??'',['normal','swapped'],true) && !($row['kind']==='reverse'&&$row['orientation']==='swapped'),422,'این روش برای ورود کاربران از ایران قابل استفاده نیست.');
+                abort_unless(in_array($row['transport']??'',$supported,true) && in_array($row['orientation']??'',['normal','swapped'],true),422,'این روش برای ورود کاربران از ایران قابل استفاده نیست.');
                 $method=['kind'=>$row['kind'],'transport'=>$row['transport'],'orientation'=>$row['orientation']];
             }
-            $settings=$this->settings($request,$method['kind'],$method['transport'],$tunnel);
+            $settings=$this->settings($request,$method['kind'],$method['transport'],$tunnel,$method['orientation']);
             $this->portsAvailable($tunnel->iran_server_id, $settings, $tunnel->id);
             $changed=$method!==['kind'=>$tunnel->kind,'transport'=>$tunnel->transport,'orientation'=>$tunnel->orientation];
             return $manager->queue($changed?'reconfigure':'apply',$tunnel,null,['settings'=>$settings,'name'=>$request->input('name'),'method'=>$method]);
@@ -140,7 +144,7 @@ class TunnelController extends Controller
         return response()->json(['message' => 'درخواست توقف ثبت شد.']);
     }
 
-    private function settings(Request $request, string $kind, string $transport, ?ServerTunnel $existing=null): array
+    private function settings(Request $request, string $kind, string $transport, ?ServerTunnel $existing=null,string $orientation='normal'): array
     {
         $data = $request->validate(['name' => 'required|string|max:100', 'public_host' => ['required','string','max:253',function ($a,$v,$fail) {
             if (!filter_var($v,FILTER_VALIDATE_IP) && !filter_var($v,FILTER_VALIDATE_DOMAIN,FILTER_FLAG_HOSTNAME)) $fail('IP یا دامنهٔ معتبر وارد کنید؛ بدون http و شماره پورت.');
@@ -151,7 +155,11 @@ class TunnelController extends Controller
         ], [], ['name'=>'نام تونل','public_host'=>'آدرس اتصال کاربران','tunnel_port'=>'پورت ارتباط بین دو سرور','mappings'=>'پورت‌ها']);
         abort_if(in_array((int)$data['tunnel_port'], array_map('intval',array_column($data['mappings'],'public_port')),true), 422, 'پورت ارتباط بین دو سرور باید با پورت کاربران متفاوت باشد.');
         // Reverse UDP is datagram-only in the pinned engine; do not sell it as a TCP tunnel.
-        abort_if($kind === 'reverse' && $transport === 'udp' && !$data['accept_udp'], 422, 'این روش فقط UDP را منتقل می‌کند؛ برای نود TCP روش دیگری انتخاب کنید.');
+        abort_if($kind === 'reverse' && $transport === 'udp' && $orientation==='normal' && !$data['accept_udp'], 422, 'این روش فقط UDP را منتقل می‌کند؛ برای نود TCP روش دیگری انتخاب کنید.');
+        if($existing&&$kind==='reverse'&&$orientation==='swapped') {
+            $ports=[(int)$data['tunnel_port'],...array_map('intval',array_column($data['mappings'],'public_port')),...array_map('intval',array_column($data['mappings'],'target_port'))];
+            abort_if(in_array(40000+(int)$existing->subnet,$ports,true),422,'یکی از پورت‌ها با پورت داخلی این تونل تداخل دارد؛ پورت دیگری انتخاب کنید.');
+        }
         $data['telegram_alerts']=app(\App\Services\TunnelAlertSettings::class)->resolve($request,$existing);
         $data['enabled']=true;
         unset($data['name']); $data['peer_host'] = $data['peer_host'] ?? '';

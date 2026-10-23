@@ -50,7 +50,7 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
   const number = value => Number(value || 0).toLocaleString('fa-IR');
   const bytes = value => { let n=Number(value||0), u=['B','KB','MB','GB','TB'], i=0; while(n>=1024&&i<u.length-1){n/=1024;i++} return `${n.toFixed(i?1:0)} ${u[i]}`; };
   const timeAgo = ts => { if(!ts)return 'هنوز متصل نشده'; const s=Math.max(0,Math.floor(Date.now()/1000-Number(ts))); if(s<60)return `${faDigits(s)} ثانیه پیش`; if(s<3600)return `${faDigits(Math.floor(s/60))} دقیقه پیش`; if(s<86400)return `${faDigits(Math.floor(s/3600))} ساعت پیش`; return `${faDigits(Math.floor(s/86400))} روز پیش`; };
-  const statusLabel = s => ({online:'آنلاین',deploying:'در حال نصب',failed:'ناموفق',draft:'آماده نصب',degraded:'نیازمند بررسی',queued:'در صف',running:'در حال اجرا',succeeded:'موفق',released:'بازگشت به صف',offline:'آفلاین'}[s]||s||'نامشخص');
+  const statusLabel = s => ({online:'آنلاین',deploying:'در حال نصب',failed:'ناموفق',draft:'آماده نصب',degraded:'نیازمند بررسی',queued:'در صف',running:'در حال اجرا',succeeded:'موفق',released:'بازگشت به صف',cancelled:'متوقف شد',offline:'آفلاین'}[s]||s||'نامشخص');
   const badge = (s, label) => `<span class="badge ${escape(s)}">${escape(label||statusLabel(s))}</span>`;
 
   async function api(path='', options={}) {
@@ -507,6 +507,7 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
       <div class="field full" id="keyField"><label>کلید خصوصی SSH</label><textarea name="private_key" placeholder="-----BEGIN OPENSSH PRIVATE KEY-----"></textarea></div>
       ${field('private_key_passphrase','رمز کلید خصوصی (اختیاری)','',false,'password')}
       ${field('host_fingerprint','اثر انگشت SSH (اختیاری)',server?.host_fingerprint||'',false,'text','ltr')}
+      <details class="full"><summary>مسیر جایگزین SSH</summary><p class="muted">پس از راه‌اندازی اتصال معکوس، پورت محلی آن را وارد کنید. هنگام تایم‌اوت مسیر مستقیم، پنل از این مسیر استفاده می‌کند. اثر انگشت SSH باید متعلق به همین سرور مقصد باشد.</p>${field('reverse_ssh_port','پورت محلی SSH معکوس (اختیاری)',server?.reverse_ssh_port||'',false,'number','ltr')}</details>
     </div><div class="form-actions"><button class="button primary">${server?'ذخیره تغییرات':'ذخیره و نصب خودکار'}</button><button type="button" class="button secondary" data-close>انصراف</button></div></form>`,{kind:'server'});
     const toggle=()=>{const key=scope.getElementById('authType').value==='key';scope.getElementById('keyField').style.display=key?'grid':'none';scope.getElementById('passwordField').style.display=key?'none':'grid'}; scope.getElementById('authType').onchange=toggle;toggle();
     scope.querySelector('[data-close]').onclick=closeModal;

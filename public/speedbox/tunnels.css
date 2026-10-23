@@ -315,3 +315,7 @@
 .tunnel-address { grid-template-columns:minmax(0,1fr);justify-content:stretch; }
 
 .speedbox-infrastructure-overlay .tunnel-modal [data-method-picker]>.modal-fields { gap:12px; }
+
+/* Reuse server-operation percentage and meter inside tunnel test dialogs. */
+.tunnel-test-progress .deployment-progress{flex:1;min-width:0}
+.tunnel-roundtrip-metrics{grid-template-columns:repeat(3,minmax(0,1fr))}

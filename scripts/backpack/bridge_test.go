@@ -33,3 +33,19 @@ func TestSpeedboxReversePartialTuneKeepsPreset(t *testing.T){
  s,err:=specFromNew(NewTunnel{Role:"server",Transport:"tcp",Name:"sb-0123456789abcdef0123456789abcdef",Token:strings.Repeat("t",64),TunnelPort:"61020",Ports:"61021=61022",Preset:PresetTurbo,Tune:f});if err!=nil{t.Fatal(err)}
  if !s.AcceptUDP||s.KeepAlive==0{t.Fatal("partial UDP setting erased preset")}
 }
+func TestSpeedboxSwappedCarrierKeepsEveryIngressOnIran(t *testing.T){
+ for _,transport:=range []string{"tcp","tcpmux","stealth","pck","ws","wss","wsmux","wssmux","kcp","quic","udp"}{
+  for _,role:=range []string{"server","client"}{
+   r:=SpeedboxRequest{Name:"sb-0123456789abcdef0123456789abcdef",Kind:"reverse",Swapped:true,Role:role,Transport:transport,Host:"192.0.2.2",Port:58443,BridgePort:55211,Token:strings.Repeat("a",64),Ports:"60443=61443",LocalIP:"10.203.250.1/30",PeerIP:"10.203.250.2",UDP:true}
+   if role=="client"{r.LocalIP="10.203.250.2/30";r.PeerIP="10.203.250.1"}
+   carrier,main,err:=sbSwappedSpecs(r);if err!=nil{t.Fatalf("%s %s: %v",transport,role,err)}
+   var c config.Config;if _,err=toml.Decode(main.Render(),&c);err!=nil{t.Fatal(err)}
+   if role=="server"{
+    if carrier.Role!="client"||c.L3.Mode!="listen"||len(c.L3.Ports)!=1{t.Fatalf("Iran ingress moved: %s",transport)}
+   }else{
+    if carrier.Role!="server"||c.L3.Mode!="dial"||len(c.L3.Ports)!=0{t.Fatalf("foreign ingress exposed: %s",transport)}
+    for _,port:=range carrier.Ports{if !strings.HasPrefix(port,"127.0.0.1:"){t.Fatal("carrier forward exposed publicly")}}
+   }
+  }
+ }
+}

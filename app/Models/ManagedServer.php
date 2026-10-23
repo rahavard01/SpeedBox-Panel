@@ -16,6 +16,7 @@ class ManagedServer extends Model
         'private_key' => 'encrypted',
         'private_key_passphrase' => 'encrypted',
         'last_checked_at' => 'integer',
+        'reverse_ssh_port' => 'integer',
     ];
 
     public function machine(): BelongsTo

@@ -3,7 +3,7 @@ import gzip,hashlib,json,pathlib
 root=pathlib.Path(__file__).resolve().parents[1]
 sha=lambda b:hashlib.sha256(b).hexdigest()
 m=json.loads((root/'backpack-dist/manifest.json').read_text())
-assert m['protocol']==1 and m['upstream_commit']=='132467bfdfb2698d74ada2992413e75bfccbfbd3'
+assert m['protocol']==1 and m['upstream_commit']=='ff86354bcafbd054e7888e48343145323c9b2207' and m['upstream_version']=='v1.8.5'
 assert sha((root/'scripts/backpack/upstream-source.tar.gz').read_bytes())==m['source_sha256']
 for name,digest in m['integration_sources'].items():assert sha((root/'scripts/backpack'/name).read_bytes().replace(b'\r\n',b'\n'))==digest,name
 assert set(m['archives'])=={'amd64','arm64'}

@@ -19,7 +19,7 @@ class Probe(unittest.TestCase):
   c=config();calls=[]
   def run(args,check=True):
    calls.append(args)
-   return subprocess.CompletedProcess(args,1 if args[:4]==['ip','link','show','dev'] else 0,'[]','')
+   return subprocess.CompletedProcess(args,1 if args[:4]==['ip','link','show','dev'] else 0,json.dumps([{'ifalias':p.alias(c)}]) if args[:4]==['ip','-j','link','show'] else '[]','')
   with patch.object(p,'run',side_effect=run):p.setup_gre(c)
   routes=[a for a in calls if a[:3]==['ip','route','add']];self.assertEqual(len(routes),1);self.assertEqual(routes[0][3],'10.253.1.1/32');self.assertNotIn('default',sum(calls,[]));self.assertFalse(any('sysctl' in a or 'nft' in a for a in calls))
  def test_route_collision_kept(self):
@@ -45,6 +45,24 @@ class Probe(unittest.TestCase):
    with p.tcp_request('127.0.0.1',echo.port,'d'*64,'echo') as conn:
     with self.assertRaises((OSError,ConnectionError)):p.line(conn)
   finally:echo.close()
+ def test_partial_tcp_upload_is_acknowledged_without_false_instability(self):
+  echo=p.Echo('127.0.0.1','c'*64);echo.start()
+  try:
+   with p.tcp_request('127.0.0.1',echo.port,'c'*64,'upload-frames') as conn:
+    for _ in range(4):conn.sendall(p.struct.pack('!I',32768)+b'x'*32768)
+    conn.sendall(p.struct.pack('!I',0))
+    self.assertEqual(p.line(conn)['bytes'],131072)
+  finally:echo.close()
+ def test_gre_alias_is_set_and_verified_before_address_or_route(self):
+  c=config();calls=[]
+  def run(args,check=True):
+   calls.append(args)
+   result=json.dumps([{'ifalias':p.alias(c)}]) if args[:4]==['ip','-j','link','show'] else '[]'
+   return subprocess.CompletedProcess(args,1 if args[:4]==['ip','link','show','dev'] else 0,result,'')
+  with patch.object(p,'run',side_effect=run):p.setup_gre(c)
+  a=calls.index(['ip','link','set','dev',p.iface(c),'alias',p.alias(c)])
+  b=next(i for i,x in enumerate(calls) if x[:3]==['ip','address','add'])
+  self.assertLess(a,b)
 class RealGost(unittest.TestCase):
  @classmethod
  def setUpClass(cls):
@@ -73,7 +91,7 @@ class RealGost(unittest.TestCase):
         self.assertGreater(result['download_bytes'],0,result);self.assertGreater(result['upload_bytes'],0,result)
         expected=16000 if proto=='udp' else 65536
         complete=result['download_bytes']==expected and result['upload_bytes']==expected
-        self.assertEqual(result['status'],'ok' if complete else 'unstable',result)
-        self.assertEqual(result['bulk_loss_percent']==0,complete,result)
+        self.assertEqual(result['status'],'ok' if proto=='tcp' or complete else 'unstable',result)
+        if proto=='udp':self.assertEqual(result['bulk_loss_percent']==0,complete,result)
      finally:child.terminate();child.wait(timeout=4);echo.close()
 if __name__=='__main__':unittest.main(verbosity=2)

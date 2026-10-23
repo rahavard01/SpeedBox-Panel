@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Bounded, authenticated engine tests. No global routes, firewall or sysctl edits."""
-import contextlib,hmac,ipaddress,json,os,re,shutil,socket,statistics,subprocess,sys,threading,time
+import contextlib,hmac,ipaddress,json,os,re,shutil,socket,statistics,struct,subprocess,sys,threading,time
 from pathlib import Path
 ROOT=Path('/var/lib/speedbox-network-tests')
 GOST=Path('/opt/speedbox-network')
@@ -37,12 +37,34 @@ def validate(c):
 
 def iface(c):return 'sbt'+c['id'][:11]
 def alias(c):return 'speedbox-probe:'+c['id']
+def owned_legacy_gre(c,link):
+ # Recovery of the old alias-less probe requires the saved complete config
+ # and a match of type, endpoints, key, address and the sole /32 test route.
+ try:
+  validate(c)
+  if link.get('ifalias'):return False
+  info=link.get('linkinfo',{});data=info.get('info_data',{})
+  local=c['local_endpoint'] if c['side']=='iran' else c['peer_host']
+  peer=c['peer_host'] if c['side']=='iran' else c['local_endpoint']
+  own=c['inner_'+c['side']];other=c['inner_foreign' if c['side']=='iran' else 'inner_iran']
+  def key(v):
+   if isinstance(v,str) and '.' in v:return int(ipaddress.IPv4Address(v))
+   return int(v)
+  if info.get('info_kind')!=c['transport'] or str(data.get('local'))!=local or str(data.get('remote'))!=peer:return False
+  if key(data.get('ikey',data.get('key')))!=int(c['gre_key']) or key(data.get('okey',data.get('key')))!=int(c['gre_key']):return False
+  addresses=json.loads(run(['ip','-j','address','show','dev',iface(c)]).stdout)
+  addrs=[a for row in addresses for a in row.get('addr_info',[]) if a.get('family')=='inet']
+  if len(addrs)!=1 or addrs[0].get('local')!=own or addrs[0].get('prefixlen')!=32:return False
+  routes=json.loads(run(['ip','-j','route','show','dev',iface(c)]).stdout)
+  return len(routes)==1 and str(routes[0].get('dst','')).removesuffix('/32')==other and routes[0].get('prefsrc')==own
+ except (ValueError,KeyError,TypeError,OSError,subprocess.SubprocessError):return False
+
 def cleanup(c):
  if c['engine']!='gre':return
- answer=run(['ip','-j','link','show','dev',iface(c)],False)
+ answer=run(['ip','-j','-d','link','show','dev',iface(c)],False)
  if answer.returncode:return
  links=json.loads(answer.stdout)
- if not links or links[0].get('ifalias')!=alias(c):raise RuntimeError('test interface ownership differs; interface kept')
+ if not links or (links[0].get('ifalias')!=alias(c) and not owned_legacy_gre(c,links[0])):raise RuntimeError('test interface ownership differs; interface kept')
  run(['ip','link','delete','dev',iface(c)])
 
 def setup_gre(c):
@@ -53,10 +75,13 @@ def setup_gre(c):
   # Refuse a pre-existing specific route. Never replace a host's route.
   found=run(['ip','-j','route','show','match',address+'/32'])
   if any(row.get('dst','default')!='default' for row in json.loads(found.stdout)):raise RuntimeError('test address overlaps an existing route')
- args=['ip','link','add',name,'alias',alias(c),'type',c['transport'],'local',local,'remote',peer,'key',str(c['gre_key'])]
+ args=['ip','link','add',name,'type',c['transport'],'local',local,'remote',peer,'key',str(c['gre_key'])]
  args+=['hoplimit','64','encaplimit','4'] if c['transport'].startswith('ip6') else ['ttl','64']
  run(args)
  try:
+  run(['ip','link','set','dev',name,'alias',alias(c)])
+  links=json.loads(run(['ip','-j','link','show','dev',name]).stdout)
+  if not links or links[0].get('ifalias')!=alias(c):raise RuntimeError('temporary interface ownership was not recorded')
   run(['ip','link','set','dev',name,'mtu','1400'])
   run(['ip','address','add',own+'/32','dev',name])
   run(['ip','link','set','dev',name,'up'])
@@ -73,6 +98,13 @@ def line(sock):
   buf.extend(b)
  raise ValueError('test header too long')
 def send(sock,value):sock.sendall(json.dumps(value).encode()+b'\n')
+def exact(sock,size):
+ buf=bytearray()
+ while len(buf)<size:
+  data=sock.recv(size-len(buf))
+  if not data:raise ConnectionError('short test frame')
+  buf.extend(data)
+ return bytes(buf)
 
 class Echo:
  def __init__(self,host,token,port=0):
@@ -91,11 +123,14 @@ class Echo:
     elif mode=='download':
      data=b'x'*32768
      for _ in range(BULK//len(data)):conn.sendall(data)
-    elif mode=='upload':
+    elif mode=='upload-frames':
      n=0
      while n<BULK:
-      data=conn.recv(min(65536,BULK-n))
-      if not data:break
+      size=struct.unpack('!I',exact(conn,4))[0]
+      if size==0:break
+      if size>32768 or n+size>BULK:raise ValueError('invalid upload frame size')
+      data=exact(conn,size)
+      if data!=b'x'*size:raise ValueError('upload frame integrity failed')
       n+=len(data)
      send(conn,{'bytes':n})
   except (OSError,ValueError):pass
@@ -161,7 +196,7 @@ def measure_protocol(host,port,token,proto,budget_seconds=45):
     if answer.get('seq')==seq:timings.append((time.monotonic()-start)*1000)
    except (OSError,ValueError):pass
    time.sleep(.1)
-  download=upload=0;download_bytes=upload_bytes=0
+  download=upload=None;download_bytes=upload_bytes=0
   if timings and time.monotonic()<deadline:
    try:
     if udp:
@@ -196,17 +231,20 @@ def measure_protocol(host,port,token,proto,budget_seconds=45):
        download_bytes+=len(buf)
      download=download_bytes*8/max(.001,time.monotonic()-start)/1e6
      start=time.monotonic()
-     with tcp_request(host,port,token,'upload') as conn:
+     with tcp_request(host,port,token,'upload-frames') as conn:
       chunk=b'x'*32768
       end=min(deadline,time.monotonic()+8)
       for _ in range(BULK//len(chunk)):
        if time.monotonic()>=end:break
-       conn.sendall(chunk)
+       conn.sendall(struct.pack('!I',len(chunk))+chunk)
+      # Explicit terminator survives proxies which do not preserve half-close.
+      conn.sendall(struct.pack('!I',0))
       upload_bytes=min(BULK,max(0,int(line(conn).get('bytes',0))))
      upload=upload_bytes*8/max(.001,time.monotonic()-start)/1e6
    except (OSError,ValueError):pass
-  ok=len(timings);expected=PACKETS*1000 if udp else BULK;status='ok' if ok==SAMPLES and download_bytes==expected and upload_bytes==expected else 'unstable' if ok>0 else 'down'
-  return {'status':status,'ok':ok,'total':SAMPLES,'rtt':round(statistics.mean(timings),2) if timings else 0,'jitter':round(statistics.pstdev(timings),2) if len(timings)>1 else 0,'download':round(download,3),'upload':round(upload,3),'download_bytes':download_bytes,'upload_bytes':upload_bytes,'loss_percent':round(100*(1-ok/SAMPLES),2),'bulk_loss_percent':round(100*(1-min(download_bytes,upload_bytes)/expected),2)}
+  ok=len(timings);expected=PACKETS*1000 if udp else BULK
+  status='ok' if ok==SAMPLES and (not udp or download_bytes==expected and upload_bytes==expected) else 'unstable' if ok>0 else 'down'
+  return {'status':status,'ok':ok,'total':SAMPLES,'rtt':round(statistics.mean(timings),2) if timings else 0,'jitter':round(statistics.pstdev(timings),2) if len(timings)>1 else 0,'download':round(download,3) if download is not None else None,'upload':round(upload,3) if upload is not None else None,'download_complete':download_bytes==expected,'upload_complete':upload_bytes==expected,'download_bytes':download_bytes,'upload_bytes':upload_bytes,'loss_percent':round(100*(1-ok/SAMPLES),2),'bulk_loss_percent':round(100*(1-min(download_bytes,upload_bytes)/expected),2) if udp else None}
  finally:
   if udp:udp.close()
 
@@ -260,6 +298,17 @@ def serve(c):
   cleanup(c)
 
 def dispatch(q):
+ if q.get('action')=='recover':
+  recovered=[];kept=[]
+  for path in ROOT.glob('*/config.json'):
+   try:
+    c=validate(read(path))
+    if path!=folder(c['id'])/'config.json' or c['engine']!='gre':continue
+    active=run(['systemctl','is-active','--quiet','speedbox-net-test-'+c['id']+'.service'],False)
+    if active.returncode==0:continue
+    cleanup(c);shutil.rmtree(path.parent);recovered.append(c['id'])
+   except (ValueError,KeyError,RuntimeError,OSError,subprocess.SubprocessError):kept.append(path.parent.name)
+  return {'recovered':len(recovered),'kept':kept}
  test_id=identity(q['id']);base=folder(test_id);config_path=base/'config.json';unit='speedbox-net-test-'+test_id
  action=q['action']
  if action=='start':

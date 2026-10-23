@@ -34,7 +34,7 @@ $assertions=0;
 $check=function($condition,$message)use(&$assertions){if(!$condition)throw new RuntimeException($message);$assertions++;};
 $hosts=[];foreach(range(1,5) as $id)$hosts[$id]=ManagedServer::create(['name'=>'host-'.$id,'host'=>'192.0.2.'.$id,'machine_id'=>$id])->fresh();
 $make=function($name,$iran,$foreign,$port) {
- return ServerTunnel::create(['name'=>$name,'remote_name'=>'sb-'.bin2hex(random_bytes(16)),'iran_server_id'=>$iran,'foreign_server_id'=>$foreign,'kind'=>'reverse','transport'=>'pck','orientation'=>'normal','secret'=>str_repeat('x',64),'settings'=>['public_host'=>'ir.test','peer_host'=>'','tunnel_port'=>$port,'accept_udp'=>false,'mappings'=>[['public_port'=>$port+1,'target_port'=>$port+2]]],'status'=>'connected','subnet'=>$port]);
+ return ServerTunnel::create(['name'=>$name,'remote_name'=>'sb-'.bin2hex(random_bytes(16)),'iran_server_id'=>$iran,'foreign_server_id'=>$foreign,'kind'=>'reverse','transport'=>'pck','orientation'=>'normal','secret'=>str_repeat('x',64),'settings'=>['enabled'=>true,'telegram_alerts'=>false,'public_host'=>'ir.test','peer_host'=>'','tunnel_port'=>$port,'accept_udp'=>false,'mappings'=>[['public_port'=>$port+1,'target_port'=>$port+2]]],'status'=>'connected','subnet'=>$port]);
 };
 
 // Real controller validation/transactions with an isolated Laravel container.

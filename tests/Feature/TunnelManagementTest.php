@@ -19,7 +19,7 @@ class TunnelManagementTest extends TestCase
         config(['app.key'=>'base64:'.base64_encode(str_repeat('t',32)), 'queue.default'=>'database', 'cache.default'=>'array']);
         Queue::fake();
         Schema::create('panel_users',function(Blueprint $t){$t->id();$t->string('name');$t->string('email');$t->string('password');$t->integer('role');$t->boolean('banned')->default(false);$t->timestamps();});
-        foreach(['2025_01_01_000000_create_speedbox_core_tables.php','2026_10_08_000001_create_speedbox_infrastructure_tables.php','2026_10_18_000001_add_node_warp_egress.php','2026_10_18_000002_create_speedbox_tunnels.php','2026_10_18_000003_create_speedbox_tunnel_host_status.php'] as $file)(require database_path('migrations/'.$file))->up();
+        foreach(['2025_01_01_000000_create_speedbox_core_tables.php','2026_10_08_000001_create_speedbox_infrastructure_tables.php','2026_10_18_000001_add_node_warp_egress.php','2026_10_18_000002_create_speedbox_tunnels.php','2026_10_18_000003_create_speedbox_tunnel_host_status.php','2026_10_23_000001_add_reverse_ssh_route.php'] as $file)(require database_path('migrations/'.$file))->up();
         foreach(['iran'=>'192.0.2.1','foreign'=>'192.0.2.2'] as $side=>$host){
             $machine=ServerMachine::create(['name'=>$side,'token'=>$side.'-token','is_active'=>true]);
             $this->$side=ManagedServer::create(['name'=>$side,'host'=>$host,'ssh_port'=>22,'ssh_user'=>'root','auth_type'=>'password','password'=>'private-password','machine_id'=>$machine->id,'status'=>'ready']);
@@ -106,11 +106,11 @@ class TunnelManagementTest extends TestCase
         $this->withToken($this->token)->postJson('/api/admin/infrastructure/tunnel-tests',['iran_server_id'=>$this->iran->id,'foreign_server_id'=>$this->foreign->id])->assertUnprocessable();
         $this->assertSame(0,TunnelConnectionTest::count());
     }
-    public function test_swapped_results_are_not_mislabelled_as_iran_entry():void
+    public function test_swapped_results_use_the_iran_ingress_adapter():void
     {
         $manager=app(TunnelManager::class);$rows=$manager->rows([['k'=>'reverse','t'=>'tcp','s'=>'ok'],['k'=>'direct','t'=>'pck','s'=>'ok'],['k'=>'reverse','t'=>'tcp','s'=>'skipped']],'swapped');
-        $this->assertFalse($rows[0]['selectable']);$this->assertTrue($rows[1]['selectable']);$this->assertFalse($rows[2]['selectable']);
-        $this->assertStringContainsString('ورود کاربران از سرور خارج',$rows[0]['reason']);
+        $this->assertTrue($rows[0]['selectable']);$this->assertTrue($rows[1]['selectable']);$this->assertFalse($rows[2]['selectable']);
+        $this->assertSame('',$rows[0]['reason']);
     }
     public function test_paired_apply_rolls_back_both_ends_and_preserves_database_settings():void
     {
@@ -188,5 +188,15 @@ class TunnelManagementTest extends TestCase
         (new RunTunnelOperation($op->id))->handle($remote,app(TunnelManager::class));
         $this->assertSame('completed',$test->fresh()->status);$this->assertSame('succeeded',$op->fresh()->status);
         $this->assertTrue($test->fresh()->results[0]['recommended']);$this->assertSame(0,DB::table('speedbox_tunnel_leases')->count());
+    }
+    public function test_reverse_route_requires_a_pinned_foreign_host_and_unique_local_port():void
+    {
+        $this->withToken($this->token);
+        $body=['name'=>'Reverse host','host'=>'192.0.2.90','ssh_port'=>22,'ssh_user'=>'root','auth_type'=>'password','password'=>'do-not-expose','install_after_save'=>false,'reverse_ssh_port'=>45221];
+        $this->postJson('/api/admin/infrastructure/servers',$body)->assertUnprocessable();
+        $body['host_fingerprint']='SHA256:'.str_repeat('a',43);
+        $response=$this->postJson('/api/admin/infrastructure/servers',$body)->assertCreated();
+        $response->assertJsonPath('data.host','192.0.2.90')->assertJsonPath('data.reverse_ssh_port',45221)->assertJsonMissingPath('data.password');
+        $this->postJson('/api/admin/infrastructure/servers',[...$body,'host'=>'192.0.2.91'])->assertUnprocessable();
     }
 }

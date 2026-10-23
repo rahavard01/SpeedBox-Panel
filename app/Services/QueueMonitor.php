@@ -152,8 +152,24 @@ class QueueMonitor
             'peakJobsPerMinute' => $peak, 'failedJobs' => $failed, 'periods' => ['recentJobs' => 1, 'failedJobs' => 168],
             'queueWithMaxRuntime' => $longest ? ['name' => $longest->queue, 'runtime' => (float) $longest->duration] : null,
             'wait' => collect($workload)->max('wait'), 'workload' => $workload,
-            'recent' => $ready ? (clone $activity)->orderByDesc('started_at')->limit(20)->get(['id', 'job_id', 'queue', 'name', 'status', 'attempts', 'started_at', 'finished_at', 'duration', 'exception_class']) : [],
+            'recent' => $ready ? $this->recentOperations((clone $activity)->orderByDesc('started_at')->limit(50)->get(['id', 'job_id', 'queue', 'name', 'status', 'attempts', 'started_at', 'finished_at', 'duration', 'exception_class'])) : [],
         ];
+    }
+
+    private function recentOperations($rows): array
+    {
+        if(!Schema::hasTable('speedbox_tunnel_operations'))return $rows->take(20)->all();
+        $continuations=[\App\Jobs\RunTunnelOperation::class,\App\Jobs\RunNetworkTunnelTest::class,\App\Jobs\RunTunnelReconfigure::class];
+        $recent=$rows->reject(fn($row)=>in_array($row->name,$continuations,true))->map(fn($row)=>(array)$row);
+        foreach(\App\Models\TunnelOperation::latest('id')->limit(20)->get() as $op) {
+            $active=in_array($op->status,['queued','running'],true);
+            $recent->push(['id'=>'tunnel-operation-'.$op->id,'job_id'=>(string)$op->id,'queue'=>'deployments',
+                'name'=>($op->test_id?'تست اتصال تونل':'عملیات تونل').' #'.$op->id,
+                'status'=>$op->status,'attempts'=>1,'started_at'=>$op->created_at->toDateTimeString(),
+                'finished_at'=>$active?null:$op->updated_at->toDateTimeString(),
+                'duration'=>max(0,($active?now():$op->updated_at)->timestamp-$op->created_at->timestamp),'exception_class'=>null]);
+        }
+        return $recent->sortByDesc('started_at')->take(20)->values()->all();
     }
 
     public function failedJobs(): array

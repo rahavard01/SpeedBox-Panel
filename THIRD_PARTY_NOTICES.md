@@ -13,7 +13,7 @@ Original license files and notices are retained where provided. The agent's inte
 ## BackPack integration
 
 Tunnel management uses a modified, isolated build of AminMGMT/BackPack, pinned to
-commit `132467bfdfb2698d74ada2992413e75bfccbfbd3` (reports v1.9.0).
+official release v1.8.5, commit `ff86354bcafbd054e7888e48343145323c9b2207`.
 Upstream: https://github.com/AminMGMT/BackPack
 License, notices, trademark terms and the complete pinned upstream source archive
 are distributed in `scripts/backpack/`. The integration changes and reproducible

@@ -80,7 +80,8 @@ class RunTunnelReconfigure implements ShouldQueue,ShouldBeEncrypted
             $this->next($op,[...$p,'phase'=>'apply','index'=>0],'در حال راه‌اندازی روش جدید…',40);return;
         }
         if($phase==='apply') {
-            $order=$candidate->kind==='reverse'||$candidate->orientation==='swapped'?$sides:array_reverse($sides);
+            $listenerIran=$candidate->kind==='reverse'?$candidate->orientation==='normal':$candidate->orientation==='swapped';
+            $order=$listenerIran?$sides:array_reverse($sides);
             if(isset($order[$i])) {
                 $side=$order[$i];
                 $r=$remote->call($servers[$side],(new RunTunnelOperation($op->id))->applyRequest($candidate,$p['settings'],$side));

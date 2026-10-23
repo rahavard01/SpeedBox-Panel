@@ -96,6 +96,7 @@ PY;
             $this->ssh->run($server,$sudo.'sh -c '.escapeshellarg($script),45);
             if($engine==='gost')foreach(\App\Support\NetworkTunnelRules::VERSIONS as $version)$this->installGost($server,$dir,$sudo,$version);
         });
+        $this->probe($server,['action'=>'recover']);
     }
 
     public function probe(ManagedServer $server,array $request): array

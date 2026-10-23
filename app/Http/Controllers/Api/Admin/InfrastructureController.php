@@ -421,6 +421,7 @@ class InfrastructureController extends Controller
             'private_key' => [Rule::requiredIf($request->input('auth_type') === 'key' && (!$server || !$server->private_key)), 'nullable', 'string'],
             'private_key_passphrase' => ['nullable', 'string'],
             'host_fingerprint' => ['nullable', 'string', 'max:255'],
+            'reverse_ssh_port' => ['nullable','integer','between:1024,65535',Rule::unique('speedbox_managed_servers')->ignore($server?->id)],
             'notes' => ['nullable', 'string', 'max:2000'],
         ], [
             'required' => 'وارد کردن :attribute الزامی است.',
@@ -440,6 +441,9 @@ class InfrastructureController extends Controller
             'host_fingerprint' => 'اثر انگشت میزبان', 'notes' => 'توضیحات',
         ]);
         unset($data['notes']);
+        if(!empty($data['reverse_ssh_port'])) {
+            abort_unless(preg_match('/^SHA256:[A-Za-z0-9+\/]{43}$/D',trim((string)($data['host_fingerprint']??$server?->host_fingerprint))),422,'برای SSH معکوس، اثر انگشت SHA256 سرور مقصد را وارد کنید.');
+        }
         return $data;
     }
 
