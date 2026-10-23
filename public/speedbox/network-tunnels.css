@@ -216,9 +216,9 @@
 .wat-carriers{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;padding:14px 0}
 .wat-carriers label{display:flex;gap:8px;align-items:center}
 .speedbox-infrastructure .tunnel-toolbar .network-filters>.seg-btn{display:inline-flex;align-items:center;justify-content:center;line-height:20px;min-height:40px;box-sizing:border-box}
-.speedbox-infrastructure-overlay .tunnel-modal .wat-editor .form-grid{display:grid;grid-template-columns:minmax(0,1fr);gap:16px}
-.speedbox-infrastructure-overlay .tunnel-modal .wat-editor .field{display:grid;grid-template-columns:minmax(0,1fr) minmax(150px,min(44%,220px));align-items:center;gap:10px;min-width:0;max-width:100%;margin:0}
-.speedbox-infrastructure-overlay .tunnel-modal .wat-editor .field>label{padding:0;line-height:1.8;white-space:normal;text-align:right}
+.speedbox-infrastructure-overlay .tunnel-modal .wat-editor .form-grid{display:grid;grid-template-columns:minmax(0,1fr);gap:18px}
+.speedbox-infrastructure-overlay .tunnel-modal .wat-editor .field,.speedbox-infrastructure-overlay .tunnel-modal .wat-editor .form-grid>.field{display:grid;grid-template-columns:minmax(0,1fr);align-items:center;gap:10px;min-width:0;max-width:100%;margin:0}
+.speedbox-infrastructure-overlay .tunnel-modal .wat-editor .field>label{padding:0 6px;line-height:1.5;white-space:normal;text-align:right}
 .speedbox-infrastructure-overlay .tunnel-modal .wat-editor .field>:is(input,select,.speedbox-select){width:100%;min-width:0;max-width:none;box-sizing:border-box}
 .speedbox-infrastructure-overlay .tunnel-modal .wat-editor .field>small{grid-column:1/-1;min-width:0;overflow-wrap:anywhere;margin:0}
 .speedbox-infrastructure-overlay .tunnel-modal .wat-editor .network-section{margin-top:18px}
@@ -229,7 +229,6 @@
 @media(max-width:540px){
  .wat-carriers{grid-template-columns:repeat(2,minmax(0,1fr))}
  .speedbox-infrastructure .tunnel-toolbar .network-filters>.seg-btn{padding:10px 5px;font-size:11px}
- .speedbox-infrastructure-overlay .tunnel-modal .wat-editor .field{grid-template-columns:minmax(0,1fr) minmax(130px,47%)}
  .speedbox-infrastructure-overlay .tunnel-modal .wat-editor .wat-map{gap:8px;padding:10px}
  .speedbox-infrastructure-overlay .tunnel-modal .wat-editor .wat-map .field{grid-template-columns:minmax(0,1fr)}
  .speedbox-infrastructure-overlay .tunnel-modal .wat-map .field>label{font-size:10px}
