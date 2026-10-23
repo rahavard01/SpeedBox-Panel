@@ -3,30 +3,30 @@
     "amd64": {
       "binaries": {
         "xbctl-linux-amd64": {
-          "bytes": 7123106,
-          "sha256": "3db192b07cfda2384d3c9e015e2c317265e96d7683d073f8200fdd0bf9c1dce5"
+          "bytes": 7143586,
+          "sha256": "637d833895fafbf7d1e775748cc4a449545edefb29ef0be14778c5cfb5d59b75"
         },
         "xboard-node-linux-amd64": {
-          "bytes": 66728098,
-          "sha256": "236bf01cce24d908ed035587f8a7b65e1510838f09c63c051af24ab33a681db1"
+          "bytes": 66859170,
+          "sha256": "ea43d1648a452399b7e5d5e442dc598045758c118e9341f2a2a8f8df26cb03d0"
         }
       },
-      "bytes": 25882155,
-      "sha256": "a0cc37bf36a189eb714bce701edf70686342fc339588b0abf788e17174a4ffbb"
+      "bytes": 25953211,
+      "sha256": "d47c7913ed61f49689fa0ab9528b61b126fa66b8e2ba44ed4b4d3e9a5ced8ab4"
     },
     "arm64": {
       "binaries": {
         "xbctl-linux-arm64": {
           "bytes": 6619298,
-          "sha256": "8363240f5b0985e916645262206e539ebe9bb146a4f7766739df8a19d67c9a57"
+          "sha256": "1c5b6c66b8b5b74695e2a9eba71212df0b8c166ce1ece80dd559e7c78863699a"
         },
         "xboard-node-linux-arm64": {
-          "bytes": 61669538,
-          "sha256": "ee791f5e51685507f83779e4a45e4c3f42a191c489bd271715cbc6f9af29b937"
+          "bytes": 61800610,
+          "sha256": "e6228b417b704bec51d9d79f044b92223fa11da5754b8a1ea9c6fb9f8c571f14"
         }
       },
-      "bytes": 23302304,
-      "sha256": "05ee2b02a95419e0bf17eb0c06316e6b361045155aefdf9f55157d0d5a98dd8e"
+      "bytes": 23372055,
+      "sha256": "3a9b66436bcb5040155dd48ad3b492101b6ab77a286260281404451193688883"
     }
   },
   "format": 1,
@@ -99,9 +99,11 @@
     "agent/internal/kernel/singbox/warp_test.go": "3bad194c1a585ace32c4d55aa818421038b54b2fef4117bb9ec75b0f2edcb04f",
     "agent/internal/kernel/uuid_rotation_test.go": "e4cb6aab7966148ff19ac140d1a31ac3dfb9d185d4a1b764ced29d55cbe67c0b",
     "agent/internal/kernel/warp_integration_test.go": "9bed5b70237938577044ed010dbca04734f9e21c7f743135cb78e16f0835e639",
+    "agent/internal/kernel/xray/admission_lifecycle_test.go": "037d660e2c8a81f117f82f746c573cda1118206dcfe5a29cf449f90cfea5a1ec",
+    "agent/internal/kernel/xray/admission_ws_test.go": "752fd894b66294c01e5ab2439ba89b6b8c61b10d5b8c655bc5af7edb46eb7289",
     "agent/internal/kernel/xray/config.go": "6aba5ee0510f2a1c3147402273da5e434b737aeb6b884037cc6535cd7d97245d",
     "agent/internal/kernel/xray/config_test.go": "eefed1724fe34ea78f916cc75f0e25058bb17bc5ef6f490a9307ee9082c15fea",
-    "agent/internal/kernel/xray/dispatcher.go": "4f37523c953653a1b6793e14a732cff6b2ce37390623814d79a47c550374502c",
+    "agent/internal/kernel/xray/dispatcher.go": "44ae582f96b507714043a8932656488ffb3846468cde77c5520dd8e0cb4f78ae",
     "agent/internal/kernel/xray/dispatcher_test.go": "c040f44cc405f729e9dc441907c39dd883e265f545be9ce690cc32b6d575a8bd",
     "agent/internal/kernel/xray/uuid_rotation_test.go": "e3be676bdd56ad141ae64cd74f7402d62c021e5b6d0032973c75178639e61aff",
     "agent/internal/kernel/xray/warp_test.go": "64e274537185ee0d07b6396594c1eb5ee979dde329e87175c301a733b7d1f703",
@@ -147,9 +149,9 @@
     "agent/internal/tracker/tracker.go": "e52075dd2482712b239cfe7043626795429bfc3a0f1eef441f9a0e67d5ed7ec7",
     "agent/internal/tracker/tracker_test.go": "2a05026190894f66ea02f978796f9ad88201edab78b77c8c26a3ae0830d6abd1",
     "scripts/agent-artifacts.php": "da5662c710978ef80d829b6c8cefeffddcd841e5a068fa107d7357b7a5c8f3ec",
-    "scripts/build-agent-from-source.sh": "ae819c9fc6ac9accfa72ea83cea188ac8c93df021f1d79318d64b85d67deda90",
+    "scripts/build-agent-from-source.sh": "6800fa9f4a94890a932e7ecfa2c39639e4d5798261868c1d1d91d09758b19526",
     "scripts/build-agent.sh": "14089d7b06d90e6e3e72f11a260858f1b24494cf049b71ec78867d26a3adb207",
-    "scripts/package-agent.py": "cdb4f34ef469eaa583d413f5f6733830dfe872006c8d8300693fe535d2a2be8c"
+    "scripts/package-agent.py": "3913799e95174917fb83842b1e4ab26139bf420044c3e6abe482a6c245a0ec68"
   },
-  "version": "panel-speedbox-http-obfs-uuid-v1-nodes-v2"
+  "version": "panel-speedbox-http-obfs-uuid-v1-nodes-v3-lease-lifecycle"
 }

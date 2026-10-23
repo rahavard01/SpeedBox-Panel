@@ -17,7 +17,7 @@ import (
 	"github.com/xtls/xray-core/transport"
 
 	"github.com/cedar2025/xboard-node/internal/admission"
- "github.com/cedar2025/xboard-node/internal/nlog"
+	"github.com/cedar2025/xboard-node/internal/nlog"
 )
 
 // Access xray's internal config creator registry so we can replace the
@@ -81,7 +81,7 @@ type LimitDispatcher struct {
 	unlimitedIPs sync.Map // email → *ipCounter
 
 	admission atomic.Pointer[admission.AcquireFunc]
- connCount atomic.Int64 // total active connections tracked by dispatcher
+	connCount atomic.Int64 // total active connections tracked by dispatcher
 }
 
 // ipCounter tracks IPs for unlimited users without any lock.
@@ -104,45 +104,77 @@ func (ic *ipCounter) aliveIPs() map[string]bool {
 // ─── routing.Dispatcher ──────────────────────────────────────────────────────
 
 func (d *LimitDispatcher) Dispatch(ctx context.Context, dest net.Destination) (*transport.Link, error) {
- email,ip,ticket,err:=d.admit(ctx)
- if err!=nil{return nil,err}
- link,err:=d.innerDisp.Dispatch(ctx,dest)
- if err!=nil {if email!=""{d.delConn(email,ip)};ticket.Release();return nil,err}
- if email!=""{d.trackLink(link,email,ip,true,ticket)}
- return link,nil
+	email, ip, ticket, err := d.admit(ctx)
+	if err != nil {
+		return nil, err
+	}
+	link, err := d.innerDisp.Dispatch(ctx, dest)
+	if err != nil {
+		if email != "" {
+			d.delConn(email, ip)
+		}
+		ticket.Release()
+		return nil, err
+	}
+	if email != "" {
+		d.trackLink(link, email, ip, true, ticket).watchContext(ctx)
+	}
+	return link, nil
 }
 func (d *LimitDispatcher) DispatchLink(ctx context.Context, dest net.Destination, link *transport.Link) error {
- email,ip,ticket,err:=d.admit(ctx)
- if err!=nil{return err}
- var writer *closeTrackingWriter
- if email!=""{writer=d.trackLink(link,email,ip,true,ticket)}
- err=d.innerDisp.DispatchLink(ctx,dest,link)
- if err!=nil && writer!=nil {writer.Interrupt()}
- return err
+	email, ip, ticket, err := d.admit(ctx)
+	if err != nil {
+		return err
+	}
+	var writer *closeTrackingWriter
+	if email != "" {
+		writer = d.trackLink(link, email, ip, true, ticket)
+		writer.watchContext(ctx)
+		// DispatchLink owns a synchronous outbound operation. Even a successful
+		// terminal handler need not close the supplied writer itself.
+		defer writer.Interrupt()
+	}
+	err = d.innerDisp.DispatchLink(ctx, dest, link)
+	if err != nil && writer != nil {
+		writer.Interrupt()
+	}
+	return err
 }
-func (d *LimitDispatcher) admit(ctx context.Context) (email,ip string,ticket *admission.Ticket,err error) {
- si:=session.InboundFromContext(ctx)
- if si==nil || si.User==nil || si.User.Email==""{return "","",nil,nil}
- email=si.User.Email;ip=si.Source.Address.IP().String()
- if fn:=d.admission.Load();fn!=nil{
-  d.mu.RLock();uid:=d.emailToUID[email];d.mu.RUnlock()
-  ticket,err=(*fn)(uid,ip)
-  if err!=nil{return "","",nil,err}
- }
- // The central reservation is authoritative; local counts remain for reports.
- if d.checkDeviceLimit(email,ip,true){ticket.Release();return "","",nil,errors.New("connection limit exceeded")}
- return email,ip,ticket,nil
+func (d *LimitDispatcher) admit(ctx context.Context) (email, ip string, ticket *admission.Ticket, err error) {
+	si := session.InboundFromContext(ctx)
+	if si == nil || si.User == nil || si.User.Email == "" {
+		return "", "", nil, nil
+	}
+	email = si.User.Email
+	ip = si.Source.Address.IP().String()
+	if fn := d.admission.Load(); fn != nil {
+		d.mu.RLock()
+		uid := d.emailToUID[email]
+		d.mu.RUnlock()
+		ticket, err = (*fn)(uid, ip)
+		if err != nil {
+			return "", "", nil, err
+		}
+	}
+	// The central reservation is authoritative; local counts remain for reports.
+	if d.checkDeviceLimit(email, ip, true) {
+		ticket.Release()
+		return "", "", nil, errors.New("connection limit exceeded")
+	}
+	return email, ip, ticket, nil
 }
-func (d *LimitDispatcher) trackLink(link *transport.Link,email,ip string,_ bool,tickets ...*admission.Ticket) *closeTrackingWriter {
- var ticket *admission.Ticket
- if len(tickets)>0{ticket=tickets[0]}
- d.connCount.Add(1)
- writer:=&closeTrackingWriter{Writer:link.Writer,onClose:func(){common.Interrupt(link.Reader);d.delConn(email,ip);d.connCount.Add(-1);ticket.Release()}}
- link.Writer=writer
- ticket.Bind(func(){common.Interrupt(link.Reader);writer.Interrupt()})
- return writer
+func (d *LimitDispatcher) trackLink(link *transport.Link, email, ip string, _ bool, tickets ...*admission.Ticket) *closeTrackingWriter {
+	var ticket *admission.Ticket
+	if len(tickets) > 0 {
+		ticket = tickets[0]
+	}
+	d.connCount.Add(1)
+	writer := &closeTrackingWriter{Writer: link.Writer, onClose: func() { common.Interrupt(link.Reader); d.delConn(email, ip); d.connCount.Add(-1); ticket.Release() }}
+	link.Writer = writer
+	ticket.Bind(func() { common.Interrupt(link.Reader); writer.Interrupt() })
+	return writer
 }
-func (d *LimitDispatcher) SetConnectionAdmission(fn admission.AcquireFunc) {d.admission.Store(&fn)}
+func (d *LimitDispatcher) SetConnectionAdmission(fn admission.AcquireFunc) { d.admission.Store(&fn) }
 
 // ─── features.Feature (delegated) ───────────────────────────────────────────
 
@@ -192,7 +224,7 @@ func (d *LimitDispatcher) GetConnectionState() (aliveIPs map[int]map[string]bool
 	d.mu.RLock()
 	emailToUID := d.emailToUID
 	limitedIPs := d.limitedIPs
- defer d.mu.RUnlock()
+	defer d.mu.RUnlock()
 
 	aliveIPs = make(map[int]map[string]bool)
 
@@ -207,7 +239,13 @@ func (d *LimitDispatcher) GetConnectionState() (aliveIPs map[int]map[string]bool
 			ipSet[ip] = true
 		}
 		if len(ipSet) > 0 {
-            if existing:=aliveIPs[uid];existing!=nil{for ip:=range ipSet{existing[ip]=true}}else{aliveIPs[uid]=ipSet}
+			if existing := aliveIPs[uid]; existing != nil {
+				for ip := range ipSet {
+					existing[ip] = true
+				}
+			} else {
+				aliveIPs[uid] = ipSet
+			}
 		}
 	}
 
@@ -240,47 +278,93 @@ func (d *LimitDispatcher) GetConnectionState() (aliveIPs map[int]map[string]bool
 
 // checkDeviceLimit atomically reserves an IP and records both TCP and UDP.
 // With central admission enabled, its ticket is authoritative.
-func (d *LimitDispatcher) checkDeviceLimit(email,sourceIP string,_ bool) bool {
- d.mu.Lock();defer d.mu.Unlock()
- ips:=d.limitedIPs[email]
- if ips==nil {ips=make(map[string]int);d.limitedIPs[email]=ips}
- limit:=d.deviceLimits[email]
- if d.admission.Load()==nil && limit>0 && ips[sourceIP]==0 && len(ips)>=limit{return true}
- // Reserve TCP and UDP in the same critical section. Never admit a new IP by sorting it.
- ips[sourceIP]++
- if _,exists:=d.unlimitedIPs.Load(email);limit<=0 || exists {
-  value,_:=d.unlimitedIPs.LoadOrStore(email,&ipCounter{})
-  counter,_:=value.(*ipCounter).ips.LoadOrStore(sourceIP,&atomic.Int64{})
-  counter.(*atomic.Int64).Add(1)
- }
- return false
+func (d *LimitDispatcher) checkDeviceLimit(email, sourceIP string, _ bool) bool {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	ips := d.limitedIPs[email]
+	if ips == nil {
+		ips = make(map[string]int)
+		d.limitedIPs[email] = ips
+	}
+	limit := d.deviceLimits[email]
+	if d.admission.Load() == nil && limit > 0 && ips[sourceIP] == 0 && len(ips) >= limit {
+		return true
+	}
+	// Reserve TCP and UDP in the same critical section. Never admit a new IP by sorting it.
+	ips[sourceIP]++
+	if _, exists := d.unlimitedIPs.Load(email); limit <= 0 || exists {
+		value, _ := d.unlimitedIPs.LoadOrStore(email, &ipCounter{})
+		counter, _ := value.(*ipCounter).ips.LoadOrStore(sourceIP, &atomic.Int64{})
+		counter.(*atomic.Int64).Add(1)
+	}
+	return false
 }
-func (d *LimitDispatcher) delConn(email,sourceIP string) {
- d.mu.Lock();defer d.mu.Unlock()
- if value,ok:=d.unlimitedIPs.Load(email);ok{
-  ic:=value.(*ipCounter)
-  if counter,ok:=ic.ips.Load(sourceIP);ok && counter.(*atomic.Int64).Add(-1)<=0{ic.ips.Delete(sourceIP)}
- }
- if ips:=d.limitedIPs[email];ips!=nil{
-  ips[sourceIP]--
-  if ips[sourceIP]<=0{delete(ips,sourceIP)}
-  if len(ips)==0{delete(d.limitedIPs,email)}
- }
+func (d *LimitDispatcher) delConn(email, sourceIP string) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if value, ok := d.unlimitedIPs.Load(email); ok {
+		ic := value.(*ipCounter)
+		if counter, ok := ic.ips.Load(sourceIP); ok && counter.(*atomic.Int64).Add(-1) <= 0 {
+			ic.ips.Delete(sourceIP)
+		}
+	}
+	if ips := d.limitedIPs[email]; ips != nil {
+		ips[sourceIP]--
+		if ips[sourceIP] <= 0 {
+			delete(ips, sourceIP)
+		}
+		if len(ips) == 0 {
+			delete(d.limitedIPs, email)
+		}
+	}
 }
 
 type closeTrackingWriter struct {
 	buf.Writer
-	onClose func()
-	closed  atomic.Bool
+	onClose     func()
+	closed      atomic.Bool
+	stopMu      sync.Mutex
+	stopContext func() bool
+}
+
+// The inbound context is the fallback lifetime boundary when a transport
+// ends without an explicit writer close. Stop the callback on normal close
+// so completed streams are not retained by a long-lived mux context.
+func (w *closeTrackingWriter) watchContext(ctx context.Context) {
+	stop := context.AfterFunc(ctx, w.Interrupt)
+	w.stopMu.Lock()
+	if w.closed.Load() {
+		w.stopMu.Unlock()
+		stop()
+		return
+	}
+	w.stopContext = stop
+	w.stopMu.Unlock()
+}
+
+func (w *closeTrackingWriter) finish() {
+	if !w.closed.CompareAndSwap(false, true) {
+		return
+	}
+	w.stopMu.Lock()
+	stop := w.stopContext
+	w.stopContext = nil
+	w.stopMu.Unlock()
+	if stop != nil {
+		stop()
+	}
+	if w.onClose != nil {
+		w.onClose()
+	}
 }
 
 func (w *closeTrackingWriter) Close() error {
- err:=common.Close(w.Writer)
- if w.closed.CompareAndSwap(false,true){w.onClose()}
- return err
+	err := common.Close(w.Writer)
+	w.finish()
+	return err
 }
 
 func (w *closeTrackingWriter) Interrupt() {
- common.Interrupt(w.Writer)
- if w.closed.CompareAndSwap(false,true){w.onClose()}
+	common.Interrupt(w.Writer)
+	w.finish()
 }
