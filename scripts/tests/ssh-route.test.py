@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Real command/upload routing through a temporary reverse SSH channel.
+"""Real direct command/upload checks; legacy reverse routes must be ignored.
 
 No external server is contacted. Authentication and host-key mismatch must stop
 before fallback; commands that partially execute must never be replayed.
@@ -58,16 +58,27 @@ Subsystem sftp internal-sftp
                     except OSError:return
             threading.Thread(target=accept,daemon=True).start()
             server={'id':1,'host':'127.0.0.1','ssh_port':direct,'ssh_user':'root','auth_type':'key','private_key':(tmp/'identity').read_text(),'host_fingerprint':fingerprint,'reverse_ssh_port':reverse}
+            forwarded=lambda:(tmp/'reverse.log').read_text().count('client_request_forwarded_tcpip:')
+            # The readiness connection above deliberately traverses the decoy.
+            # Record it before checking that panel commands add no channels.
+            deadline=time.monotonic()+5
+            while forwarded()==0:
+                if time.monotonic()>deadline:raise AssertionError('decoy readiness connection was not observed')
+                time.sleep(.05)
+            before=forwarded()
             def check(name,changes=None,**payload):
                 fixture=tmp/(name+'.json');fixture.write_text(json.dumps({'server':{**server,**(changes or {})},**payload}))
                 return subprocess.run([args.php,str(ROOT/'scripts/tests/ssh-route.test.php'),str(fixture)],capture_output=True,text=True,env={**os.environ,'SPEEDBOX_SSH_TEST_STORAGE':str(tmp/'storage')},timeout=45)
             r=check('direct',command='printf DIRECT_OK');assert r.returncode==0 and r.stdout=='DIRECT_OK',(r.stdout,r.stderr)
-            # Blackhole the direct SSH handshake; use a real authenticated reverse route.
-            source=tmp/'payload';source.write_text('REVERSE_UPLOAD_OK')
-            r=check('reverse-upload',{'ssh_port':silent},mode='upload',source=str(source),destination=str(tmp/'received'))
-            assert r.returncode==0 and r.stdout=='REVERSE_UPLOAD_OK',(r.stdout,r.stderr)
-            forwarded=lambda:(tmp/'reverse.log').read_text().count('client_request_forwarded_tcpip:')
-            before=forwarded();assert before>0,'reverse channel did not forward SSH traffic'
+            # Upload directly. The live reverse channel is a decoy that must stay unused.
+            source=tmp/'payload';source.write_text('DIRECT_UPLOAD_OK')
+            r=check('direct-upload',mode='upload',source=str(source),destination=str(tmp/'received'))
+            assert r.returncode==0 and r.stdout=='DIRECT_UPLOAD_OK',(r.stdout,r.stderr)
+            assert forwarded()==before,'direct operation used the legacy reverse channel'
+            r=check('stdin',command='cat',input='private request sent on stdin')
+            assert r.returncode==0 and r.stdout=='private request sent on stdin',(r.stdout,r.stderr)
+            r=check('disabled-reverse',{'ssh_port':silent},command='printf MUST_NOT_RUN')
+            assert r.returncode!=0 and forwarded()==before,'unreachable direct host used a removed fallback'
             # Keep fallback fully working, but do not use it to hide bad credentials.
             r=check('wrong-auth',{'private_key':(tmp/'wrong').read_text()},command='printf MUST_NOT_RUN');assert r.returncode!=0 and 'Permission denied' in r.stderr,r
             assert forwarded()==before,'authentication failure used fallback'
@@ -77,7 +88,7 @@ Subsystem sftp internal-sftp
             r=check('partial-command',command='printf x >> '+str(marker)+'; false');assert r.returncode!=0 and marker.read_text()=='x',r
             for conn in connections:conn.close()
             blackhole.close()
-            print('PASS: direct SSH, real reverse SCP/command, authentication refusal, host pinning and no command replay')
+            print('PASS: direct SSH/SCP/stdin, ignored legacy reverse route, authentication refusal, host pinning and no replay')
         except BaseException:
             if (tmp/'sshd.log').exists():print((tmp/'sshd.log').read_text()[-4000:])
             raise

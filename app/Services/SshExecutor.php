@@ -10,7 +10,7 @@ use Symfony\Component\Process\Process;
 class SshExecutor
 {
     private array $temporaryFiles = [];
-    private array $endpoints = [];
+    private array $verifiedHostKeys = [];
     private ?string $pinnedHostFile = null;
 
     public function __construct()
@@ -23,9 +23,9 @@ class SshExecutor
         $this->cleanup();
     }
 
-    public function run(ManagedServer $server, string $command, int $timeout = 120): string
+    public function run(ManagedServer $server, string $command, int $timeout = 120, ?string $input = null): string
     {
-        $endpoint=$this->endpoint($server);
+        $endpoint=['host'=>$server->host,'port'=>(int)$server->ssh_port];
         $this->verifyHostKey($server,$endpoint);
         $process = new Process([
             ...$this->authPrefix($server),
@@ -35,6 +35,7 @@ class SshExecutor
             $command,
         ], null, $this->environment($server));
         $process->setTimeout($timeout);
+        if ($input !== null) $process->setInput($input);
         try {
             $process->run();
         } finally {
@@ -51,7 +52,7 @@ class SshExecutor
     public function upload(ManagedServer $server, string $localPath, string $remotePath, int $timeout = 180): void
     {
         abort_unless(File::isFile($localPath), 500, "فایل موردنیاز نصب موجود نیست: {$localPath}");
-        $endpoint=$this->endpoint($server);
+        $endpoint=['host'=>$server->host,'port'=>(int)$server->ssh_port];
         $scpHost = filter_var($endpoint['host'], FILTER_VALIDATE_IP, FILTER_FLAG_IPV6)
             ? '['.$endpoint['host'].']' : $endpoint['host'];
         foreach ([false, true] as $legacy) {
@@ -144,6 +145,14 @@ class SshExecutor
         if (!$server->host_fingerprint) {
             return;
         }
+        // Cache only the verified public key, never an authenticated session.
+        // Every real connection still has to present this exact pinned key.
+        $cacheKey='speedbox-ssh-key-'.hash('sha256',json_encode([$server->id,$endpoint,$server->host_fingerprint]));
+        $key=$this->verifiedHostKeys[$cacheKey]??null;
+        if ($key===null && app()->bound('cache')) $key=\Illuminate\Support\Facades\Cache::get($cacheKey);
+        if (is_string($key)) {
+            $this->pinKey($key);return;
+        }
         $scan = new Process(['ssh-keyscan', '-p', (string) $endpoint['port'], '-T', '8', $endpoint['host']]);
         $scan->setTimeout(15);
         $scan->run();
@@ -158,43 +167,21 @@ class SshExecutor
             file_put_contents($keyFile,'speedbox-managed-'.$server->id.' '.$parts[1].' '.$parts[2]."\n");chmod($keyFile,0600);
             $fingerprint=new Process(['ssh-keygen','-lf',$keyFile,'-E','sha256']);$fingerprint->mustRun();
             if(in_array(trim($server->host_fingerprint),preg_split('/\s+/',$fingerprint->getOutput()),true)) {
-                $this->pinnedHostFile=$keyFile;return;
+                $this->pinnedHostFile=$keyFile;
+                $key=file_get_contents($keyFile);$this->verifiedHostKeys[$cacheKey]=$key;
+                if(app()->bound('cache'))\Illuminate\Support\Facades\Cache::put($cacheKey,$key,300);
+                return;
             }
         }
         $this->cleanup();
         throw new RuntimeException('اثر انگشت میزبان SSH تغییر کرده است. عملیات متوقف شد.');
     }
 
-    /** Select a route with a harmless command BEFORE executing or uploading anything.
-     * A failed mutation is never retried through another route.
-     */
-    private function endpoint(ManagedServer $server): array
+    private function pinKey(string $key): void
     {
-        $direct=['host'=>$server->host,'port'=>(int)$server->ssh_port];
-        if(!$server->reverse_ssh_port)return $direct;
-        if(!preg_match('/^SHA256:[A-Za-z0-9+\/]{43}$/D',trim((string)$server->host_fingerprint))) {
-            throw new RuntimeException('برای مسیر SSH معکوس، اثر انگشت معتبر سرور مقصد را ثبت کنید.');
-        }
-        $key=hash('sha256',json_encode([$server->id,$direct,$server->reverse_ssh_port,$server->host_fingerprint]));
-        if(isset($this->endpoints[$key]))return $this->endpoints[$key];
-        foreach([$direct,['host'=>'127.0.0.1','port'=>(int)$server->reverse_ssh_port]] as $index=>$route) {
-            $networkFailure=false;
-            try {
-                $this->verifyHostKey($server,$route);
-                $process=new Process([...$this->authPrefix($server),'ssh',...$this->sshOptions($server,$route),
-                    $server->ssh_user.'@'.$route['host'],'true'],null,$this->environment($server));
-                $process->setTimeout(30);$process->run();
-                if($process->isSuccessful())return $this->endpoints[$key]=$route;
-                $error=trim($process->getErrorOutput()."\n".$process->getOutput());
-            } catch (RuntimeException $e) { $error=$e->getMessage();$networkFailure=$e->getCode()===1001; }
-            finally { $this->cleanup(); }
-            // Key mismatch, denied credentials and remote command failures are
-            // not evidence of a broken network route.
-            if($index===1||!$networkFailure&&!preg_match('/Connection timed out|Operation timed out|timed out during/u',$error)) {
-                throw new RuntimeException($error?:'برقراری ارتباط SSH ناموفق بود.');
-            }
-        }
-        throw new RuntimeException('مسیر مستقیم و مسیر SSH معکوس پاسخ ندادند؛ اتصال معکوس سرور را بررسی کنید.');
+        $path=tempnam(storage_path('app/private'),'speedbox-host-key-');
+        file_put_contents($path,$key);chmod($path,0600);
+        $this->temporaryFiles[]=$path;$this->pinnedHostFile=$path;
     }
 
     private function cleanup(): void

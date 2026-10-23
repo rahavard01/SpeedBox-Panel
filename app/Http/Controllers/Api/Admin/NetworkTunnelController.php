@@ -26,7 +26,7 @@ final class NetworkTunnelController extends Controller
         [$test,$op]=DB::transaction(function()use($data,$network,$manager,$tester){
             $servers=\App\Models\ManagedServer::whereIn('id',[$data['iran_server_id'],$data['foreign_server_id']])->orderBy('id')->lockForUpdate()->get()->keyBy('id');
             $cases=$tester->candidates($data['engine'],$servers[$data['iran_server_id']],$servers[$data['foreign_server_id']],$network);
-            $test=\App\Models\TunnelConnectionTest::create(['iran_server_id'=>$data['iran_server_id'],'foreign_server_id'=>$data['foreign_server_id'],'results'=>[]]);
+            $test=\App\Models\TunnelConnectionTest::create(['iran_server_id'=>$data['iran_server_id'],'foreign_server_id'=>$data['foreign_server_id'],'results'=>array_map(fn($row)=>[...$row,'status'=>'queued'],$cases)]);
             return [$test,$manager->queue('network-test',null,$test,['engine'=>$data['engine'],'cases'=>$cases])];
         });
         return response()->json(['message'=>'تست اتصال در صف قرار گرفت.','data'=>$tester->publicTest($test),'operation'=>$op],202);

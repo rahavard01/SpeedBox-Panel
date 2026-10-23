@@ -173,9 +173,17 @@ class Echo:
 def tcp_request(host,port,token,mode,seq=0):
  conn=socket.create_connection((host,port),timeout=1.5);conn.settimeout(4);send(conn,{'token':token,'op':mode,'seq':seq});return conn
 
-def measure_protocol(host,port,token,proto,budget_seconds=45):
- deadline=time.monotonic()+max(.01,min(float(budget_seconds),45))
+def measure_protocol(host,port,token,proto,budget_seconds=30,progress=None):
+ started=time.monotonic();deadline=started+max(.01,min(float(budget_seconds),30))
  timings=[];udp=None;nonce=os.urandom(8).hex()
+ tried=0;download=upload=None;download_bytes=upload_bytes=0
+ def snapshot(phase='echo',status='testing'):
+  value={'status':status,'ok':len(timings),'tried':tried,'total':SAMPLES,'phase':phase,
+   'rtt':round(statistics.mean(timings),2) if timings else None,
+   'jitter':round(statistics.pstdev(timings),2) if len(timings)>1 else None,
+   'download':round(download,3) if download is not None else None,'upload':round(upload,3) if upload is not None else None}
+  if progress:progress(value)
+  return value
  if proto=='udp':udp=socket.socket(socket.AF_INET6 if ':' in host else socket.AF_INET,socket.SOCK_DGRAM);udp.setsockopt(socket.SOL_SOCKET,socket.SO_RCVBUF,1048576);udp.settimeout(1.5);udp.connect((host,port))
  def request(op,**extra):udp.send(json.dumps({'token':token,'nonce':nonce,'op':op,**extra}).encode())
  def response(required=None,expected=None):
@@ -188,6 +196,8 @@ def measure_protocol(host,port,token,proto,budget_seconds=45):
  try:
   for seq in range(SAMPLES):
    if time.monotonic()>=deadline:break
+   if not timings and tried>=3 and time.monotonic()-started>=6:break
+   tried+=1
    start=time.monotonic()
    try:
     if udp:request('echo',seq=seq);answer=response('seq',seq)
@@ -195,9 +205,10 @@ def measure_protocol(host,port,token,proto,budget_seconds=45):
      with tcp_request(host,port,token,'echo',seq) as conn:answer=line(conn)
     if answer.get('seq')==seq:timings.append((time.monotonic()-start)*1000)
    except (OSError,ValueError):pass
+   snapshot()
    time.sleep(.1)
-  download=upload=None;download_bytes=upload_bytes=0
   if timings and time.monotonic()<deadline:
+   snapshot('download')
    try:
     if udp:
      nonce=os.urandom(8).hex();seen=set();start=time.monotonic()
@@ -211,6 +222,7 @@ def measure_protocol(host,port,token,proto,budget_seconds=45):
        except (OSError,ValueError):break
        if q.get('data')=='x'*1000 and isinstance(q.get('i'),int) and 0<=q['i']<PACKETS:seen.add(q['i'])
      elapsed=time.monotonic()-start;download_bytes=len(seen)*1000;download=download_bytes*8/max(.001,elapsed)/1e6
+     snapshot('upload')
      nonce=os.urandom(8).hex()
      for base in range(0,PACKETS,16):
       if time.monotonic()>=deadline:break
@@ -230,6 +242,7 @@ def measure_protocol(host,port,token,proto,budget_seconds=45):
        if not buf:break
        download_bytes+=len(buf)
      download=download_bytes*8/max(.001,time.monotonic()-start)/1e6
+     snapshot('upload')
      start=time.monotonic()
      with tcp_request(host,port,token,'upload-frames') as conn:
       chunk=b'x'*32768
@@ -244,13 +257,28 @@ def measure_protocol(host,port,token,proto,budget_seconds=45):
    except (OSError,ValueError):pass
   ok=len(timings);expected=PACKETS*1000 if udp else BULK
   status='ok' if ok==SAMPLES and (not udp or download_bytes==expected and upload_bytes==expected) else 'unstable' if ok>0 else 'down'
-  return {'status':status,'ok':ok,'total':SAMPLES,'rtt':round(statistics.mean(timings),2) if timings else 0,'jitter':round(statistics.pstdev(timings),2) if len(timings)>1 else 0,'download':round(download,3) if download is not None else None,'upload':round(upload,3) if upload is not None else None,'download_complete':download_bytes==expected,'upload_complete':upload_bytes==expected,'download_bytes':download_bytes,'upload_bytes':upload_bytes,'loss_percent':round(100*(1-ok/SAMPLES),2),'bulk_loss_percent':round(100*(1-min(download_bytes,upload_bytes)/expected),2) if udp else None}
+  return {**snapshot('done',status),'download_complete':download_bytes==expected,'upload_complete':upload_bytes==expected,'download_bytes':download_bytes,'upload_bytes':upload_bytes,'loss_percent':round(100*(1-ok/max(1,tried)),2),'bulk_loss_percent':round(100*(1-min(download_bytes,upload_bytes)/expected),2) if udp else None}
  finally:
   if udp:udp.close()
 
-def measure(c,state):
+def measure(c,state,progress=None):
  host='127.0.0.1' if c['engine']=='gost' else c['inner_foreign'];port=state['port']
- return {proto:measure_protocol(host,port,c['token'],proto) for proto in ('tcp','udp')}
+ results={}
+ for proto in ('tcp','udp'):
+  def update(value):
+   results[proto]=value
+   if progress:progress(dict(results))
+  results[proto]=measure_protocol(host,port,c['token'],proto,progress=update)
+ return results
+
+def measure_worker(c):
+ base=folder(c['id']);started=time.time()
+ def update(protocols):atomic(base/'measurement.json',{'state':'running','protocols':protocols,'started':started,'updated':time.time()})
+ try:
+  protocols=measure(c,read(base/'state.json'),update)
+  atomic(base/'measurement.json',{'state':'completed','protocols':protocols,'started':started,'updated':time.time()})
+ except Exception as error:
+  atomic(base/'measurement.json',{'state':'failed','error':str(error)[:400],'started':started,'updated':time.time()});raise
 
 def serve(c):
  validate(c);base=folder(c['id']);echo=None;proc=None
@@ -326,6 +354,9 @@ def dispatch(q):
    time.sleep(.1)
   raise RuntimeError('temporary test did not become ready')
  if action=='stop':
+  measure_unit='speedbox-net-measure-'+test_id+'.service'
+  run(['systemctl','stop',measure_unit],False)
+  if run(['systemctl','is-active','--quiet',measure_unit],False).returncode==0:raise RuntimeError('test measurement is still running')
   result=run(['systemctl','stop',unit+'.service'],False)
   if config_path.exists():cleanup(validate(read(config_path)))
   elif q.get('engine')=='gre':cleanup({'id':test_id,'engine':'gre'})
@@ -333,6 +364,23 @@ def dispatch(q):
   if active.returncode==0:raise RuntimeError('temporary test is still running')
   shutil.rmtree(base,ignore_errors=True)
   return {'stopped':True}
+ if action in ('measure-start','measure-state'):
+  c=validate(read(config_path))
+  if c['side']!='iran':raise ValueError('measurement must originate in Iran')
+  path=base/'measurement.json'
+  if action=='measure-start' and not path.exists():
+   atomic(path,{'state':'starting','protocols':{},'started':time.time(),'updated':time.time()})
+   try:run(['systemd-run','--quiet','--collect','--unit=speedbox-net-measure-'+test_id,'--property=RuntimeMaxSec=75','--property=TimeoutStopSec=5','--property=KillMode=control-group','/usr/bin/python3',str(Path(__file__).resolve()),'measure-worker',str(config_path)])
+   except BaseException:
+    atomic(path,{'state':'failed','error':'measurement could not start'});raise
+  state=read(path)
+  if state.get('state') in ('starting','running') and time.time()-state.get('started',0)>80:
+   return {**state,'state':'failed','error':'measurement time budget exceeded'}
+  if state.get('state') in ('starting','running') and time.time()-state.get('started',time.time())>3:
+   if run(['systemctl','is-active','--quiet','speedbox-net-measure-'+test_id+'.service'],False).returncode:
+    state=read(path)
+    if state.get('state') in ('starting','running'):return {**state,'state':'failed','error':'measurement worker stopped'}
+  return state
  if action=='measure':
   c=validate(read(config_path))
   if c['side']!='iran':raise ValueError('measurement must originate in Iran')
@@ -342,13 +390,15 @@ def dispatch(q):
 if __name__=='__main__':
  os.umask(0o077)
  try:
-  if len(sys.argv)==3 and sys.argv[1] in ('serve','cleanup'):
+  if len(sys.argv)==3 and sys.argv[1] in ('serve','cleanup','measure-worker'):
    path=Path(sys.argv[2]);c=validate(read(path))
    if path!=folder(c['id'])/'config.json':raise ValueError('invalid test config path')
    if sys.argv[1]=='serve':serve(c)
+   elif sys.argv[1]=='measure-worker':measure_worker(c)
    else:cleanup(c);shutil.rmtree(folder(c['id']),ignore_errors=True)
   else:
    if os.geteuid()!=0:raise RuntimeError('root or passwordless sudo required')
-   answer=dispatch(read(Path(sys.argv[1])));print(json.dumps({'ok':True,'data':answer}))
+   request=json.load(sys.stdin) if sys.argv[1]=='-' else read(Path(sys.argv[1]))
+   answer=dispatch(request);print(json.dumps({'ok':True,'data':answer}))
  except Exception as error:
   print(json.dumps({'ok':False,'error':str(error)[:500]}));sys.exit(1)

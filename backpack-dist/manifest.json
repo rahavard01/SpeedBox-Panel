@@ -6,19 +6,19 @@
   "speed_measurement": "round_trip_1mib",
   "source_sha256": "e11b3f81f8cfb485a01491db523a1947c1d0c02f740ecc8d98d8a4ab4116b491",
   "integration_sources": {
-    "speedbox.go": "8db2a1eeca9dd3095e7638c18c0ae7fbfd9f5f51094042a2d7d6f167c0daa7bf",
-    "bridge.go": "430518524aeb44c6ef3593b8f0144fe268d47c60be040bf57d7d235d708aae97",
-    "bridge_test.go": "0909c64220d1e8eb3161730abbf36303081bb5dd327d6f4e15f877f16c427dd4",
-    "build.py": "f7ec6b4ea50fffb784f863566bf6d85b5ad2eb3036a3ae214c5c0c1c596a3271"
+    "speedbox.go": "2ec225e9fcf8889f9e927bbddb9f041f9b1548c3f76bf9e0c6744455fcd438e6",
+    "bridge.go": "31b5be4d556ceafef93f1e459b2820c50524c7a9ad6aae239ebd505555593121",
+    "bridge_test.go": "4dc16d03215c198564cd2e7043670343a6635bf06965feda9483bf12b75863e5",
+    "build.py": "f0e756cb6743771e6ca02f992009cff39e827efcc87f7326e7a19c63004df41e"
   },
   "archives": {
     "amd64": {
-      "sha256": "1afe25287ba61ac5d5b917c11cdf5e79f7a2df6475f0fa36c7c2211e9c69f79f",
-      "binary_sha256": "566ab515c66a9e781b4a706ba59c30541893c66dcdcca13dc0487eb9eeaba653"
+      "sha256": "13b5fd64ffad5e94b09ab40d7ee45e9b8370cd70df5841a19e25762a7e9c8df8",
+      "binary_sha256": "ba72900d5852dd105d263dda35f1ee924d927f590774ff44540c6130d0106f5d"
     },
     "arm64": {
-      "sha256": "e7e53e3bc9d4f90978b54f29b063fe84ffd6745daa74c3db02b34d18a67a6f6f",
-      "binary_sha256": "7f0111d3bf6f5aa9c7124620cdca4b4bfe057d651e907f9cba3de48042710de7"
+      "sha256": "3c11ee7787eaaea674b0fbe2797c8ca4ace9dc3436a1d875b97312277dd98c29",
+      "binary_sha256": "e96347ddb54b3074131be0a35552e4a8db0f92cb0206b3652d4645bdf34477d2"
     }
   }
 }

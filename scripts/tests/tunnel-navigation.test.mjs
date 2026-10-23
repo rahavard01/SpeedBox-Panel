@@ -50,6 +50,54 @@ async function setPorts(page,values){
 const save=page=>page.locator('[data-network-editor] button[type=submit]').click();
 async function action(page,card,name){await card.locator('.tunnel-actions summary').click();await card.locator(`[data-tunnel-action="${name}"]`).click();}
 
+async function liveCases(page,width){
+ const fixture=await page.evaluate(()=>networkData());
+ for(const engine of ['backpack','gost','gre']){
+  await page.goto(origin+'/');
+  await page.addStyleTag({content:'*,*::before,*::after{animation:none!important;transition:none!important}'});
+  await page.evaluate(({fixture,engine})=>{
+   localStorage.setItem('token','test');localStorage.setItem('user',JSON.stringify({role:1}));
+   window.messages=[];window.liveReads=0;window.liveTest=null;
+   const servers=fixture.servers;
+   const row={id:engine==='backpack'?'normal:reverse:tcp':engine+':sample:ipv4',engine,label:engine==='backpack'?'Reverse TCP':engine.toUpperCase()+' · IPv4',kind:'reverse',transport:'tcp',orientation:'normal',status:'testing',selectable:false,measurement:'round_trip_1mib',ok:7,total:engine==='backpack'?60:20,rtt:45,speed:null,download:12,upload:8,protocols:{tcp:{status:'testing',ok:7,total:20,rtt:45,download:12,upload:8}}};
+   window.fetch=async(url,options={})=>{
+    const pathname=new URL(url,location.origin).pathname;
+    const endpoint=engine==='backpack'?'/tunnel-tests':'/network-tunnel-tests';
+    let answer;
+    if(pathname.endsWith('/tunnels'))answer={...fixture,tests:liveTest?[liveTest]:[]};
+    else if(pathname.endsWith(endpoint)&&options.method==='POST'){
+     liveTest={id:700,engine,status:'running',iran_server_id:servers[0].id,foreign_server_id:servers[1].id,results:engine==='backpack'?[]:[{...row,status:'queued',ok:null,total:null,rtt:null,download:null,upload:null,protocols:{}},{...row,id:row.id+'-2',label:row.label+' 2',status:'queued',ok:null,total:null,rtt:null,download:null,upload:null,protocols:{}}]};
+     answer={data:liveTest,operation:{id:700,status:'running',progress:5},message:'started'};
+    }else if(pathname.endsWith(endpoint+'/700')){
+     liveReads++;
+     if(liveReads===1)throw Error('temporary poll interruption');
+     liveTest.results=engine==='backpack'?[row]:[row,liveTest.results[1]];
+     answer={data:liveTest,operation:{id:700,status:'running',progress:32}};
+    }else throw Error('unexpected fixture endpoint '+pathname);
+    return {ok:true,status:200,json:async()=>structuredClone(answer)};
+   };
+   window.session=SpeedboxInfrastructure.mount(document.getElementById('mount'),{router:{push(){},replace(){}},notify:{success:m=>messages.push(m),error:m=>messages.push(m),notif:m=>messages.push(m)},view:'tunnels'});
+  },{fixture,engine});
+  await page.locator('[data-new-tunnel]').waitFor();await page.locator('[data-new-tunnel]').click();await page.locator(`[data-engine="${engine}"]`).click();
+  const form=engine==='backpack'?'[data-test-form]':'[data-network-test]';
+  await page.locator(form+' [name=iran_server_id]').selectOption(String(fixture.servers[0].id),{force:true});
+  await page.locator(form+' [name=foreign_server_id]').selectOption(String(fixture.servers[1].id),{force:true});
+  await page.locator(form+' button[type=submit]').click();
+  await page.locator('.tunnel-result-row').first().waitFor();
+  check(await page.locator('.tunnel-result-row').count()===(engine==='backpack'?16:2),engine+' candidate cards exist before any sample');
+  check((await page.locator('.tunnel-result-row').first().textContent()).includes('—'),engine+' unmeasured values are unknown');
+  const notifications=await page.evaluate(()=>messages.length);
+  await page.waitForFunction(()=>liveReads>=2);
+  await page.waitForFunction(()=>[...document.querySelectorAll('.tunnel-result-metrics dd')].some(d=>d.textContent.includes('7 /')));
+  check(await page.locator('.tunnel-result-row').first().locator('.tunnel-result-metrics').textContent().then(t=>t.includes('7 /')),engine+' displays samples while still running');
+  check(await page.locator('.tunnel-result-row button:not(:disabled)').count()===0,engine+' cannot construct before cleanup');
+  check(await page.evaluate(()=>messages.length)===notifications,engine+' poll interruption retries without a toast');
+  if(engine==='backpack')check(await page.locator('.tunnel-result-metrics dt').allTextContents().then(t=>t.includes('سرعت')&&!t.includes('دریافت')), 'BackPack shows one measured speed');
+  if(process.env.SPEEDBOX_TEST_SCREENSHOT_DIR){mkdirSync(process.env.SPEEDBOX_TEST_SCREENSHOT_DIR,{recursive:true});await page.screenshot({path:path.join(process.env.SPEEDBOX_TEST_SCREENSHOT_DIR,'live-'+engine+'-'+width+'.png'),fullPage:true});}
+  await page.evaluate(()=>session.dispose());
+ }
+}
+
 try {
  for(const width of [390,1280]){
   const page=await context.newPage();await page.setViewportSize({width,height:900});await start(page);
@@ -76,7 +124,7 @@ try {
   check(await page.locator('[data-history]').count()>=3,'closed test remains visible in the recent-test list');
   await page.locator('[data-new-tunnel]').click();
   check(await page.locator('[data-engine]').count()===3,'new create does not force an existing test to reopen');
-  await page.keyboard.press('Escape');await page.evaluate(()=>session.dispose());await page.close();
+  await page.keyboard.press('Escape');await liveCases(page,width);await page.evaluate(()=>session.dispose());await page.close();
  }
  console.log('PASS:',assertions,'navigation and progress assertions on mobile and desktop');
 } finally {await browser.close();await new Promise(r=>server.close(r));}

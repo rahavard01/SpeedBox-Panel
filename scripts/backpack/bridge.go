@@ -144,8 +144,8 @@ func sbRunHost(r SpeedboxRequest)(any,error){
  s,link,err:=StartConnTestIran(ConnTestOptions{Host:r.Host,Direct:true,Preset:PresetTurbo})
  if err!=nil{_=sbWriteTest(r.ID,sbTestState{State:"failed",Error:err.Error()});return nil,err};defer s.Close()
  _=sbWriteTest(r.ID,sbTestState{State:"waiting",Link:link})
- handshake:=time.NewTimer(60*time.Second);defer handshake.Stop()
- select{case <-s.Joined():case <-handshake.C:_=sbWriteTest(r.ID,sbTestState{State:"failed",Error:"coordinator handshake timed out after 60 seconds"});return nil,fmt.Errorf("coordinator handshake timeout");case <-ctx.Done():_=sbWriteTest(r.ID,sbTestState{State:"failed",Error:"peer did not join"});return nil,ctx.Err()}
+ handshake:=time.NewTimer(30*time.Second);defer handshake.Stop()
+ select{case <-s.Joined():case <-handshake.C:_=sbWriteTest(r.ID,sbTestState{State:"failed",Error:"coordinator handshake timed out after 30 seconds"});return nil,fmt.Errorf("coordinator handshake timeout");case <-ctx.Done():_=sbWriteTest(r.ID,sbTestState{State:"failed",Error:"peer did not join"});return nil,ctx.Err()}
  state:=sbTestState{State:"running",Link:link,Total:len(s.cases)}
  _=sbWriteTest(r.ID,state)
  var progressLock sync.Mutex

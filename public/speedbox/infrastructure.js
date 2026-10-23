@@ -507,7 +507,6 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
       <div class="field full" id="keyField"><label>کلید خصوصی SSH</label><textarea name="private_key" placeholder="-----BEGIN OPENSSH PRIVATE KEY-----"></textarea></div>
       ${field('private_key_passphrase','رمز کلید خصوصی (اختیاری)','',false,'password')}
       ${field('host_fingerprint','اثر انگشت SSH (اختیاری)',server?.host_fingerprint||'',false,'text','ltr')}
-      <details class="full"><summary>مسیر جایگزین SSH</summary><p class="muted">پس از راه‌اندازی اتصال معکوس، پورت محلی آن را وارد کنید. هنگام تایم‌اوت مسیر مستقیم، پنل از این مسیر استفاده می‌کند. اثر انگشت SSH باید متعلق به همین سرور مقصد باشد.</p>${field('reverse_ssh_port','پورت محلی SSH معکوس (اختیاری)',server?.reverse_ssh_port||'',false,'number','ltr')}</details>
     </div><div class="form-actions"><button class="button primary">${server?'ذخیره تغییرات':'ذخیره و نصب خودکار'}</button><button type="button" class="button secondary" data-close>انصراف</button></div></form>`,{kind:'server'});
     const toggle=()=>{const key=scope.getElementById('authType').value==='key';scope.getElementById('keyField').style.display=key?'grid':'none';scope.getElementById('passwordField').style.display=key?'none':'grid'}; scope.getElementById('authType').onchange=toggle;toggle();
     scope.querySelector('[data-close]').onclick=closeModal;

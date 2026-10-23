@@ -15,6 +15,9 @@ class BackpackRemote
     {
         if(isset($this->testPaths[$server->id]))return $this->testPaths[$server->id];
         $manifest=json_decode(file_get_contents(base_path('backpack-dist/manifest.json')),true,16,JSON_THROW_ON_ERROR);
+        $key='speedbox-test-binary-'.hash('sha256',json_encode([$server->id,$server->host,$server->ssh_port,$server->updated_at,$manifest['archives']]));
+        $cached=\Illuminate\Support\Facades\Cache::get($key);
+        if(is_string($cached)&&in_array($cached,array_map(fn($entry)=>'/opt/speedbox-backpack/tests/'.$entry['binary_sha256'].'/backpack',$manifest['archives']),true))return $this->testPaths[$server->id]=$cached;
         $arch=match(trim($this->ssh->run($server,'uname -m',20))){'x86_64'=>'amd64','aarch64','arm64'=>'arm64',default=>throw new RuntimeException('unsupported_arch')};
         $entry=$manifest['archives'][$arch];$local=base_path('backpack-dist/backpack-linux-'.$arch.'.gz');
         if(!hash_equals($entry['sha256'],hash_file('sha256',$local)))throw new RuntimeException('artifact_mismatch');
@@ -29,6 +32,7 @@ class BackpackRemote
                 .'chmod 0755 '.escapeshellarg($path.'.new').'; mv '.escapeshellarg($path.'.new').' '.escapeshellarg($path).';';
             $this->ssh->run($server,$sudo.'sh -c '.escapeshellarg($script),120);
         });
+        \Illuminate\Support\Facades\Cache::put($key,$path,60);
         return $this->testPaths[$server->id]=$path;
     }
 
@@ -65,6 +69,7 @@ class BackpackRemote
     public function call(ManagedServer $server, array $request): array
     {
         $binary=in_array($request['action']??'',['test-ready','spawn-host','spawn-peer','test-state','test-stop'],true)?$this->testBinary($server):'/opt/speedbox-backpack/backpack';
+        if ($binary==='/opt/speedbox-backpack/backpack') {
         return $this->temporary($server, function ($dir) use ($server, $request,$binary) {
             $local = tempnam(storage_path('app/private'), 'bp-');
             if ($local === false) throw new RuntimeException('temporary_file');
@@ -78,6 +83,11 @@ class BackpackRemote
                 return $answer['data'];
             } finally { @unlink($local); }
         });
+        }
+        $raw=$this->ssh->run($server,$this->sudo($server).escapeshellarg($binary).' speedbox-json -',100,json_encode($request,JSON_THROW_ON_ERROR));
+        $answer=json_decode($raw,true,64,JSON_THROW_ON_ERROR);
+        if (($answer['ok']??false)!==true || !is_array($answer['data']??null)) throw new RuntimeException('invalid_response');
+        return $answer['data'];
     }
 
     private function sudo(ManagedServer $server): string { return $server->ssh_user === 'root' ? '' : 'sudo -n '; }

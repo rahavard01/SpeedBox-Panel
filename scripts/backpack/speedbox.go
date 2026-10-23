@@ -4,13 +4,16 @@ package main
 import (
  "encoding/json"
  "fmt"
+ "io"
  "os"
  "github.com/backpack/backpack/internal/manage"
 )
 
 func init() {
  if len(os.Args)<3 || os.Args[1]!="speedbox-json" { return }
- raw,err:=os.ReadFile(os.Args[2]); if err!=nil { fmt.Fprintln(os.Stderr,"request unavailable"); os.Exit(1) }
+ var raw []byte;var err error
+ if os.Args[2]=="-" { raw,err=io.ReadAll(io.LimitReader(os.Stdin,1<<20)) } else { raw,err=os.ReadFile(os.Args[2]) }
+ if err!=nil { fmt.Fprintln(os.Stderr,"request unavailable"); os.Exit(1) }
  var req manage.SpeedboxRequest
  if json.Unmarshal(raw,&req)!=nil { fmt.Fprintln(os.Stderr,"invalid request"); os.Exit(1) }
  answer,err:=manage.SpeedboxExecute(req)

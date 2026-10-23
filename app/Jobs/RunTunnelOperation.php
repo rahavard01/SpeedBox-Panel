@@ -54,12 +54,14 @@ class RunTunnelOperation implements ShouldQueue, ShouldBeEncrypted
         $host = $orientation === 'normal' ? $iran : $foreign;
         $peer = $orientation === 'normal' ? $foreign : $iran;
         if (!isset($payload['test_id'])) {
+            $prepareStarted=microtime(true);
             $op->update(['progress'=>max((int)$op->progress,$orientation==='normal'?5:50),'message'=>'در حال آماده‌سازی BackPack روی دو سرور…']);
             // Artifact transfer is preparation, not part of the handshake budget.
             $remote->call($iran,['action'=>'test-ready']);$remote->call($foreign,['action'=>'test-ready']);
             $id = bin2hex(random_bytes(16));
             // Persist the id before starting either side, so cancellation can always clean up.
             $payload = [...$payload,'test_id'=>$id,'orientation'=>$orientation,'peer_started'=>false,'phase_started_at'=>now()->timestamp];
+            $payload['timings'][]=['orientation'=>$orientation,'phase'=>'prepare','seconds'=>round(microtime(true)-$prepareStarted,3)];
             $op->update(['payload'=>$payload]);
             $remote->call($host,['action'=>'spawn-host','id'=>$id,'host'=>$host->host]);
             $test->update(['status'=>'running','message'=>'در حال برقراری ارتباط اولیهٔ تست…']);
@@ -77,9 +79,14 @@ class RunTunnelOperation implements ShouldQueue, ShouldBeEncrypted
                 }
             }
             if (in_array($answer['state']??'',['starting','waiting'],true)
-                && now()->timestamp-($payload['peer_requested_at']??$payload['phase_started_at']??$op->created_at->timestamp)>=65) {
+                && now()->timestamp-($payload['peer_requested_at']??$payload['phase_started_at']??$op->created_at->timestamp)>=30) {
                 $answer['state']='failed';$answer['error']='initial test handshake timed out';
             }
+        }
+        if(($answer['state']??'')==='running'&&!isset($payload['measurement_started_at'])){
+            $payload['measurement_started_at']=now()->timestamp;
+            $payload['timings'][]=['orientation'=>$orientation,'phase'=>'handshake','seconds'=>max(0,now()->timestamp-($payload['peer_requested_at']??$payload['phase_started_at']??now()->timestamp))];
+            $op->update(['payload'=>$payload]);
         }
         $existing = array_values(array_filter($test->results ?? [],fn($r)=>$r['orientation']!==$orientation));
         $rows = [...$existing,...$manager->rows($answer['rows'] ?? [],$orientation)];
@@ -94,21 +101,25 @@ class RunTunnelOperation implements ShouldQueue, ShouldBeEncrypted
         $test->update(['message'=>$message]);
         $op->update(['progress'=>min(95,$progress),'message'=>$message]);
         if (in_array($answer['state'] ?? '',['completed','failed'])) {
+            if(empty($payload['phase_timing_recorded'])){
+                $payload['timings'][]=['orientation'=>$orientation,'phase'=>isset($payload['measurement_started_at'])?'measure':'handshake','seconds'=>max(0,now()->timestamp-($payload['measurement_started_at']??$payload['peer_requested_at']??$payload['phase_started_at']??now()->timestamp))];
+                $payload['phase_timing_recorded']=true;$op->update(['payload'=>$payload]);
+            }
             if(!$this->cleanupTest($op,$remote,$manager))return;
             $payload=$op->payload??$payload;
             $usable = collect($rows)->contains(fn($r)=>$r['selectable'] && $r['status']==='ok');
             if ($orientation==='normal' && ($test->compare_both || !$usable)) {
-                $payload['orientation']='swapped'; unset($payload['test_id'],$payload['peer_requested_at'],$payload['phase_started_at']); $payload['peer_started']=false;
+                $payload['orientation']='swapped'; unset($payload['test_id'],$payload['peer_requested_at'],$payload['phase_started_at'],$payload['measurement_started_at'],$payload['phase_timing_recorded']); $payload['peer_started']=false;
                 $op->update(['payload'=>$payload]);
             } else {
                 $test->update(['status'=>'completed','results'=>$manager->recommend($rows),
                     'message'=>count($rows) ? 'بررسی تمام شد؛ روش موردنظر را انتخاب کنید.' : 'هماهنگی تست بین دو سرور برقرار نشد؛ روش‌های تونل اندازه‌گیری نشدند.']);
                 if(!count($rows))$test->update(['status'=>'failed']);
-                $manager->finish($op,count($rows)?'succeeded':'failed',$test->message); return;
+                $manager->finish($op,count($rows)?'succeeded':'failed',$test->message,['timings'=>$payload['timings']??[]]); return;
             }
         }
         // A durable continuation leaves the queue worker free while engines test.
-        self::dispatch($op->id)->delay(now()->addSeconds(5));
+        self::dispatch($op->id)->delay(now()->addSeconds(2));
     }
 
     private function cleanupTest(TunnelOperation $op, BackpackRemote $remote, TunnelManager $manager): bool

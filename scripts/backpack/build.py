@@ -33,6 +33,13 @@ with tempfile.TemporaryDirectory(prefix='speedbox-backpack-build-') as work:
     p=source/'cmd/optimization.go';s=p.read_text();assert 'optimize.EngineStartupTuning()' in s
     p.write_text(s.replace('optimize.EngineStartupTuning()', '[][2]string{}').replace('\"github.com/backpack/backpack/internal/optimize\"','_ \"github.com/backpack/backpack/internal/optimize\"'))
     p=source/'internal/manage/conntest.go';s=p.read_text()
+    # Bound setup attempts, keeping the full upstream 60-sample stability test
+    # and the verified 1 MiB round-trip throughput measurement unchanged.
+    assert 'connTestConnectWait = 60 * time.Second' in s
+    s=s.replace('connTestConnectWait = 60 * time.Second','connTestConnectWait = 30 * time.Second')
+    s=s.replace('return connTestConnectWait + 30*time.Second','return connTestConnectWait + 15*time.Second')
+    assert 'rtt += took' in s
+    s=s.replace('rtt += took','rtt += took\n\t\tr.RTTms = int((rtt / time.Duration(r.OK)).Milliseconds())')
     assert s.count('fmt.Sprintf("bpt%d", i)')==2
     s=s.replace('Iface: fmt.Sprintf("bpt%d", i)', 'Iface: speedboxTestIface(id, i)')
     s=s.replace('block := ctFreeL3Block(i)', 'block := ctFreeL3Block(i)\n\t\t\tif l3BlockOwner(block+"1") != "" { c.skip="private network already in use"; s.cases=append(s.cases,c); continue }')

@@ -16,5 +16,5 @@ try {
     if(($fixture['mode']??'')==='upload'){
         $ssh->upload($server,$fixture['source'],$fixture['destination'],15);
         echo $ssh->run($server,'cat '.escapeshellarg($fixture['destination']),15);
-    }else echo $ssh->run($server,$fixture['command'],15);
+    }else echo $ssh->run($server,$fixture['command'],15,$fixture['input']??null);
 }catch(Throwable $error){fwrite(STDERR,$error->getMessage());exit(1);}

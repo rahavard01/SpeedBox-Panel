@@ -36,6 +36,34 @@ class Probe(unittest.TestCase):
   with socket.socket(type=socket.SOCK_DGRAM) as silent:
    silent.bind(('127.0.0.1',0));started=time.monotonic();result=p.measure_protocol('127.0.0.1',silent.getsockname()[1],'c'*64,'udp',budget_seconds=.03)
   self.assertLess(time.monotonic()-started,.6);self.assertEqual(result['status'],'down');self.assertEqual(result['ok'],0)
+ def test_unanswered_protocol_fails_early_without_fake_speed(self):
+  with socket.socket(type=socket.SOCK_DGRAM) as silent:
+   silent.bind(('127.0.0.1',0));started=time.monotonic();seen=[]
+   result=p.measure_protocol('127.0.0.1',silent.getsockname()[1],'c'*64,'udp',progress=lambda row:seen.append(row))
+  self.assertLess(time.monotonic()-started,9);self.assertEqual(result['status'],'down');self.assertLess(result['tried'],p.SAMPLES)
+  self.assertIsNone(result['download']);self.assertIsNone(result['upload']);self.assertGreater(len(seen),1)
+ def test_live_worker_publishes_samples_before_completion(self):
+  echo=p.Echo('127.0.0.1','c'*64);echo.start()
+  try:
+   with tempfile.TemporaryDirectory() as d,patch.object(p,'ROOT',Path(d)),patch.object(p,'SAMPLES',5),patch.object(p,'BULK',65536),patch.object(p,'PACKETS',16):
+    c={**config(),'engine':'gost','side':'iran','token':'c'*64};base=p.folder(c['id']);p.atomic(base/'state.json',{'state':'ready','port':echo.port})
+    thread=p.threading.Thread(target=p.measure_worker,args=(c,));thread.start();seen=[]
+    while thread.is_alive():
+     try:seen.append(p.read(base/'measurement.json'))
+     except OSError:pass
+     time.sleep(.02)
+    thread.join();final=p.read(base/'measurement.json')
+    self.assertTrue(any(s['state']=='running' and s['protocols'].get('tcp',{}).get('ok',0)>0 for s in seen))
+    self.assertTrue(any(s['protocols'].get('tcp',{}).get('status')=='ok' and s['protocols'].get('udp',{}).get('status')=='testing' for s in seen))
+    self.assertEqual(final['state'],'completed');self.assertEqual(final['protocols']['udp']['ok'],5)
+  finally:echo.close()
+ def test_dead_measurement_is_reported_without_waiting_for_deadline(self):
+  c={**config(),'side':'iran','peer_port':12345}
+  with tempfile.TemporaryDirectory() as d,patch.object(p,'ROOT',Path(d)):
+   p.atomic(p.folder(c['id'])/'config.json',c);p.atomic(p.folder(c['id'])/'measurement.json',{'state':'running','started':time.time()-10})
+   with patch.object(p,'run',return_value=subprocess.CompletedProcess([],3,'','')):
+    result=p.dispatch({'action':'measure-state','id':c['id']})
+   self.assertEqual(result['state'],'failed');self.assertIn('stopped',result['error'])
  def test_real_authenticated_echo(self):
   echo=p.Echo('127.0.0.1','c'*64);echo.start()
   try:

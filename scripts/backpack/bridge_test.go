@@ -4,9 +4,15 @@ import (
  "encoding/json"
  "strings"
  "testing"
+ "time"
  "github.com/BurntSushi/toml"
  "github.com/backpack/backpack/config"
 )
+
+func TestSpeedboxBoundedSetupKeepsFullStabilitySample(t *testing.T){
+ if connTestConnectWait!=30*time.Second || connTestSoak!=60 {t.Fatal("setup budget or stability sample changed")}
+ if connectWaitFor(&connTestCase{kind:"direct"})!=45*time.Second {t.Fatal("direct setup budget is not bounded")}
+}
 
 func TestSpeedboxDirectKeepsIranIngressInBothOrientations(t *testing.T){
  for _,swapped:=range []bool{false,true}{

@@ -101,20 +101,13 @@ PY;
 
     public function probe(ManagedServer $server,array $request): array
     {
-        return $this->temporary($server,function($dir)use($server,$request){
-            $local=tempnam(storage_path('app/private'),'probe-');
-            if($local===false)throw new RuntimeException('ساخت فایل موقت تست کامل نشد.');
-            try {
-                chmod($local,0600);file_put_contents($local,json_encode($request,JSON_THROW_ON_ERROR),LOCK_EX);
-                $this->ssh->upload($server,$local,$dir.'/request.json');
-                $helper='/opt/speedbox-network-tests/'.hash_file('sha256',base_path('scripts/network-tunnels/probe.py')).'/probe.py';
-                $command=($server->ssh_user==='root'?'':'sudo -n ').'python3 '.escapeshellarg($helper).' '.escapeshellarg($dir.'/request.json');
-                try{$raw=$this->ssh->run($server,$command,120);}catch(RuntimeException $error){$raw=$error->getMessage();}
-                $reply=json_decode($raw,true,64);
-                if(!is_array($reply)||($reply['ok']??false)!==true)throw new RuntimeException($reply['error']??'اجرای تست شبکه کامل نشد؛ گزارش SSH را بررسی کنید.');
-                return $reply['data'];
-            } finally {@unlink($local);}
-        });
+        $helper='/opt/speedbox-network-tests/'.hash_file('sha256',base_path('scripts/network-tunnels/probe.py')).'/probe.py';
+        $command=($server->ssh_user==='root'?'':'sudo -n ').'python3 '.escapeshellarg($helper).' -';
+        try{$raw=$this->ssh->run($server,$command,120,json_encode($request,JSON_THROW_ON_ERROR));}
+        catch(RuntimeException $error){throw new RuntimeException('اجرای تست شبکه کامل نشد؛ گزارش SSH را بررسی کنید.',0,$error);}
+        $reply=json_decode($raw,true,64);
+        if(!is_array($reply)||($reply['ok']??false)!==true)throw new RuntimeException($reply['error']??'پاسخ تست شبکه معتبر نیست.');
+        return $reply['data'];
     }
 
     public function call(ManagedServer $server,array $request): array

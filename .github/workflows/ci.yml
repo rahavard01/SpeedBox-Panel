@@ -45,7 +45,7 @@ jobs:
           php scripts/tests/tunnel-alerts-and-tags.test.php
           php scripts/tests/tunnel-runtime.test.php
           php scripts/tests/network-preflight.test.php
-      - name: Real reverse SSH management routing
+      - name: Direct SSH command and upload
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y openssh-server
@@ -69,18 +69,30 @@ jobs:
           node scripts/tests/network-tunnel-form.test.mjs
           python3 scripts/tests/network-host.test.py
           python3 scripts/tests/network-probe.test.py
+          sudo python3 scripts/tests/network-probe-worker.test.py
       - name: Production UI regressions
         run: |
           npm install --prefix "$RUNNER_TEMP/ui-deps" --no-save --package-lock=false jsdom@30.1.3
           export SPEEDBOX_TEST_JSDOM="$RUNNER_TEMP/ui-deps/node_modules/jsdom/lib/api.js"
           node --experimental-vm-modules scripts/tests/online-presence-ui.test.mjs
           node --experimental-vm-modules scripts/tests/user-experience-ui.test.mjs
-      - name: Tunnel navigation and progress UI
+      - name: Build tunnel UI fixtures
+        timeout-minutes: 4
         run: |
           npm ci
           npm run build
+      - name: Prepare tunnel browser
+        timeout-minutes: 15
+        run: |
           npm install --prefix "$RUNNER_TEMP/tunnel-ui" --no-save --package-lock=false playwright
-          "$RUNNER_TEMP/tunnel-ui/node_modules/.bin/playwright" install --with-deps chromium
+          if command -v google-chrome >/dev/null 2>&1; then
+            echo "SPEEDBOX_TEST_CHROME=$(command -v google-chrome)" >> "$GITHUB_ENV"
+          else
+            "$RUNNER_TEMP/tunnel-ui/node_modules/.bin/playwright" install --with-deps chromium
+          fi
+      - name: Tunnel navigation and progress UI
+        timeout-minutes: 3
+        run: |
           export SPEEDBOX_TEST_PLAYWRIGHT="$RUNNER_TEMP/tunnel-ui/node_modules/playwright/index.mjs"
           node scripts/tests/tunnel-navigation.test.mjs
       - name: Fresh MySQL installation

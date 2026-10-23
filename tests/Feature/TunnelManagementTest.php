@@ -189,14 +189,11 @@ class TunnelManagementTest extends TestCase
         $this->assertSame('completed',$test->fresh()->status);$this->assertSame('succeeded',$op->fresh()->status);
         $this->assertTrue($test->fresh()->results[0]['recommended']);$this->assertSame(0,DB::table('speedbox_tunnel_leases')->count());
     }
-    public function test_reverse_route_requires_a_pinned_foreign_host_and_unique_local_port():void
+    public function test_server_creation_uses_direct_ssh_and_ignores_legacy_reverse_route():void
     {
-        $this->withToken($this->token);
-        $body=['name'=>'Reverse host','host'=>'192.0.2.90','ssh_port'=>22,'ssh_user'=>'root','auth_type'=>'password','password'=>'do-not-expose','install_after_save'=>false,'reverse_ssh_port'=>45221];
-        $this->postJson('/api/admin/infrastructure/servers',$body)->assertUnprocessable();
-        $body['host_fingerprint']='SHA256:'.str_repeat('a',43);
-        $response=$this->postJson('/api/admin/infrastructure/servers',$body)->assertCreated();
-        $response->assertJsonPath('data.host','192.0.2.90')->assertJsonPath('data.reverse_ssh_port',45221)->assertJsonMissingPath('data.password');
-        $this->postJson('/api/admin/infrastructure/servers',[...$body,'host'=>'192.0.2.91'])->assertUnprocessable();
+        $body=['name'=>'Direct host','host'=>'192.0.2.90','ssh_port'=>22,'ssh_user'=>'root','auth_type'=>'password','password'=>'private-password','reverse_ssh_port'=>45221];
+        $response=$this->withToken($this->token)->postJson('/api/admin/infrastructure/servers',$body)->assertCreated();
+        $response->assertJsonPath('data.host','192.0.2.90')->assertJsonMissingPath('data.reverse_ssh_port')->assertJsonMissingPath('data.password');
+        $this->assertNull(ManagedServer::where('host','192.0.2.90')->first()->getRawOriginal('reverse_ssh_port'));
     }
 }

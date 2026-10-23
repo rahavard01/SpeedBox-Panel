@@ -30,7 +30,7 @@ $assert($op->payload['orientation']==='swapped'&&!isset($op->payload['test_id'])
 $assert(in_array([80,'test-stop'],$calls,true)&&in_array([81,'test-stop'],$calls,true),'both sides stop before direction switch');
 $assert($op->progress>=35,'progress never retreats on direction switch');$close($op);
 
-[$test,$op]=$make(['peer_requested_at'=>now()->subSeconds(66)->timestamp]);
+[$test,$op]=$make(['peer_requested_at'=>now()->subSeconds(31)->timestamp]);
 $mock=$remote(fn($s,$r)=>$r['action']==='test-stop'?['stopped'=>true]:['state'=>'waiting']);
 (new RunTunnelOperation($op->id))->handle($mock,$manager);$op->refresh();
 $assert($op->payload['orientation']==='swapped','missing handshake is bounded independently of remote wait');$close($op);

@@ -1,7 +1,7 @@
 name: BackPack stable integration build
 on:
   push:
-    branches: [fix/tunnel-runtime-v19]
+    branches: [fix/live-tunnel-tests]
     paths: ['scripts/backpack/**', 'scripts/tests/tunnel-swapped-routing.test.py', '.github/workflows/backpack-integration.yml']
   workflow_dispatch:
 permissions:
@@ -19,6 +19,11 @@ jobs:
         run: sudo install -d -o "$(id -u)" -g "$(id -g)" -m 0700 /etc/speedbox-backpack
       - run: python3 scripts/backpack/build.py --refresh-source
       - run: python3 scripts/verify-backpack.py
+      - name: Standard input request protocol
+        run: |
+          gzip -dc backpack-dist/backpack-linux-amd64.gz > "$RUNNER_TEMP/backpack"
+          chmod 700 "$RUNNER_TEMP/backpack"
+          printf '%s' '{"action":"test-ready"}' | "$RUNNER_TEMP/backpack" speedbox-json -
       - name: Real tunnel forwarding
         run: |
           gzip -dc backpack-dist/backpack-linux-amd64.gz > "$RUNNER_TEMP/backpack"
@@ -27,12 +32,12 @@ jobs:
       - name: Real swapped carrier routing
         run: sudo python3 scripts/tests/tunnel-swapped-routing.test.py "$RUNNER_TEMP/backpack"
       - name: Commit verified bundles to the working branch
-        if: github.ref == 'refs/heads/fix/tunnel-runtime-v19'
+        if: github.ref == 'refs/heads/fix/live-tunnel-tests'
         run: |
           git config user.name 'SpeedBox build'
           git config user.email 'build@users.noreply.github.com'
           git add backpack-dist scripts/backpack/upstream-source.tar.gz
           if ! git diff --cached --quiet; then
             git commit -m 'build: bundle verified BackPack v1.8.5 integration'
-            git push origin HEAD:fix/tunnel-runtime-v19
+            git push origin HEAD:fix/live-tunnel-tests
           fi

@@ -10,7 +10,7 @@ $cases=$tester->candidates('gost',ManagedServer::findOrFail(1),ManagedServer::fi
 $assert(count($cases)===2&&array_column($cases,'version')===['2.11.5','3.0.0'],'GOST tests both versions on available family');
 $assert(count($tester->candidates('gre',ManagedServer::findOrFail(7),ManagedServer::findOrFail(8),$network))===4,'registered dual-stack domains produce four GRE modes');
 $runTest=function($op,$remote,$cancelAfter=null)use($manager,$assert){for($i=0;$i<80;$i++){if($cancelAfter===$i)$op->update(['cancel_requested'=>true]);(new App\Jobs\RunNetworkTunnelTest($op->id))->handle($remote,$manager);$op->refresh();if(!in_array($op->status,['queued','running']))return $op;}$assert(false,'test state machine terminates');};
-$mock=function(&$calls,$fail=null){$remote=Mockery::mock(NetworkTunnelRemote::class);$remote->shouldReceive('ensureProbe')->andReturnUsing(function($server,$engine)use(&$calls){$calls[]=['ensure',$server->id,$engine];});$remote->shouldReceive('probe')->andReturnUsing(function($server,$q)use(&$calls,$fail){$calls[]=[$q['action'],$server->id,$q['id']];if($fail&&$fail===[$q['action'],$server->id])throw new RuntimeException('simulated probe SSH failure');return match($q['action']){'start'=>['port'=>32443],'stop'=>['stopped'=>true],'measure'=>['tcp'=>['status'=>'ok','ok'=>20,'total'=>20,'rtt'=>45,'download'=>12,'upload'=>8],'udp'=>['status'=>'down','ok'=>0,'total'=>20,'rtt'=>0,'download'=>0,'upload'=>0]]};});return $remote;};
+$mock=function(&$calls,$fail=null){$remote=Mockery::mock(NetworkTunnelRemote::class);$remote->shouldReceive('ensureProbe')->andReturnUsing(function($server,$engine)use(&$calls){$calls[]=['ensure',$server->id,$engine];});$remote->shouldReceive('probe')->andReturnUsing(function($server,$q)use(&$calls,$fail){$calls[]=[$q['action'],$server->id,$q['id']];if($fail&&$fail===[$q['action'],$server->id])throw new RuntimeException('simulated probe SSH failure');return match($q['action']){'start'=>['port'=>32443],'stop'=>['stopped'=>true],'measure-start'=>['state'=>'running'],'measure-state'=>['state'=>'completed','protocols'=>['tcp'=>['status'=>'ok','ok'=>20,'total'=>20,'rtt'=>45,'download'=>12,'upload'=>8],'udp'=>['status'=>'down','ok'=>0,'total'=>20,'rtt'=>0,'download'=>0,'upload'=>0]]]};});return $remote;};
 $calls=[];$response=$controller->test(Request::create('/','POST',['engine'=>'gost','iran_server_id'=>1,'foreign_server_id'=>2]),$network,$manager,$tester);
 $op=TunnelOperation::findOrFail($response->getData()->operation->id);$test=TunnelConnectionTest::findOrFail($op->test_id);
 $assert(Bus::dispatched(App\Jobs\RunNetworkTunnelTest::class)->count()>0,'network tests use their own durable worker');
@@ -50,6 +50,24 @@ for($i=0;$i<3;$i++)(new App\Jobs\RunNetworkTunnelTest($op->id))->handle($remote,
 $assert(isset($op->fresh()->payload['probe']['id']),'temporary identity is durable before a remote reply can be lost');
 (new App\Jobs\RunNetworkTunnelTest($op->id))->failed(new RuntimeException('worker interrupted'));
 $op=$runTest($op,$remote);$assert($op->status==='failed'&&count(array_filter($calls,fn($c)=>$c[0]==='stop'))===2,'worker recovery cleans both hosts before releasing leases');
+// Partial samples must be public while the operation remains running, and a
+// completed protocol never authorizes construction before pair cleanup.
+$answer=$controller->test(Request::create('/','POST',['engine'=>'gost','iran_server_id'=>1,'foreign_server_id'=>2]),$network,$manager,$tester);
+$op=TunnelOperation::findOrFail($answer->getData()->operation->id);$live=TunnelConnectionTest::findOrFail($op->test_id);
+$assert(count($tester->publicTest($live)['results'])===2,'candidate cards exist before workers start');
+$remote=Mockery::mock(NetworkTunnelRemote::class);$remote->shouldReceive('ensureProbe')->andReturnNull();
+$remote->shouldReceive('probe')->andReturnUsing(fn($s,$q)=>match($q['action']){
+ 'start'=>['port'=>32443],'stop'=>['stopped'=>true],'measure-start'=>['state'=>'running'],
+ 'measure-state'=>['state'=>'running','protocols'=>['tcp'=>['status'=>'testing','phase'=>'echo','ok'=>7,'tried'=>7,'total'=>20,'rtt'=>40,'download'=>null,'upload'=>null]]]
+});
+for($i=0;$i<6;$i++)(new App\Jobs\RunNetworkTunnelTest($op->id))->handle($remote,$manager);
+$live->refresh();$op->refresh();
+$assert($op->status==='running'&&(int)$live->results[0]['ok']===7,'intermediate echo count is persisted before completion');
+$assert($live->results[0]['status']==='testing'&&!$live->results[0]['selectable'],'live samples cannot be selected early');
+$assert($live->results[0]['download']===null&&$live->results[0]['upload']===null,'unmeasured speeds stay unknown');
+$assert(!empty($op->payload['timings']),'phase timing is retained for diagnosis');
+$op->update(['cancel_requested'=>true]);$calls=[];$op=$runTest($op,$mock($calls));
+$assert($op->status==='cancelled','live measurement can still be cancelled and cleaned');
 $index=(new App\Http\Controllers\Api\Admin\TunnelController())->index()->getData(true);
 $networkHistory=array_values(array_filter($index['tests'],fn($row)=>in_array($row['engine']??'',['gost','gre'])));
 $assert(count($networkHistory)>0,'network test history is available after closing or reloading');
