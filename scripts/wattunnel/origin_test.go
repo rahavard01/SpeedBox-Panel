@@ -283,3 +283,186 @@ func TestSpeedboxOriginUDPRecoversAfterBrokerRestart(t *testing.T) {
 	}
 	exchange("after")
 }
+
+// Test the published bridge with real TCP FIN and the exact origin wrapper.
+func TestSpeedboxOriginBridgeForwardsClientFIN(t *testing.T) {
+	for _, wrapped := range []bool{false, true} {
+		name := "raw"
+		if wrapped {
+			name = "origin-wrapped"
+		}
+		t.Run(name, func(t *testing.T) {
+			key := []byte("origin-close-regression")
+			carrier, err := wat.NewUDPServer("127.0.0.1:0")
+			if err != nil {
+				t.Fatal(err)
+			}
+			server := wat.NewServer(wat.Config{Key: key}, carrier)
+			defer server.Close()
+			uc, err := wat.NewUDPClient(carrier.Addr().String())
+			if err != nil {
+				t.Fatal(err)
+			}
+			client, err := wat.NewSession(wat.Config{Key: key}, uc)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer client.Close()
+			waitFor(t, "alive", 3*time.Second, client.Alive)
+			cs, err := client.OpenStream()
+			if err != nil {
+				t.Fatal(err)
+			}
+			timer := time.AfterFunc(3*time.Second, client.Close)
+			defer timer.Stop()
+			if _, err = cs.Write([]byte("hello")); err != nil {
+				t.Fatal(err)
+			}
+			var session *wat.Session
+			select {
+			case session = <-server.New:
+			case <-time.After(3 * time.Second):
+				t.Fatal("no server session")
+			}
+			ss, err := session.Accept()
+			if err != nil {
+				t.Fatal(err)
+			}
+			ln, err := net.Listen("tcp4", "127.0.0.1:0")
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer ln.Close()
+			conn, err := net.Dial("tcp4", ln.Addr().String())
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer conn.Close()
+			backend, err := ln.Accept()
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer backend.Close()
+			if wrapped {
+				identity, peer := net.Pipe()
+				defer identity.Close()
+				defer peer.Close()
+				conn = &speedboxOriginConn{Conn: conn, identity: identity}
+			}
+			done := make(chan struct{})
+			go func() {
+				bridge(conn, ss, "origin-close", portReg.get("s", ln.Addr().(*net.TCPAddr).Port), true)
+				close(done)
+			}()
+			defer func() {
+				backend.Close()
+				conn.Close()
+				select {
+				case <-done:
+				case <-time.After(time.Second):
+					t.Error("bridge did not close")
+				}
+			}()
+			backend.SetReadDeadline(time.Now().Add(time.Second))
+			var b [5]byte
+			if _, err = io.ReadFull(backend, b[:]); err != nil || string(b[:]) != "hello" {
+				t.Fatal("payload", err)
+			}
+			cs.CloseWrite()
+			backend.SetReadDeadline(time.Now().Add(600 * time.Millisecond))
+			n, err := backend.Read(b[:])
+			if n != 0 || err != io.EOF {
+				t.Fatalf("client FIN was not delivered to backend: n=%d err=%v", n, err)
+			}
+			// A FIN ends only upload; the backend can still finish its response.
+			if _, err = backend.Write([]byte("reply")); err != nil {
+				t.Fatal(err)
+			}
+			if _, err = io.ReadFull(cs, b[:]); err != nil || string(b[:]) != "reply" {
+				t.Fatal("half-close response", err)
+			}
+			backend.(*net.TCPConn).CloseWrite()
+		})
+	}
+}
+
+func TestSpeedboxOriginBridgeForwardsClientReset(t *testing.T) {
+	key := []byte("origin-reset-regression")
+	carrier, err := wat.NewUDPServer("127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := wat.NewServer(wat.Config{Key: key}, carrier)
+	defer server.Close()
+	uc, err := wat.NewUDPClient(carrier.Addr().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	client, err := wat.NewSession(wat.Config{Key: key}, uc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Close()
+	waitFor(t, "alive", 3*time.Second, client.Alive)
+	cs, err := client.OpenStream()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = cs.Write([]byte("hello")); err != nil {
+		t.Fatal(err)
+	}
+	var session *wat.Session
+	select {
+	case session = <-server.New:
+	case <-time.After(3 * time.Second):
+		t.Fatal("no server session")
+	}
+	ss, err := session.Accept()
+	if err != nil {
+		t.Fatal(err)
+	}
+	ln, err := net.Listen("tcp4", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+	conn, err := net.Dial("tcp4", ln.Addr().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	backend, err := ln.Accept()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer backend.Close()
+	identity, peer := net.Pipe()
+	defer peer.Close()
+	defer identity.Close()
+	wrapped := &speedboxOriginConn{Conn: conn, identity: identity}
+	done := make(chan struct{})
+	go func() {
+		bridge(wrapped, ss, "origin-reset", portReg.get("s", ln.Addr().(*net.TCPAddr).Port), true)
+		close(done)
+	}()
+	defer wrapped.Close()
+	backend.SetReadDeadline(time.Now().Add(time.Second))
+	var payload [5]byte
+	if _, err = io.ReadFull(backend, payload[:]); err != nil {
+		t.Fatal(err)
+	}
+	cs.Reset()
+	backend.SetReadDeadline(time.Now().Add(time.Second))
+	if n, err := backend.Read(payload[:]); n != 0 || err == nil {
+		t.Fatal("reset did not close backend", n, err)
+	}
+	peer.SetReadDeadline(time.Now().Add(time.Second))
+	if _, err := peer.Read(payload[:]); err != io.EOF {
+		t.Fatal("reset retained origin registration", err)
+	}
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("reset retained bridge")
+	}
+}

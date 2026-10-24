@@ -57,6 +57,9 @@ class Validation(unittest.TestCase):
         with self.assertRaises(ValueError):h.validate(c)
         c['origin_ports']=[];h.validate(c)
         self.assertIn('wattun-2.10.9-sb1',h.service_text(c))
+        c['settings']['version']='2.10.9-sb2';c['origin_ports']=[12345];h.validate(c)
+        self.assertIn('wattun-2.10.9-sb2',h.service_text(c))
+        self.assertIn('-speedbox-origin-ports',h.wat.arguments(c,'/private/key'))
     def test_lifecycle_and_transaction(self):
         c=config(settings());calls=[]
         with tempfile.TemporaryDirectory() as td,patch.object(h,'ETC',Path(td)/'etc'),patch.object(h,'ROOT',Path(td)/'state'),patch.object(h,'UNITS',Path(td)/'units'),patch.object(h,'active_unit',return_value=True),patch.object(h,'run',side_effect=lambda args,**kw:(calls.append(args) or subprocess.CompletedProcess(args,0,'',''))),patch.object(h,'snapshot',return_value={'active':True}),patch.object(h,'preflight',return_value=[]):
@@ -206,4 +209,5 @@ class RealEngine(unittest.TestCase):
             for reverse in ([False] if carrier=='udp' else [False,True]):
                 with self.subTest(carrier=carrier,reverse=reverse):self.pair(carrier,reverse,'ipv6',pin=carrier in ('tls','wss','h2','grpc'))
 if __name__=='__main__':unittest.main()
+
 

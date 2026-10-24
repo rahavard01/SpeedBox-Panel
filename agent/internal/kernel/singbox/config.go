@@ -442,9 +442,11 @@ func mergeCustomSingboxRoute(cfg M, customRoute map[string]any) {
 
 func buildInbound(nc *model.NodeSpec, users []model.UserSpec, tc kernel.TLSCert) M {
 	base := M{
-		"tag":         nc.Protocol + "-in",
-		"listen":      "::",
-		"listen_port": nc.ServerPort,
+		"tag":                     nc.Protocol + "-in",
+		"listen":                  "::",
+		"listen_port":             nc.ServerPort,
+		"tcp_keep_alive":          "15s",
+		"tcp_keep_alive_interval": "5s",
 	}
 
 	switch nc.Protocol {

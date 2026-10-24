@@ -16,6 +16,7 @@ import (
 	"golang.org/x/time/rate"
 
 	"github.com/cedar2025/xboard-node/internal/admission"
+	"github.com/cedar2025/xboard-node/internal/liveness"
 	"github.com/cedar2025/xboard-node/internal/nlog"
 	"github.com/cedar2025/xboard-node/internal/origin"
 )
@@ -302,6 +303,7 @@ func (t *ConnTracker) RoutedPacketConnection(
 		ctx:        ctx,
 		ticket:     ticket,
 	}
+	tracked.idle = liveness.NewIdle(liveness.UDPIdle, func() { tracked.Close() })
 	ticket.Bind(func() { tracked.Close() })
 	return tracked
 }
@@ -683,11 +685,13 @@ type trackedPacketConn struct {
 	ctx      context.Context
 	closed   atomic.Bool
 	ticket   *admission.Ticket
+	idle     *liveness.Idle
 }
 
 func (c *trackedPacketConn) ReadPacket(buffer *buf.Buffer) (singM.Socksaddr, error) {
 	dest, err := c.PacketConn.ReadPacket(buffer)
 	if err == nil {
+		c.idle.Touch()
 		n := int64(buffer.Len())
 		if c.us != nil {
 			c.us.upload.Add(n) // 从入站读取 = 用户上传
@@ -735,6 +739,9 @@ func (c *trackedPacketConn) WritePacket(buffer *buf.Buffer, dest singM.Socksaddr
 	}
 
 	err := c.PacketConn.WritePacket(buffer, dest)
+	if err == nil {
+		c.idle.Touch()
+	}
 	if err == nil && c.us != nil {
 		c.us.download.Add(n) // 向入站写入 = 用户下载
 	}
@@ -744,6 +751,7 @@ func (c *trackedPacketConn) WritePacket(buffer *buf.Buffer, dest singM.Socksaddr
 func (c *trackedPacketConn) Close() error {
 	err := c.PacketConn.Close()
 	if c.closed.CompareAndSwap(false, true) {
+		c.idle.Stop()
 
 		if c.us != nil {
 			c.us.removeConn(c.sourceIP)
@@ -756,10 +764,11 @@ func (c *trackedPacketConn) Close() error {
 
 func (c *trackedPacketConn) makeCountFunc(counter *atomic.Int64) N.CountFunc {
 	if c.limiter == nil {
-		return func(n int64) { counter.Add(n) }
+		return func(n int64) { counter.Add(n); c.idle.Touch() }
 	}
 	return func(n int64) {
 		counter.Add(n)
+		c.idle.Touch()
 		// Non-blocking rate limiting with context cancellation
 		if !c.limiter.AllowN(time.Now(), int(n)) {
 			resv := c.limiter.ReserveN(time.Now(), int(n))

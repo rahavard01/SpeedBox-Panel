@@ -18,6 +18,7 @@ import (
 	"github.com/xtls/xray-core/transport"
 
 	"github.com/cedar2025/xboard-node/internal/admission"
+	"github.com/cedar2025/xboard-node/internal/liveness"
 	"github.com/cedar2025/xboard-node/internal/nlog"
 	"github.com/cedar2025/xboard-node/internal/origin"
 )
@@ -63,10 +64,8 @@ func limitDispatcherFactory(ctx context.Context, config interface{}) (interface{
 // LimitDispatcher wraps xray's DefaultDispatcher to enforce per-user
 // admission checks before a request is dispatched into xray-core.
 //
-// It preserves transport.Link.Reader. Xray's
-// mux/XUDP close path requires the original concrete *pipe.Reader to remain
-// intact, so the dispatcher is limited to gate-keeping and safe connection
-// lifecycle bookkeeping.
+// TCP readers remain untouched. UDP activity tracking preserves the original
+// pipe's timeout and XUDP detach/recovery methods.
 type LimitDispatcher struct {
 	originPolicy origin.Policy
 	inner        interface{}        // original DefaultDispatcher (Feature + Dispatcher)
@@ -120,11 +119,20 @@ func (d *LimitDispatcher) Dispatch(ctx context.Context, dest net.Destination) (*
 		return nil, err
 	}
 	if email != "" {
-		d.trackLink(link, email, ip, true, ticket).watchContext(ctx)
+		w := d.trackLink(link, email, ip, true, ticket)
+		if dest.Network == net.Network_UDP {
+			watchDatagram(link, w, nil, liveness.UDPIdle)
+		}
+		w.watchContext(ctx)
 	}
 	return link, nil
 }
 func (d *LimitDispatcher) DispatchLink(ctx context.Context, dest net.Destination, link *transport.Link) error {
+	var cancel context.CancelFunc
+	if dest.Network == net.Network_UDP {
+		ctx, cancel = context.WithCancel(ctx)
+		defer cancel()
+	}
 	email, ip, ticket, err := d.admit(ctx)
 	if err != nil {
 		return err
@@ -132,6 +140,9 @@ func (d *LimitDispatcher) DispatchLink(ctx context.Context, dest net.Destination
 	var writer *closeTrackingWriter
 	if email != "" {
 		writer = d.trackLink(link, email, ip, true, ticket)
+		if dest.Network == net.Network_UDP {
+			watchDatagram(link, writer, cancel, liveness.UDPIdle)
+		}
 		writer.watchContext(ctx)
 		// DispatchLink owns a synchronous outbound operation. Even a successful
 		// terminal handler need not close the supplied writer itself.
@@ -188,9 +199,10 @@ func (d *LimitDispatcher) trackLink(link *transport.Link, email, ip string, _ bo
 		ticket = tickets[0]
 	}
 	d.connCount.Add(1)
-	writer := &closeTrackingWriter{Writer: link.Writer, onClose: func() { common.Interrupt(link.Reader); d.delConn(email, ip); d.connCount.Add(-1); ticket.Release() }}
+	reader := link.Reader
+	writer := &closeTrackingWriter{Writer: link.Writer, onClose: func() { common.Interrupt(reader); d.delConn(email, ip); d.connCount.Add(-1); ticket.Release() }}
 	link.Writer = writer
-	ticket.Bind(func() { common.Interrupt(link.Reader); writer.Interrupt() })
+	ticket.Bind(func() { common.Interrupt(reader); writer.Interrupt() })
 	return writer
 }
 func (d *LimitDispatcher) SetConnectionAdmission(fn admission.AcquireFunc) { d.admission.Store(&fn) }
@@ -344,6 +356,8 @@ type closeTrackingWriter struct {
 	closed      atomic.Bool
 	stopMu      sync.Mutex
 	stopContext func() bool
+	idle        atomic.Pointer[liveness.Idle]
+	stopFlow    atomic.Pointer[context.CancelFunc]
 }
 
 // The inbound context is the fallback lifetime boundary when a transport
@@ -365,6 +379,12 @@ func (w *closeTrackingWriter) finish() {
 	if !w.closed.CompareAndSwap(false, true) {
 		return
 	}
+	if stop := w.stopFlow.Load(); stop != nil {
+		(*stop)()
+	}
+	if idle := w.idle.Load(); idle != nil {
+		idle.Stop()
+	}
 	w.stopMu.Lock()
 	stop := w.stopContext
 	w.stopContext = nil
@@ -375,6 +395,16 @@ func (w *closeTrackingWriter) finish() {
 	if w.onClose != nil {
 		w.onClose()
 	}
+}
+
+func (w *closeTrackingWriter) WriteMultiBuffer(b buf.MultiBuffer) error {
+	err := w.Writer.WriteMultiBuffer(b)
+	if err == nil {
+		if idle := w.idle.Load(); idle != nil {
+			idle.Touch()
+		}
+	}
+	return err
 }
 
 func (w *closeTrackingWriter) Close() error {

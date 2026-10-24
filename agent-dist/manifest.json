@@ -4,29 +4,29 @@
       "binaries": {
         "xbctl-linux-amd64": {
           "bytes": 7143586,
-          "sha256": "1b7882b35a62ffefdf2afe1e3cfcefccd7a0bb0ed5f037358a6c63ef1a7e58bf"
+          "sha256": "393818c8842272119f296e2e3ebe6e9d233dd9d5cde8fa5cee0236e22f6f15f8"
         },
         "xboard-node-linux-amd64": {
-          "bytes": 66883746,
-          "sha256": "419d29c540a9f6a787a12f9aaad947a9441eb28ff4fcb721899269260b17e3d4"
+          "bytes": 66904226,
+          "sha256": "8ed70280aa90a49f78f5d020532792584edbfe3dd97bdbe1dfde84412e5b8c13"
         }
       },
-      "bytes": 25961501,
-      "sha256": "c4586f016cdcb21fb9c5c1c973d17d388a38f46c63a0c0759e4e68ed84c7297c"
+      "bytes": 25971477,
+      "sha256": "b671095f665a1c91a3e86e955d7bfeefe362480192b98863cb3dd022b517d81e"
     },
     "arm64": {
       "binaries": {
         "xbctl-linux-arm64": {
           "bytes": 6619298,
-          "sha256": "5d439462a1fbfe2130015f2144c25d3145b89cec37b7bfd4447640fbc8eaa8ee"
+          "sha256": "0a7795b2da2e16b9aac480d2bf684a1657e2a673024c513cae2d60d9dfa3a1b6"
         },
         "xboard-node-linux-arm64": {
-          "bytes": 61800610,
-          "sha256": "d8dd1f583e9894a057c23fbaa578421e3ee8bcec57ada84a2d39199ba23ec196"
+          "bytes": 61866146,
+          "sha256": "4b8b3503ae8cb56943a32abcdeaccc26a1b90834eaac7809a132ad0571080dd6"
         }
       },
-      "bytes": 23377402,
-      "sha256": "438cbd753a0235c750b544a2064f115868c0c84c8628faba855d1efd2c550ebe"
+      "bytes": 23384859,
+      "sha256": "6492ee6304465ee0e4d114c4ed9198d3df1235c8304a05b4b06da345ac9ffb04"
     }
   },
   "format": 1,
@@ -90,24 +90,27 @@
     "agent/internal/kernel/geo.go": "29de4766c3c6ba1108f895841a17d2cadaa26efc84ca8a9ab1d5a1bc069cb588",
     "agent/internal/kernel/geodata/geodata.go": "14b4b26044f0555af4ec02e5a9609679ab7767dd3461a5da00a8326b9fbee766",
     "agent/internal/kernel/kernel.go": "6dd2572b1549d2c9495891b08d30bec19db6a1c13ddf57b6c076af7ec66a0f9e",
-    "agent/internal/kernel/singbox/config.go": "b88d5634ea0867b7b8de21a2f2d4a61090ccd3913ef0cca0fcaab2919f495713",
+    "agent/internal/kernel/singbox/config.go": "6e69cb0946726d535c3cbaa4530afc29464b556b2f5c34b7f0c6a09d6eb6e5c1",
     "agent/internal/kernel/singbox/config_test.go": "0ccb5ed6e3ff6f9f29339f9e27fc65c221e24582b29082973c70dc7fe871e0be",
-    "agent/internal/kernel/singbox/conntracker.go": "d16d1aa8c31292c59c4ff16d32f2c110e3ddb2e13ab23cd5ad5321f71afc0d97",
+    "agent/internal/kernel/singbox/conntracker.go": "d6fcfdd2fdeac18c767f198d78b289d6ea863a35c7571777acc154b20680b4f6",
     "agent/internal/kernel/singbox/origin.go": "a82a87ba2a8abb29e4db46a1cc0e464b5ca5c3ecad7aff849179a14c710d1e0d",
     "agent/internal/kernel/singbox/origin_test.go": "1bb3d8c2f7f58bdd4121abf77c2b4e22a89f413d12aed71fe73f30567ba4585b",
     "agent/internal/kernel/singbox/singbox.go": "e1163752ce89c9c40450d3271e9968d4de792fea6478090f0c344b7e337ab9c0",
     "agent/internal/kernel/singbox/singbox_test.go": "50332631bef00d7cd555c84574dde6fe206c54c546b9ede53fcc7765b120aad3",
+    "agent/internal/kernel/singbox/udp_liveness_test.go": "af53018ee818b496505ea66456f17e928509f9e32734d9821fcbe82d6fd973af",
     "agent/internal/kernel/singbox/warp_reload_test.go": "a65ea8f915dade2fbd041588f2bbd75b371a2b3dbbf0749dd249a46bc6e488c1",
     "agent/internal/kernel/singbox/warp_test.go": "3bad194c1a585ace32c4d55aa818421038b54b2fef4117bb9ec75b0f2edcb04f",
     "agent/internal/kernel/uuid_rotation_test.go": "e4cb6aab7966148ff19ac140d1a31ac3dfb9d185d4a1b764ced29d55cbe67c0b",
     "agent/internal/kernel/warp_integration_test.go": "9bed5b70237938577044ed010dbca04734f9e21c7f743135cb78e16f0835e639",
     "agent/internal/kernel/xray/admission_lifecycle_test.go": "037d660e2c8a81f117f82f746c573cda1118206dcfe5a29cf449f90cfea5a1ec",
     "agent/internal/kernel/xray/admission_ws_test.go": "752fd894b66294c01e5ab2439ba89b6b8c61b10d5b8c655bc5af7edb46eb7289",
-    "agent/internal/kernel/xray/config.go": "37513c8654ece6c73755d7db185fd962c7cb6f0aa95f33c58d82764b341ee36d",
+    "agent/internal/kernel/xray/config.go": "23b1fe9ddfc9421ae47cb61df18faf6f3d4075a8d5a88037c7444349927e22c1",
     "agent/internal/kernel/xray/config_test.go": "eefed1724fe34ea78f916cc75f0e25058bb17bc5ef6f490a9307ee9082c15fea",
-    "agent/internal/kernel/xray/dispatcher.go": "bfe5b3277dc011d0f84020d0cf14f4ee3dfd01526df4251e2028d78fa882576b",
+    "agent/internal/kernel/xray/dispatcher.go": "7cc9a3fb333f7c7509a6283d1ba510e6c35d3749b4c1065cb584852ee49c6d66",
     "agent/internal/kernel/xray/dispatcher_test.go": "c040f44cc405f729e9dc441907c39dd883e265f545be9ce690cc32b6d575a8bd",
-    "agent/internal/kernel/xray/trusted_origin_test.go": "10d601e8b2df865d9a3391898d204c07c1e9f5a5ff8c8dfa892b0c0f715c33ba",
+    "agent/internal/kernel/xray/trusted_origin_test.go": "d2aea90fba5fd361b85b4e1ecdb7b744e6bb85bb1cbf98dbeea6ca7a197cdc69",
+    "agent/internal/kernel/xray/udp_liveness.go": "21188f7c9ff0cedc4411257ac6b324177c7e01757d9c79dbb908952e7208f3e0",
+    "agent/internal/kernel/xray/udp_liveness_test.go": "4cb06ea68bcbfce833d629c50257cab0c8c6bc3570205118b9571ce4ff648b55",
     "agent/internal/kernel/xray/uuid_rotation_test.go": "e3be676bdd56ad141ae64cd74f7402d62c021e5b6d0032973c75178639e61aff",
     "agent/internal/kernel/xray/warp_test.go": "64e274537185ee0d07b6396594c1eb5ee979dde329e87175c301a733b7d1f703",
     "agent/internal/kernel/xray/xray.go": "77793ec5f38992656ed5bc140b15ec3097af1788e8f4fdc8fe601a423a18a3c3",
@@ -116,6 +119,8 @@
     "agent/internal/limiter/limiter_test.go": "b8461b201e92c2a29365ed454000330f6ae304a8bcaec2163d6a06e4ba8c9968",
     "agent/internal/limiter/speedtracker.go": "2095c7d0874199d52ec83f6abaf3f26f16c66cd7fbf9eb250b1d9414f9a45f0a",
     "agent/internal/limiter/speedtracker_test.go": "a2db4705a297c4c92c7b0aed725cd5419288d564bc5bc8d40f7e10544bbab2ba",
+    "agent/internal/liveness/idle.go": "4d769ed7019e5b27d2c7afab2bc90e11c3457deddc77dd4668648fc34a5966f6",
+    "agent/internal/liveness/idle_test.go": "7abd1d8e2bdc4e9a49858c3e9fd6b296e3f1c15354f282f9121860d73f60f016",
     "agent/internal/machine/machine.go": "af33cedd122486160bd6bde568df51858526dba3b79c4663a06f3c29c42b37f6",
     "agent/internal/model/custom_config_tags.go": "fe47d609078dd52f3d219f0f02465a628207e8349a7568c54b85e1d5806246bd",
     "agent/internal/model/custom_config_tags_test.go": "6d6b483e0e3535129b7a68a1bffd38ff6852436f8e479449cc464da0f160a828",
@@ -154,9 +159,9 @@
     "agent/internal/tracker/tracker.go": "e52075dd2482712b239cfe7043626795429bfc3a0f1eef441f9a0e67d5ed7ec7",
     "agent/internal/tracker/tracker_test.go": "2a05026190894f66ea02f978796f9ad88201edab78b77c8c26a3ae0830d6abd1",
     "scripts/agent-artifacts.php": "da5662c710978ef80d829b6c8cefeffddcd841e5a068fa107d7357b7a5c8f3ec",
-    "scripts/build-agent-from-source.sh": "5494d84b361488a226dafe236b8889316a04b5d497d603438a7a5c0029ca2e06",
+    "scripts/build-agent-from-source.sh": "5efebd05b0659ff05c89b8c5748641671cf1e5bc0a735f896155b302b17af418",
     "scripts/build-agent.sh": "14089d7b06d90e6e3e72f11a260858f1b24494cf049b71ec78867d26a3adb207",
-    "scripts/package-agent.py": "1413a569e14b59423d566287632573dbc8e7285a1aa59560be3c0cd462a57c13"
+    "scripts/package-agent.py": "01045d0863110801c22c8c71f4f67b4ec43e588b6ca7a15f1c330cee20c98e92"
   },
-  "version": "panel-speedbox-http-obfs-uuid-v1-nodes-v4-trusted-origin"
+  "version": "panel-speedbox-http-obfs-uuid-v1-nodes-v5-session-liveness"
 }

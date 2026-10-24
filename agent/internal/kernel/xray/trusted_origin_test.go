@@ -21,9 +21,11 @@ import (
 	"github.com/cedar2025/xboard-node/internal/kernel"
 	"github.com/cedar2025/xboard-node/internal/model"
 	"github.com/cedar2025/xboard-node/internal/origin"
+	xbuf "github.com/xtls/xray-core/common/buf"
 	xnet "github.com/xtls/xray-core/common/net"
 	"github.com/xtls/xray-core/common/protocol"
 	"github.com/xtls/xray-core/common/session"
+	"github.com/xtls/xray-core/proxy/shadowsocks"
 	"golang.org/x/net/websocket"
 )
 
@@ -41,6 +43,262 @@ func originBroker(t *testing.T) (*origin.Registry, string) {
 	}
 	t.Cleanup(func() { r.Close() })
 	return r, path
+}
+
+// Shadowsocks has no application close frame. Its authenticated reservation
+// must end when the client's TCP FIN crosses the actual trusted-origin bridge.
+func TestTrustedOriginLiveWatShadowsocksDisconnectReleasesLease(t *testing.T) {
+	binary := os.Getenv("SPEEDBOX_TEST_WATTUN")
+	if binary == "" {
+		t.Skip("set SPEEDBOX_TEST_WATTUN to the verified bundled Linux binary")
+	}
+	var clientIP string
+	addrs, _ := stdnet.InterfaceAddrs()
+	for _, addr := range addrs {
+		p, err := netip.ParsePrefix(addr.String())
+		if err == nil && p.Addr().Is4() && p.Addr().IsGlobalUnicast() {
+			clientIP = p.Addr().String()
+			break
+		}
+	}
+	if clientIP == "" {
+		t.Fatal("integration requires a non-loopback local IPv4")
+	}
+	for _, carrier := range []string{"h2", "tcp"} {
+		t.Run(carrier, func(t *testing.T) {
+			broker, path := originBroker(t)
+			origin.SetDefault(broker)
+			port := func() int {
+				ln, err := stdnet.Listen("tcp4", "0.0.0.0:0")
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer ln.Close()
+				return ln.Addr().(*stdnet.TCPAddr).Port
+			}
+			target, err := stdnet.Listen("tcp4", "127.0.0.1:0")
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer target.Close()
+			udpTarget, err := stdnet.ListenPacket("udp4", target.Addr().String())
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer udpTarget.Close()
+			go func() {
+				var b [2048]byte
+				for {
+					n, addr, e := udpTarget.ReadFrom(b[:])
+					if e != nil {
+						return
+					}
+					udpTarget.WriteTo(b[:n], addr)
+				}
+			}()
+			go func() {
+				for {
+					c, err := target.Accept()
+					if err != nil {
+						return
+					}
+					go func() { defer c.Close(); io.Copy(c, c) }()
+				}
+			}()
+			p := &lifecyclePanel{leases: map[string]lifecycleLease{}}
+			x := New(config.KernelConfig{Type: "xray", LogLevel: "error"})
+			gateCtx, stopGate := context.WithCancel(context.Background())
+			defer stopGate()
+			gate := admission.New(lifecycleCaller{p, 4})
+			go gate.Run(gateCtx)
+			x.SetConnectionAdmission(gate.Acquire)
+			const credential = "11111111-1111-4111-8111-111111111111"
+			nodePort, carrierPort, publicPort := port(), port(), port()
+			nc := &model.NodeSpec{Protocol: "shadowsocks", Cipher: "aes-128-gcm", ListenIP: "0.0.0.0", ServerPort: nodePort,
+				TrustedTunnelOrigin: true, CustomRoutes: []map[string]any{{"type": "field", "ip": []string{"127.0.0.1"}, "outboundTag": "direct"}}}
+			if err = x.Start(nc, []model.UserSpec{{ID: 7, UUID: credential, DeviceLimit: 1}}, kernel.TLSCert{}); err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(x.Stop)
+			start := func(name string, args ...string) {
+				logPath := filepath.Join(t.TempDir(), name+".log")
+				f, err := os.Create(logPath)
+				if err != nil {
+					t.Fatal(err)
+				}
+				cmd := exec.Command(binary, args...)
+				cmd.Stdout = f
+				cmd.Stderr = f
+				if err = cmd.Start(); err != nil {
+					f.Close()
+					t.Fatal(err)
+				}
+				t.Cleanup(func() {
+					cmd.Process.Kill()
+					cmd.Wait()
+					f.Close()
+					if t.Failed() {
+						b, _ := os.ReadFile(logPath)
+						t.Logf("%s: %s", name, b)
+					}
+				})
+			}
+			originPorts := strconv.Itoa(nodePort)
+			key := "shadowsocks-close-regression-only"
+			start("server", "-mode", "server", "-carrier", carrier, "-listen", fmt.Sprintf("127.0.0.1:%d", carrierPort), "-key", key, "-tcp-cc", "system", "-allow-ports", originPorts+","+originPorts+"/udp", "-speedbox-origin-ports", originPorts, "-speedbox-origin-socket", path)
+			start("client", "-mode", "client", "-carrier", carrier, "-peer", fmt.Sprintf("127.0.0.1:%d", carrierPort), "-key", key, "-tcp-cc", "system", "-conns", "1", "-map", fmt.Sprintf("%d:%d", publicPort, nodePort), "-udp", fmt.Sprintf("%d:%d", publicPort, nodePort), "-speedbox-origin-ports", originPorts)
+			account, err := (&shadowsocks.Account{Password: credential, CipherType: shadowsocks.CipherType_AES_128_GCM}).AsAccount()
+			if err != nil {
+				t.Fatal(err)
+			}
+			user := &protocol.MemoryUser{Email: userEmail(7), Account: account}
+			type stream struct {
+				conn   stdnet.Conn
+				writer xbuf.Writer
+				reader io.Reader
+			}
+			exchange := func(s *stream, payload string) error {
+				b := xbuf.New()
+				b.WriteString(payload)
+				if err := s.writer.WriteMultiBuffer(xbuf.MultiBuffer{b}); err != nil {
+					return err
+				}
+				if s.reader == nil {
+					reader, err := shadowsocks.ReadTCPResponse(user, s.conn)
+					if err != nil {
+						return err
+					}
+					s.reader = &xbuf.BufferedReader{Reader: reader}
+				}
+				reply := make([]byte, len(payload))
+				if _, err := io.ReadFull(s.reader, reply); err != nil {
+					return err
+				}
+				if string(reply) != payload {
+					return fmt.Errorf("unexpected echo %q", reply)
+				}
+				return nil
+			}
+			dial := func() (*stream, error) {
+				c, err := stdnet.DialTimeout("tcp4", stdnet.JoinHostPort(clientIP, strconv.Itoa(publicPort)), time.Second)
+				if err != nil {
+					return nil, err
+				}
+				c.SetDeadline(time.Now().Add(3 * time.Second))
+				writer, err := shadowsocks.WriteTCPRequest(&protocol.RequestHeader{Version: shadowsocks.Version, Command: protocol.RequestCommandTCP, Address: xnet.ParseAddress("127.0.0.1"), Port: xnet.Port(target.Addr().(*stdnet.TCPAddr).Port), User: user}, c)
+				if err != nil {
+					c.Close()
+					return nil, err
+				}
+				s := &stream{conn: c, writer: writer}
+				if err = exchange(s, "ping"); err != nil {
+					c.Close()
+					return nil, err
+				}
+				return s, nil
+			}
+			var first *stream
+			deadline := time.Now().Add(25 * time.Second)
+			for {
+				first, err = dial()
+				if err == nil {
+					break
+				}
+				if time.Now().After(deadline) {
+					t.Fatal("Wat Shadowsocks did not start", err)
+				}
+				time.Sleep(100 * time.Millisecond)
+			}
+			defer first.conn.Close()
+			second, err := dial()
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer second.conn.Close()
+			if p.count() != 1 {
+				t.Fatal("same node/IP must share one lease", p.count())
+			}
+			p.mu.Lock()
+			for _, l := range p.leases {
+				if l.ip != clientIP {
+					t.Error("original client IP lost", l.ip)
+				}
+			}
+			p.mu.Unlock()
+			first.conn.Close()
+			awaitLifecycle(t, "closed SS socket was retained behind origin wrapper", func() bool { _, n := x.limitDispatcher.GetConnectionState(); return n == 1 })
+			if p.count() != 1 {
+				t.Fatal("closing one socket revoked the other")
+			}
+			if err = exchange(second, "still-live"); err != nil {
+				t.Fatal("second socket disrupted", err)
+			}
+			second.conn.Close()
+			awaitLifecycle(t, "closed Shadowsocks client retained the account reservation", func() bool { return p.count() == 0 })
+			if carrier == "h2" {
+				udp, err := stdnet.DialUDP("udp4", nil, &stdnet.UDPAddr{IP: stdnet.ParseIP(clientIP), Port: publicPort})
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer udp.Close()
+				udpEcho := func(c *stdnet.UDPConn) {
+					c.SetDeadline(time.Now().Add(3 * time.Second))
+					packet, err := shadowsocks.EncodeUDPPacket(&protocol.RequestHeader{Version: shadowsocks.Version, Command: protocol.RequestCommandUDP, Address: xnet.ParseAddress("127.0.0.1"), Port: xnet.Port(target.Addr().(*stdnet.TCPAddr).Port), User: user}, []byte("datagram"))
+					if err != nil {
+						t.Fatal(err)
+					}
+					_, err = c.Write(packet.Bytes())
+					packet.Release()
+					if err != nil {
+						t.Fatal(err)
+					}
+					var response [2048]byte
+					n, err := c.Read(response[:])
+					if err != nil {
+						t.Fatal(err)
+					}
+					encoded := xbuf.New()
+					encoded.Write(response[:n])
+					validator := new(shadowsocks.Validator)
+					validator.Add(user)
+					_, payload, err := shadowsocks.DecodeUDPPacket(validator, encoded)
+					if err != nil {
+						encoded.Release()
+						t.Fatal(err)
+					}
+					got := string(payload.Bytes())
+					payload.Release()
+					if got != "datagram" {
+						t.Fatal("UDP echo changed", got)
+					}
+				}
+				udpEcho(udp)
+				if p.count() != 1 {
+					t.Fatal("authenticated UDP missing lease")
+				}
+				udp.Close() // No FIN exists: exercise the production 30-second idle watchdog.
+				deadline := time.Now().Add(33 * time.Second)
+				for p.count() != 0 && time.Now().Before(deadline) {
+					time.Sleep(20 * time.Millisecond)
+				}
+				if p.count() != 0 {
+					t.Fatal("silent UDP retained reservation after inactivity deadline")
+				}
+				again, err := stdnet.DialUDP("udp4", nil, &stdnet.UDPAddr{IP: stdnet.ParseIP(clientIP), Port: publicPort})
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer again.Close()
+				udpEcho(again)
+				if p.count() != 1 {
+					t.Fatal("UDP did not reacquire quota after idle cleanup")
+				}
+				x.Stop()
+				stopGate() // The real service stops its admission manager with the kernel.
+				awaitLifecycle(t, "stopped UDP node retained quota", func() bool { return p.count() == 0 })
+			}
+		})
+	}
 }
 func registerOrigin(t *testing.T, path string, source, target uint16, ip string) stdnet.Conn {
 	t.Helper()

@@ -70,6 +70,21 @@ func buildConfig(kcfg config.KernelConfig, nc *model.NodeSpec, users []model.Use
 
 	inbound := buildInbound(nc, users, tc)
 	if inbound != nil {
+		// Per-socket probes detect a vanished peer without expiring healthy,
+		// quiet TCP sessions or changing host-wide kernel settings.
+		ss, ok := inbound["streamSettings"].(M)
+		if !ok {
+			ss = M{}
+			inbound["streamSettings"] = ss
+		}
+		sock, ok := ss["sockopt"].(M)
+		if !ok {
+			sock = M{}
+			ss["sockopt"] = sock
+		}
+		sock["tcpKeepAliveIdle"] = 15
+		sock["tcpKeepAliveInterval"] = 5
+		sock["tcpUserTimeout"] = 15000
 		cfg["inbounds"] = []M{inbound}
 	} else {
 		nlog.Core().Warn("xray: unsupported protocol, no inbound configured — node will not accept connections",

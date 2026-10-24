@@ -15,6 +15,10 @@ def apply(root):
                 if err==nil {c,err=speedboxDialOriginTCP(port,src)}
             } else { c,err=net.DialTimeout("tcp",net.JoinHostPort("127.0.0.1",strconv.Itoa(port)),5*time.Second) }''')
     patch(main,'"net"','"net"\n"net/netip"')
+    # The origin connection wraps *net.TCPConn. Preserve TCP half-close through
+    # its CloseWrite method so a client FIN reaches the authenticated backend.
+    patch(main,'if tc, ok := c.(*net.TCPConn); ok && err == nil {','if tc, ok := c.(interface{ CloseWrite() error }); ok && err == nil {')
+    patch(main,'func forward(tun *tunnel, c net.Conn, target int, ps *portStat) {','func forward(tun *tunnel, c net.Conn, target int, ps *portStat) {\n\tspeedboxTCPKeepAlive(c)')
     patch(udp,'l.c.tun.forFlow(f.id).SendDatagram(f.id, l.target, buf[:n])','''payload:=buf[:n]
         if speedboxOriginPorts[l.target] {
             header,err:=speedboxEncodeOrigin(src);if err!=nil {continue}
@@ -50,4 +54,5 @@ def apply(root):
         }
     }
 }''')
+
 

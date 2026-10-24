@@ -2,27 +2,27 @@
   "protocol": 1,
   "upstream_commit": "7c30c59a65f962ceb6763daf23952ecbc5e7de91",
   "upstream_version": "2.10.9",
-  "version": "2.10.9-sb2",
+  "version": "2.10.9-sb3",
   "go_version": "1.26.10",
   "source_archive_sha256": "0b2e0440ebed1e22b86503339ede9254b769ba3065ea1eb4d04acca10c1fb24b",
   "integration_sources": {
-    "build.py": "0d07868bcfdf432111ee75812f75365e7034b1b18b0d3f86cb0ff0e3ad3608de",
-    "origin_patch.py": "ace7e3c14122415d3233dfa4df41afa4d48c18fcd75ec4edcdd7f0bc9b4188d7",
+    "build.py": "2ce4cab3c5d84cc45bc31f448f87c25c0be741e7d5d5fff8329a5f5509a3e67a",
+    "origin_patch.py": "57ebff2710376e9680ff47938b6e98daa4ee3e828a6ced4dbdce8a78633b549c",
     "udp_reply_linux.go": "196f0636853d51068f345751a0dd9c3bfdf1d16a84725d2e3aa66335ad991efc",
     "udp_reply_test.go": "c487156c1e6a527d862d94d263870500554e0ee4c7489ea3a9af26c110247d1d",
-    "origin_linux.go": "e937781f5ac0fa6597288bc5b1e6bad56d0537027adf7fe093540d2e5887b5eb",
-    "origin_test.go": "c54d27995ac3ba1e5551b4c93323b4c52b5194c01473eb7936a56e8165b2e2d5"
+    "origin_linux.go": "4c4d8f23c98a3461b180682fdb28b2a7d72e672cbfdd5cf050de2ffc9bd21679",
+    "origin_test.go": "8879864cd0beddd33f238cfb6bc6b093b922c5d72250348db4aab6edd5a6a623"
   },
   "archives": {
     "amd64": {
       "file": "wattun-linux-amd64.gz",
-      "sha256": "6ffe35a262cc350eead85cfc3ff2850d6a18fb962de04cfd162925daa8f10582",
-      "binary_sha256": "b2b5514077d41b10a79f09aaaf62615c4fcac390dcfdaca921a2918b92362735"
+      "sha256": "a5015fc5db281255d676b701313ed3aba0712d0118896e39c076cd007d3c9770",
+      "binary_sha256": "e86564c37b07a2bc3707640a2cc2c806ff8e381374ea76c59dcd87a7a54a3c89"
     },
     "arm64": {
       "file": "wattun-linux-arm64.gz",
-      "sha256": "4720cc921c7d922846c9f25a4d962b85e02f3dc3b6c88934d1a910a6fab32952",
-      "binary_sha256": "060e52b4ea937a1eb8106bfd03bb24020c786172117c1de1c55d9bf946231764"
+      "sha256": "040761608c0f1c2a186d80cd6b43a98459885e7204663cccf30f03e977d7b6ba",
+      "binary_sha256": "3c90f03b14ee44ec0dfe3699b67768147f528b3f42992524f53d161a5abf881b"
     }
   }
 }

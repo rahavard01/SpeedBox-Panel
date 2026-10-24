@@ -4,7 +4,7 @@ import gzip,hashlib,io,json,os,pathlib,shutil,subprocess,tarfile,tempfile,urllib
 ROOT=pathlib.Path(__file__).resolve().parents[2]
 HERE=pathlib.Path(__file__).resolve().parent
 PIN='7c30c59a65f962ceb6763daf23952ecbc5e7de91'
-VERSION='2.10.9-sb2'
+VERSION='2.10.9-sb3'
 def sha(p):return hashlib.sha256(p.read_bytes().replace(b'\r\n',b'\n') if p.suffix in ('.go','.py') else p.read_bytes()).hexdigest()
 assert subprocess.check_output(['go','version'],text=True).split()[2]=='go1.26.10','Use the patched, pinned Go 1.26.10 toolchain'
 with tempfile.TemporaryDirectory(prefix='speedbox-wat-') as td:
@@ -44,4 +44,5 @@ with tempfile.TemporaryDirectory(prefix='speedbox-wat-') as td:
         manifest['archives'][arch]={'file':p.name,'sha256':sha(p),'binary_sha256':sha(binary)}
     (out/'manifest.json').write_text(json.dumps(manifest,indent=2)+'\n')
     print('WatTunnel: UDP regression and patched amd64/arm64 builds passed')
+
 

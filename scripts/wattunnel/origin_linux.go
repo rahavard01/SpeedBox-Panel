@@ -148,6 +148,16 @@ func speedboxGuard(conn net.Conn, identity net.Conn) net.Conn {
 	go func() { var b [1]byte; identity.Read(b[:]); c.Close() }()
 	return c
 }
+
+// Probe the actual public client socket, not only the loopback backend or
+// shared carrier. Healthy idle sockets answer at TCP level without app traffic.
+func speedboxTCPKeepAlive(c net.Conn) {
+	if tcp, ok := c.(*net.TCPConn); ok {
+		if err := tcp.SetKeepAliveConfig(net.KeepAliveConfig{Enable: true, Idle: 15 * time.Second, Interval: 5 * time.Second, Count: 3}); err != nil {
+			dbg("public TCP keepalive: %v", err)
+		}
+	}
+}
 func speedboxDialOriginTCP(port int, src netip.AddrPort) (net.Conn, error) {
 	var last error
 	for attempt := 0; attempt < 8; attempt++ {

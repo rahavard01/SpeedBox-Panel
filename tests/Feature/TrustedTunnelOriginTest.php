@@ -65,7 +65,7 @@ class TrustedTunnelOriginTest extends TestCase
     }
     public function test_engine_update_commits_both_peers_even_when_binaries_are_already_current(): void
     {
-        [$servers,$tunnel]=$this->pair();$old=[...$tunnel->settings,'enabled'=>false];$tunnel->update(['settings'=>$old]);$executed=[];
+        [$servers,$tunnel]=$this->pair();$old=[...$tunnel->settings,'version'=>'2.10.9-sb2','source_identity'=>true,'enabled'=>false];$tunnel->update(['settings'=>$old]);$executed=[];
         $op=app(TunnelManager::class)->queue('engine-update',$tunnel,null);
         $remote=\Mockery::mock(NetworkTunnelRemote::class);
         $remote->shouldReceive('maintenanceStatus')->andReturn(['up_to_date'=>true]);
@@ -102,3 +102,4 @@ class TrustedTunnelOriginTest extends TestCase
         $this->assertTrue(((array)$direct['networkSettings'])['acceptProxyProtocol']);
     }
 }
+

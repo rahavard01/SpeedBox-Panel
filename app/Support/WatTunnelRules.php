@@ -8,7 +8,7 @@ use Illuminate\Validation\Rule;
 /** WatTunnel has its own schema; GRE/GOST settings never become engine flags. */
 final class WatTunnelRules
 {
-    public const VERSION = '2.10.9-sb2';
+    public const VERSION = '2.10.9-sb3';
     public const CARRIERS = ['icmp','udp','tcp','tls','ws','wss','h2','h2c','grpc'];
 
     public static function defaults(): array
@@ -25,7 +25,7 @@ final class WatTunnelRules
 
     public static function normalize(Request $request, ?ServerTunnel $existing=null): array
     {
-        if($request->input('version')==='2.10.9-sb1')$request->merge(['version'=>self::VERSION]);
+        if(in_array($request->input('version'),['2.10.9-sb1','2.10.9-sb2'],true))$request->merge(['version'=>self::VERSION]);
         $request->replace([...self::defaults(),...$request->all()]);
         $d=$request->validate([
             'engine'=>['required',Rule::in(['wattunnel'])],'version'=>['required',Rule::in([self::VERSION])],
@@ -74,4 +74,5 @@ final class WatTunnelRules
         return $d;
     }
 }
+
 

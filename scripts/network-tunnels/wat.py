@@ -1,8 +1,9 @@
 """WatTunnel engine adapter. No upstream installer, firewall or kernel tuning."""
 import hashlib,ipaddress,json,re,socket,ssl,time,urllib.request
 
-VERSION='2.10.9-sb2'
-SUPPORTED_VERSIONS=('2.10.9-sb1',VERSION)
+VERSION='2.10.9-sb3'
+SUPPORTED_VERSIONS=('2.10.9-sb1','2.10.9-sb2',VERSION)
+ORIGIN_VERSIONS=('2.10.9-sb2',VERSION)
 CARRIERS=('icmp','udp','tcp','tls','ws','wss','h2','h2c','grpc')
 
 def validate(c):
@@ -12,7 +13,7 @@ def validate(c):
     if s.get('version') not in SUPPORTED_VERSIONS or s.get('transport') not in CARRIERS or s.get('protocol') not in ('tcp','udp','both'):raise ValueError('invalid WatTunnel method')
     origin=c.get('origin_ports',[])
     if not isinstance(origin,list) or len(origin)>256 or any(type(p) is not int or not 1<=p<=65535 for p in origin):raise ValueError('invalid trusted origin ports')
-    if origin and s['version']!=VERSION:raise ValueError('origin metadata requires matching WatTunnel peers')
+    if origin and s['version'] not in ORIGIN_VERSIONS:raise ValueError('origin metadata requires matching WatTunnel peers')
     family={'ipv4':4,'ipv6':6}.get(s.get('ip_family'))
     if not family or any(ipaddress.ip_address(s[k]).version!=family for k in ('peer_host','local_endpoint')):raise ValueError('WatTunnel address family mismatch')
     for k,lo,hi in [('tunnel_port',1,65535),('metrics_port',32768,65500),('mtu',0,16384),('conns',1,64),('sessions',1,16),('lanes',1,16),('tls_frag',0,16384),('ping_every',1,300),('udp_idle',5,3600),('monitor_interval',5,300),('restart_hours',0,168)]:
@@ -151,4 +152,5 @@ def prepare_files(h,c):
         key_tmp.chmod(0o600);cert_tmp.chmod(0o600);key_tmp.replace(key);cert_tmp.replace(cert)
     finally:
         key_tmp.unlink(missing_ok=True);cert_tmp.unlink(missing_ok=True)
+
 

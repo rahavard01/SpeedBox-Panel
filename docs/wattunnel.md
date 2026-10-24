@@ -25,7 +25,7 @@ and inspection/update to the compatible bundle supplied with the panel.
 
 ## Engine supply and security
 
-Integration version `2.10.9-sb2` is built from upstream commit
+Integration version `2.10.9-sb3` is built from upstream commit
 `7c30c59a65f962ceb6763daf23952ecbc5e7de91` with patched Go 1.26.10. It replaces
 the upstream 4096-byte UDP reply read with full datagram buffers borrowed only
 after a socket becomes readable. Idle flows do not each retain 64 KiB.
@@ -101,7 +101,7 @@ Update the panel, then `php scripts/update-uuid-nodes.php --apply-all`, then
 `php scripts/update-tunnel-origins.php --apply-all`. The last command upgrades
 existing Wat pairs using the normal durable operation queue and paired rollback;
 its prerequisites check the destination broker before either peer is changed.
-Stopped tunnels stay stopped. Old sb1 binaries/configurations remain available
+Stopped tunnels stay stopped. Old sb1/sb2 binaries/configurations remain available
 for rollback. The deployments queue must be running. No manual node-port or
 firewall changes are part of this migration.
 
@@ -113,3 +113,41 @@ addresses. Subscription `Online` labels remain a snapshot from their last refres
 The recorded origin is the socket peer accepted by the Iran forwarder. If a CDN
 or another proxy fronts that port, that hop must separately preserve a verified
 client identity; opaque TCP forwarding cannot infer it from encrypted payloads.
+
+
+## TCP disconnect propagation (sb3)
+
+The trusted-origin backend socket implements TCP half-close through its wrapper.
+The bridge now calls that interface instead of requiring a concrete TCP socket.
+A client FIN reaches the backend promptly, allowing the node to release its
+authenticated connection reservation without waiting for the idle timeout.
+A half-closed upload still permits the backend to finish its download.
+
+The engine regression checks real stream FIN/reset against raw and wrapped TCP
+sockets. The node integration checks Shadowsocks over the bundled Wat H2 engine,
+including immediate admission release and another live connection on the same IP.
+Connection limits, lease TTL and traffic counters are unchanged. A silent network
+loss without FIN/reset still depends on transport failure detection; raw UDP has
+no disconnect message.
+
+## Datagram inactivity and silent disconnects
+
+Node v5 closes authenticated UDP associations after 30 seconds without payload
+in either direction, before releasing their account reservation. This is shared
+by Xray and sing-box, including sing-box zero-copy counters and Xray XUDP recovery.
+A new datagram is admitted again against the same global quota. Active downlink
+traffic refreshes the deadline as well as uplink traffic. Existing explicit
+transport-close handling remains immediate.
+
+Public Wat client TCP sockets use keepalive idle 15s, interval 5s, count 3. Xray
+inbound sockets use idle 15s, interval 5s and TCP_USER_TIMEOUT 15s; sing-box uses
+idle 15s and interval 5s with its kernel probe count. Probes let a healthy idle
+connection stay open while a vanished peer is detected in tens of seconds.
+Wat's authenticated carrier watchdog already resets its streams after 30s
+without a peer response. Detection is not instantaneous and can be affected by
+intermediate proxies that keep their own backend sockets alive.
+
+Deploy the panel, update all UUID node agents to v5, then run
+`php scripts/update-tunnel-origins.php --apply-all` for the paired sb3 rollout.
+The account admission algorithm, 60s safety lease TTL and traffic accounting
+are unchanged. No global firewall or sysctl changes are required.
