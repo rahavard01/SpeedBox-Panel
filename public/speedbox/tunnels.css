@@ -47,10 +47,21 @@
 .tunnel-workspace .button:disabled { opacity: .4; cursor: not-allowed; }
 .tunnel-workspace .tunnel-create:focus-visible,.tunnel-workspace .button:focus-visible,.tunnel-actions button:focus-visible { outline: 2px solid rgba(255,255,255,.7); outline-offset: 3px; }
 .speedbox-infrastructure .tunnel-workspace .is-selected { background: rgba(255,255,255,.14); border-color: rgba(255,255,255,.45); color: #fff; }
-.tunnel-actions { position: relative; }
+.tunnel-action-control,.tunnel-actions { position: relative; }
+.tunnel-actions-native { display:none; }
+.tunnel-action-control:focus-within { outline:2px solid rgba(255,255,255,.7);outline-offset:3px;border-radius:10px; }
 .tunnel-actions>summary { list-style: none; cursor: pointer; }
 .tunnel-actions>summary::-webkit-details-marker { display: none; }
 .tunnel-actions>div { position: absolute; inset-inline-end: 0; top: calc(100% + 6px); z-index: 15; min-width: 180px; border: 1px solid #50505f; background: #292929; border-radius: 10px; box-shadow: 0 8px 28px #0005; padding: 6px; display: grid; }
+.tunnel-actions>div { box-sizing:border-box;overflow-y:auto;overscroll-behavior:contain;max-width:calc(100vw - 24px); }
+.tunnel-actions.opens-up>div { top:auto;bottom:calc(100% + 6px); }
+.tunnel-card:has(.tunnel-actions[open]) { position:relative;z-index:16; }
+@media (max-width:767px), (hover:none) and (pointer:coarse) {
+  .tunnel-action-control>.tunnel-actions-native { display:block;position:absolute;inset:0;width:100%;height:100%;opacity:0;z-index:2;cursor:pointer;font-size:16px; }
+  .tunnel-action-control>.tunnel-actions>summary { pointer-events:none; }
+  .tunnel-action-control>.tunnel-actions>div { display:none; }
+  .tunnel-action-control:has(select:disabled) { opacity:.4; }
+}
 .tunnel-actions button { background: none; border: 0; color: inherit; font: inherit; font-size: 11px; text-align: start; padding: 10px; border-radius: 7px; cursor: pointer; }
 .tunnel-actions button:hover { background: rgba(255,255,255,.06); }
 .tunnel-actions button:disabled { opacity: .4; cursor: not-allowed; }
@@ -320,5 +331,6 @@
 /* Reuse server-operation percentage and meter inside tunnel test dialogs. */
 .tunnel-test-progress .deployment-progress{flex:1;min-width:0}
 .tunnel-roundtrip-metrics{grid-template-columns:repeat(3,minmax(0,1fr))}
+
 
 

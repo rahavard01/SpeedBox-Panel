@@ -38,7 +38,12 @@ async function mount(page,count=3,url=origin){await page.goto(url);await page.ev
  const notify={success:m=>messages.push(m),error:m=>messages.push(m),notif:m=>messages.push(m)};
  window.session=SpeedboxInfrastructure.mount(document.getElementById('mount'),{router:{push(){},replace(){}},notify,view:'tunnels'});
  },count);await page.locator('[data-new-tunnel]').waitFor();}
-async function action(page,name){await page.locator('[data-tunnel-card="1"] .tunnel-actions summary').click();await page.locator(`[data-tunnel-card="1"] [data-tunnel-action="${name}"]`).click();}
+async function cardAction(page,id,name){
+ const card=page.locator(`[data-tunnel-card="${id}"]`),native=card.locator('[data-tunnel-native-action]');
+ if(await native.isVisible())await native.selectOption(name);
+ else{await card.locator('.tunnel-actions summary').click();await card.locator(`[data-tunnel-action="${name}"]`).click();}
+}
+async function action(page,name){await cardAction(page,1,name);}
 async function screenshot(page,name,width){if(process.env.SPEEDBOX_TEST_SCREENSHOT_DIR){mkdirSync(process.env.SPEEDBOX_TEST_SCREENSHOT_DIR,{recursive:true});await page.screenshot({path:path.join(process.env.SPEEDBOX_TEST_SCREENSHOT_DIR,`${name}-${width}.png`),fullPage:true});}}
 async function checkResults(page){
  const layout=await page.evaluate(()=>{
@@ -171,7 +176,7 @@ try{
   check(await previewPage.locator('[data-tunnel-card="601"] .tunnel-link.is-connected').count()===1&&await previewPage.locator('[data-tunnel-card="602"] .tunnel-link.is-disconnected').count()===1,'connected and disconnected cards use distinct status colors');
   check(await previewPage.evaluate(()=>calls.length===0),'opening preview makes no real API call');
   await screenshot(previewPage,'preview-cards',width);
-    await previewPage.locator('[data-tunnel-card="601"] .tunnel-actions summary').click();await previewPage.locator('[data-tunnel-card="601"] [data-tunnel-action=optimize]').click();
+  await cardAction(previewPage,601,'optimize');
   await previewPage.locator('[data-maintenance-form] button[type=submit]:not([disabled])').waitFor();
   await previewPage.locator('[data-maintenance-form] button[type=submit]').click();
   await previewPage.locator('.tunnel-operation-result').filter({hasText:'عملیات نمایشی انجام شد'}).waitFor();
@@ -182,7 +187,7 @@ try{
   await checkResults(previewPage);
   if(width>=1280)check(await previewPage.locator('.infrastructure-modal').evaluate(el=>el.getBoundingClientRect().height<=innerHeight-24),'all eight sample results fit the desktop viewport');
   await screenshot(previewPage,'preview-results',width);await previewPage.keyboard.press('Escape');
-  await previewPage.locator('[data-tunnel-card="601"] .tunnel-actions summary').click();await previewPage.locator('[data-tunnel-card="601"] [data-tunnel-action=logs]').click();
+  await cardAction(previewPage,601,'logs');
   check(await previewPage.locator('.tunnel-log-columns section').evaluateAll(sections=>sections.every(s=>s.querySelector('pre').getBoundingClientRect().top-s.querySelector('h4').getBoundingClientRect().bottom>=11.5)),'both server report headings have a gap above log boxes');
   await screenshot(previewPage,'logs',width);await previewPage.keyboard.press('Escape');
   await previewPage.locator('[data-tunnel-detail="601"]').click();await previewPage.locator('[data-create-tunnel-node]').click();
@@ -202,3 +207,4 @@ try{
  await externalPage.evaluate(()=>session.dispose());await externalPage.close();
  console.log(`PASS: ${assertions} assertions using real infrastructure modal at 1280, 1920 and 390px`);
 }finally{await browser.close();await new Promise(r=>server.close(r));}
+

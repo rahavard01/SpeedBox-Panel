@@ -48,7 +48,45 @@ async function setPorts(page,values){
  for(let i=0;i<ports.length;i++)for(const key of ['public_port','target_port'])await page.locator(`[data-map-row="${i}"] [data-map-key=${key}]`).fill(ports[i]);
 }
 const save=page=>page.locator('[data-network-editor] button[type=submit]').click();
-async function action(page,card,name){await card.locator('.tunnel-actions summary').click();await card.locator(`[data-tunnel-action="${name}"]`).click();}
+async function action(page,card,name){
+ const native=card.locator('[data-tunnel-native-action]');
+ if(await native.isVisible())await native.selectOption(name);
+ else{await card.locator('.tunnel-actions summary').click();await card.locator(`[data-tunnel-action="${name}"]`).click();}
+}
+
+async function actionMenuCases(page,width){
+ const card=page.locator('[data-tunnel-card="601"]'),native=card.locator('[data-tunnel-native-action]');
+ for(const id of [601,605,606]){
+  const control=page.locator(`[data-tunnel-card="${id}"] .tunnel-action-control`);
+  check(await control.evaluate(e=>{
+   const choices=[...e.querySelectorAll('select option')].filter(o=>o.value).map(o=>o.value);
+   return JSON.stringify(choices)===JSON.stringify([...e.querySelectorAll('[data-tunnel-action]')].map(b=>b.dataset.tunnelAction));
+  }),'native and desktop operations match the engine '+id);
+ }
+ if(width<768){
+  await native.scrollIntoViewIfNeeded();
+  check(await native.evaluate(e=>{const r=e.getBoundingClientRect();return document.elementFromPoint(r.x+r.width/2,r.y+r.height/2)===e;}),'mobile taps hit the real native select');
+  check(await card.locator('summary').getAttribute('tabindex')==='-1','mobile has one accessible operations control');
+  await action(page,card,'edit');await page.locator('[data-tunnel-setup]').waitFor();
+  check(await native.inputValue()==='','native action resets after selection');await page.keyboard.press('Escape');
+  await action(page,card,'edit');await page.locator('[data-tunnel-setup]').waitFor();await page.keyboard.press('Escape');
+  check(true,'same native operation can be selected repeatedly');
+ }else{
+  const summary=card.locator('.tunnel-actions summary');
+  // Keep scroll space on both sides so the trigger can be placed at either viewport edge.
+  await page.evaluate(()=>{const a=document.createElement('div'),b=document.createElement('div');a.id='menu-before';b.id='menu-after';a.style.height=b.style.height='1000px';document.querySelector('.tunnel-grid').before(a);document.querySelector('.tunnel-grid').after(b);});
+  for(const [edge,up] of [['bottom',true],['top',false]]){
+   await summary.evaluate((e,edge)=>{const r=e.getBoundingClientRect();window.scrollBy(0,r.top-(edge==='bottom'?innerHeight-r.height-20:20));},edge);
+   const height=await page.evaluate(()=>document.documentElement.scrollHeight);
+   await summary.click();
+   const box=await card.locator('.tunnel-actions').evaluate(e=>{const r=e.querySelector('[role=group]').getBoundingClientRect();return {up:e.classList.contains('opens-up'),top:r.top,bottom:r.bottom};});
+   check(box.up===up&&box.top>=0&&box.bottom<=900,'desktop menu fits at '+edge);
+   check(await page.evaluate(()=>document.documentElement.scrollHeight)===height,'opening operations does not extend page at '+edge);
+   await page.keyboard.press('Escape');check(!await card.locator('.tunnel-actions').getAttribute('open'),'Escape closes operations');
+  }
+  await page.evaluate(()=>{document.getElementById('menu-before').remove();document.getElementById('menu-after').remove();});
+ }
+}
 
 async function liveCases(page,width){
  const fixture=await page.evaluate(()=>networkData());
@@ -183,9 +221,8 @@ async function watCases(page,width){
  await page.locator('[data-wat-editor] button[type=submit]').click();await card.waitFor();
  await card.locator('[data-tunnel-detail]').click();await page.locator('.tunnel-details').waitFor();
  check((await page.locator('.tunnel-details').textContent()).includes('WatTunnel'),'WatTunnel owns details');await page.keyboard.press('Escape');
- await card.locator('.tunnel-actions summary').click();
  check(await card.locator('[data-tunnel-action=optimize],[data-tunnel-action=reset-quota],[data-tunnel-action=diagnose]').count()===0,'WatTunnel exposes only its supported operations');
- await card.locator('[data-tunnel-action=stop]').click();await card.waitFor();
+ await action(page,card,'stop');await card.waitFor();
  check((await card.textContent()).includes('متوقف'),'WatTunnel stop updates its card');
  await action(page,card,'delete');
  const deletion=await page.locator('[data-confirm-network]').evaluate(e=>({kind:e.className,color:getComputedStyle(e).backgroundColor}));
@@ -212,6 +249,7 @@ async function summaryCases(page){
 try {
  for(const width of [390,1280]){
   const page=await context.newPage();await page.setViewportSize({width,height:900});await start(page);
+  await actionMenuCases(page,width);
   const aligned=await page.locator('.network-filters').evaluate(e=>[...e.children].every(b=>['flex','inline-flex'].includes(getComputedStyle(b).display)&&getComputedStyle(b).alignItems==='center'&&getComputedStyle(b).justifyContent==='center'));
   check(aligned,'all engine labels share horizontal and vertical centering');
   const bp=page.locator('[data-tunnel-card="601"]');await action(page,bp,'delete');
@@ -252,3 +290,4 @@ try {
  }
  console.log('PASS:',assertions,'navigation and progress assertions on mobile and desktop');
 } finally {await browser.close();await new Promise(r=>server.close(r));}
+
