@@ -66,7 +66,7 @@ window.SpeedboxEmergencyConfigs = {
       openModal(row?'ویرایش کانفیگ اضطراری':'افزودن کانفیگ اضطراری', `<form id="emergencyForm" autocomplete="off">
         <div class="field"><label for="emergencyName">نام نمایشی</label><input id="emergencyName" name="name" required maxlength="150" value="${escape(row?.name||'')}" placeholder="مثلاً مسیر اضطراری آلمان"></div>
         <div class="field emergency-link-field"><label for="emergencyLink">لینک کانفیگ</label><textarea id="emergencyLink" name="config_uri" required maxlength="16384" rows="5" dir="ltr" spellcheck="false" autocapitalize="off" placeholder="vless://…">${escape(row?.config_uri||'')}</textarea></div>
-        <div class="field emergency-tags-field"><label for="emergencyTags">تگ کانفیگ</label><textarea id="emergencyTags" name="tags" rows="2" dir="ltr" maxlength="2100" placeholder="SBONLY">${escape((row?.tags||[]).join('\n'))}</textarea><small>هر خط یک تگ؛ با SBONLY این کانفیگ فقط در SpeedBox نمایش داده می‌شود.</small></div>
+        <div class="field emergency-tags-field"><label for="emergencyTags">تگ کانفیگ</label><textarea id="emergencyTags" name="tags" rows="2" dir="ltr" maxlength="2100">${escape((row?.tags||[]).join('\n'))}</textarea></div>
         <div class="field emergency-modal-display"><label for="emergencyVisible">نمایش در لیست</label><label class="switch-line ios"><input id="emergencyVisible" name="show" type="checkbox" ${row?.show===false?'':'checked'}></label></div>
         <div class="emergency-form-error" role="alert" hidden></div>
         <div class="form-actions"><button class="button primary" type="submit">ذخیره</button></div>

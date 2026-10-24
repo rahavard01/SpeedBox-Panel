@@ -416,17 +416,15 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
     const version=++serverFetchVersion;
     if(!background||!scope.getElementById('serverSearch')){
       const query=scope.getElementById('serverSearch')?.value||'';
-      content.innerHTML=`<div class="stats-grid" id="serverSummary"></div><div class="toolbar entity-toolbar"><button class="button primary" id="addServer"><i class="fas fa-plus" aria-hidden="true"></i> افزودن سرور</button><input class="search" id="serverSearch" placeholder="جستجو"></div><article class="panel-card entity-list-shell"></article>`;
+      content.innerHTML=`<div class="toolbar entity-toolbar"><button class="button primary" id="addServer"><i class="fas fa-plus" aria-hidden="true"></i> افزودن سرور</button><input class="search" id="serverSearch" placeholder="جستجو"></div><article class="panel-card entity-list-shell"></article>`;
       scope.getElementById('serverSearch').value=query;
       bindServers();
-      scope.getElementById('serverSummary').innerHTML=stat('سرورها',0,'server')+stat('سرورهای آنلاین',0,'heartbeat')+stat('سرورهای آفلاین',0,'power-off')+stat('نودهای متصل',0,'project-diagram');
       content.querySelector('.panel-card').innerHTML=loadingTable(['سرور','وضعیت','نودهای متصل','منابع','آخرین عملیات','عملیات'],'servers');
     }
     const data=await api('/servers');
     if(version!==serverFetchVersion||state.view!=='servers')return;
     state.servers=data.data;
     renderServerRows();
-    scope.getElementById('serverSummary').innerHTML=stat('سرورها',state.servers.length,'server')+stat('سرورهای آنلاین',state.servers.filter(s=>s.connection_status==='online').length,'heartbeat')+stat('سرورهای آفلاین',state.servers.filter(s=>s.connection_status!=='online').length,'power-off')+stat('نودهای متصل',state.servers.reduce((n,s)=>n+Number(s.machine?.nodes_count||0),0),'project-diagram');
     scheduleServerRefresh();
   }
   function deploymentProgress(deployment){
