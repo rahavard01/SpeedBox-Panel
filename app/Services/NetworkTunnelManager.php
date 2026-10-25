@@ -49,6 +49,8 @@ final class NetworkTunnelManager
         $data=$wat?\App\Support\WatTunnelRules::normalize($request,$existing):NetworkTunnelRules::normalize($request,$existing);
         if($wat && $existing)$data['metrics_port']=(int)$existing->subnet;
         if($wat)$data['source_identity']=(bool)$servers[(int)$data['foreign_server_id']]->machine_id;
+        $data=[...$data,...TunnelCdn::normalize($request,$data['engine'],!empty($data['reverse'])?'reverse':'direct',$data['transport'],$existing)];
+        if(($data['connection_mode']??'direct')==='cdn'&&$wat){$data['sni']=$data['cdn']['domain'];$data['host_header']=$data['cdn']['domain'];}
         $data['telegram_alerts']=$alerts;
         $data['enabled']=$existing?(bool)($existing->settings['enabled']??true):true;
         $this->assertPorts($data,(int)$data['iran_server_id'],(int)$data['foreign_server_id'],$existing?->id);
@@ -139,7 +141,7 @@ final class NetworkTunnelManager
     public function export(ServerTunnel $tunnel): array
     {
         return ['format'=>'speedbox-network-v1','engine'=>$tunnel->engine,'name'=>$tunnel->name,
-            'settings'=>array_diff_key($tunnel->settings,array_flip(['enabled']))];
+            'settings'=>TunnelCdn::publicSettings(array_diff_key($tunnel->settings,array_flip(['enabled'])))];
     }
 
     public function saveSnapshot(ServerTunnel $tunnel,array $snapshots): void
@@ -153,6 +155,7 @@ final class NetworkTunnelManager
             'stopped'=>'اتصال متوقف است.','offline'=>'سرویس یکی از سمت‌ها فعال نیست.',default=>'سرویس بررسی شد؛ ارتباط کامل هنوز تأیید نشده است.'};
         if (isset($iran['error'])||isset($foreign['error'])) {$status='needs_review';$message='دسترسی به یکی از سرورها تأیید نشد.';}
         if($tunnel->engine==='wattunnel'&&$status==='connected')$message='ارتباط رمز‌شدهٔ دو سرور برقرار است؛ دسترسی سرویس مقصد را با کلاینت هم آزمایش کنید.';
+        if(($tunnel->settings['connection_mode']??'direct')==='cdn'&&$status==='connected')foreach([$iran,$foreign] as $snapshot)if(isset($snapshot['cdn']['cdn_verified'])&&!$snapshot['cdn']['cdn_verified']){$status='degraded';$message='سرویس روشن است، اما مسیر CDN تأیید نشده است.';}
         if($tunnel->engine==='gre' && (int)($tunnel->settings['quota_gb']??0)>0 && (!empty($iran['quota_exhausted'])||!empty($foreign['quota_exhausted']))) {
             $stopped=($tunnel->settings['quota_mode']??'warn')==='enforce';
             if(!$stopped && $status==='connected')$status='degraded';

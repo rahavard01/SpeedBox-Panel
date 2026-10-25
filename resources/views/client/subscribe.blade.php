@@ -1133,13 +1133,13 @@
                     <button type="button" class="tutorial-item" onclick="openTutorial('android')">
                         <span class="platform-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><g fill="#3DDC84"><path d="M7.25 6.25 5.7 3.57a.65.65 0 1 1 1.13-.65L8.4 5.64A9.05 9.05 0 0 1 12 4.9c1.28 0 2.5.26 3.6.74l1.57-2.72a.65.65 0 1 1 1.13.65l-1.55 2.68A7.57 7.57 0 0 1 20 12H4a7.57 7.57 0 0 1 3.25-5.75Z"/><path d="M4 13h16v5.25A1.75 1.75 0 0 1 18.25 20H17v2a1 1 0 1 1-2 0v-2H9v2a1 1 0 1 1-2 0v-2H5.75A1.75 1.75 0 0 1 4 18.25V13Z"/></g><circle cx="8.3" cy="9.1" r=".8" fill="#081014"/><circle cx="15.7" cy="9.1" r=".8" fill="#081014"/></svg></span>
                         <span class="platform-name">اندروید</span>
-                        <span class="platform-app">کلاینت سازگار</span>
+                        <span class="platform-app">SPEEDBOX</span>
                     </button>
 
                     <button type="button" class="tutorial-item" onclick="openTutorial('windows')">
                         <span class="platform-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#00A4EF" d="M2.5 4.2 10.7 3v8.1H2.5V4.2Zm9.3-1.35L21.5 1.5v9.6h-9.7V2.85ZM2.5 12.1h8.2v8.15L2.5 19.1v-7Zm9.3 0h9.7v9.55l-9.7-1.35v-8.2Z"/></svg></span>
                         <span class="platform-name">ویندوز</span>
-                        <span class="platform-app">کلاینت سازگار</span>
+                        <span class="platform-app">SPEEDBOX</span>
                     </button>
 
                 </div>
@@ -1200,7 +1200,7 @@
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                             <path d="M13 2 4.5 13H11l-1 9L19.5 11H13l0-9Z"></path>
                         </svg>
-                        <span>ویژگی‌های برنامه</span>
+                        <span>ویژگی‌های برنامه SPEEDBOX</span>
                     </div>
 
                     <ul id="speedboxFeatures" class="speedbox-features"></ul>
@@ -1246,17 +1246,33 @@
         },
         android: {
             title: 'راهنمای اتصال اندروید',
-            app: 'کلاینت سازگار',
+            app: '(مخصوص گوشی و اندروید تی وی) SPEEDBOX',
             platformIcon: icons.android,
             appIcon: icons.android,
-            steps: ['یک کلاینت سازگار با فرمت اشتراک و پروتکل‌های سرور خود نصب کنید.', 'لینک اشتراک را کپی و در بخش اشتراک‌های برنامه وارد کنید؛ سپس فهرست را به‌روزرسانی و سرور را انتخاب کنید.']
+            steps: [
+                'برنامه را از لینک زیر دانلود کنید :<br><a href="https://io.subupdatefast.info/Download/speedbox/SPEEDBOX.apk" target="_blank" rel="noopener">https://io.subupdatefast.info/Download/speedbox/SPEEDBOX.apk</a>',
+                'لینک اشتراک را داخل برنامه وارد کرده و کشور مورد نظر را انتخاب کرده و دکمه اتصال را بزنید تا به بهترین سرور مورد نظر با توجه به اینترنت خود متصل شوید.',
+            ],
+            features: [
+                'انتخاب خودکار بهترین سرور',
+                'باز کردن سایت‌های ایرانی بدون نیاز به خاموش کردن وی پی ان',
+                'به اشتراک گذاری وی پی ان با دیگر دستگاهها'
+            ]
         },
         windows: {
             title: 'راهنمای اتصال ویندوز',
-            app: 'کلاینت سازگار',
+            app: 'SPEEDBOX',
             platformIcon: icons.windows,
             appIcon: icons.windows,
-            steps: ['یک کلاینت سازگار با فرمت اشتراک و پروتکل‌های سرور خود نصب کنید.', 'لینک اشتراک را کپی و در بخش اشتراک‌های برنامه وارد کنید؛ سپس فهرست را به‌روزرسانی و سرور را انتخاب کنید.']
+            steps: [
+                'برنامه را از لینک زیر دانلود کنید :<br><a href="https://io.subupdatefast.info/Download/speedbox/SPEEDBOX.exe" target="_blank" rel="noopener">https://io.subupdatefast.info/Download/speedbox/SPEEDBOX.exe</a>',
+                'لینک اشتراک را داخل برنامه وارد کرده و کشور مورد نظر را انتخاب کرده و دکمه اتصال را بزنید تا به بهترین سرور مورد نظر با توجه به اینترنت خود متصل شوید.',
+            ],
+            features: [
+                'انتخاب خودکار بهترین سرور',
+                'باز کردن سایت‌های ایرانی بدون نیاز به خاموش کردن وی پی ان',
+                'به اشتراک گذاری وی پی ان با دیگر دستگاهها'
+            ]
         }
     };
 

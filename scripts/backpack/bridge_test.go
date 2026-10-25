@@ -55,3 +55,20 @@ func TestSpeedboxSwappedCarrierKeepsEveryIngressOnIran(t *testing.T){
   }
  }
 }
+
+func TestSpeedboxCDNUsesEdgeDomainAndIndependentOriginPort(t *testing.T){
+ for _,transport:=range []string{"ws","wss","wsmux","wssmux"}{
+  for _,role:=range []string{"server","client"}{
+   s:=TunnelSpec{Role:role,Transport:transport,BindAddr:"0.0.0.0:18443",RemoteAddr:"192.0.2.1:18443"}
+   cdn:=&SpeedboxCDN{Domain:"tunnel.example.com",Port:8443,EdgeIP:"185.143.234.132",CertFile:"/etc/speedbox-tunnel-cdn/test/fullchain.pem",KeyFile:"/etc/speedbox-tunnel-cdn/test/privkey.pem"}
+   if err:=sbConfigureCDN(&s,cdn);err!=nil{t.Fatal(err)}
+   if s.BindAddr!="0.0.0.0:18443"{t.Fatal("CDN edge port replaced origin listener")}
+   if role=="client"&&(s.RemoteAddr!="tunnel.example.com:8443"||s.EdgeIP!=cdn.EdgeIP){t.Fatal("edge route or domain lost")}
+   if needsTLS(transport)&&!s.SimpleAuth{t.Fatal("TLS termination requires simple authentication on both peers")}
+   if role=="server"&&needsTLS(transport)&&(s.TLSCert!=cdn.CertFile||s.TLSKey!=cdn.KeyFile||s.ACMEDomain!=""){t.Fatal("prepared certificate not used")}
+  }
+ }
+ for _,transport:=range []string{"tcp","tcpmux","quic","udp"}{s:=TunnelSpec{Role:"client",Transport:transport};if sbConfigureCDN(&s,&SpeedboxCDN{Domain:"tunnel.example.com",Port:443})==nil{t.Fatal("unsupported CDN carrier accepted")}}
+ s:=TunnelSpec{Role:"client",Transport:"wss"};if sbConfigureCDN(&s,&SpeedboxCDN{Domain:"192.0.2.1",Port:443})==nil{t.Fatal("raw origin accepted as CDN")}
+ if err:=sbConfigureCDN(&s,nil);err!=nil{t.Fatal("direct path changed")}
+}

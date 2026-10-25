@@ -45,6 +45,11 @@ jobs:
           php scripts/tests/tunnel-alerts-and-tags.test.php
           php scripts/tests/tunnel-runtime.test.php
           php scripts/tests/network-preflight.test.php
+          php scripts/tests/tunnel-cdn.test.php
+          python3 scripts/tests/tunnel-cdn-host.test.py
+          python3 scripts/tests/tunnel-certificate.test.py
+          python3 scripts/tests/tunnel-cdn-live.test.py
+          python3 scripts/verify-tunnel-cdn.py
       - name: Direct SSH command and upload
         run: |
           sudo apt-get update -qq
@@ -79,6 +84,8 @@ jobs:
           node --experimental-vm-modules scripts/tests/online-presence-ui.test.mjs
           node --experimental-vm-modules scripts/tests/user-experience-ui.test.mjs
           node scripts/tests/removal-ui.test.mjs
+          node scripts/tests/certificate-dns.test.mjs
+          node scripts/tests/subscription-guide.test.mjs
       - name: Build tunnel UI fixtures
         timeout-minutes: 4
         run: |
@@ -98,6 +105,7 @@ jobs:
         run: |
           export SPEEDBOX_TEST_PLAYWRIGHT="$RUNNER_TEMP/tunnel-ui/node_modules/playwright/index.mjs"
           node scripts/tests/tunnel-navigation.test.mjs
+          node scripts/tests/tunnel-cdn-ui.test.mjs
       - name: Fresh MySQL installation
         env:
           DB_CONNECTION: mysql

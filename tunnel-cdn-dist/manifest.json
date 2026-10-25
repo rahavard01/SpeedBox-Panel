@@ -1,0 +1,23 @@
+{
+  "protocol": 1,
+  "version": "1.0.0",
+  "go_version": "1.26.10",
+  "sources": {
+    "main.go": "61c40e7d3241dcb497f59aedf9358db9361f3e369922e24f33081559dd468c5a",
+    "go.mod": "e4fc00cc0c0cfae84ce9645fb8e481bf3331db0ce647d3d0f142ca2561e9ec57",
+    "go.sum": "70a9bb8500702bcb4e5cf75fff8eb9160cef10c5a29f13be8edfe66c741f5eea",
+    "host.py": "ff2b4f2e58b37be7a4f237eacf98ce6d9f0405ab2d8e778266fd0d340a16cd16"
+  },
+  "archives": {
+    "amd64": {
+      "file": "certificate-linux-amd64.gz",
+      "sha256": "e5accbbba55257d2774f027fe2823ef802697c8d9220d68233155249e26d05a3",
+      "binary_sha256": "b70ad5f289ecc2c6fa7f26fff7a69289e2c97155b95d4b09efa416fa167a2f69"
+    },
+    "arm64": {
+      "file": "certificate-linux-arm64.gz",
+      "sha256": "cb0987879de33841cf7176e190a287bad09e984688db098fed83df38964ddb11",
+      "binary_sha256": "25b88e10927c6a5ce9f1e9568436726f52b22b37df4ca9826c9e4db0684ed8b1"
+    }
+  }
+}

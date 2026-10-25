@@ -1,5 +1,16 @@
 # Source attribution
 
+## Tunnel certificate helper
+
+The standalone tunnel certificate helper uses go-acme/lego v4.33.0, including its
+ArvanCloud and Cloudflare DNS providers, under the MIT License. Upstream:
+https://github.com/go-acme/lego/tree/v4.33.0
+The license is retained at `scripts/tunnel-cdn/LEGO-LICENSE`; the pinned module
+versions, checksums, integration source and reproducible build are distributed in
+`scripts/tunnel-cdn/`. Binaries for Linux amd64 and arm64 and their source/binary
+checksums are in `tunnel-cdn-dist/`. Provider credentials are supplied over private
+standard input rather than command-line arguments.
+
 Panel SpeedBox combines the existing rahavard01/Panel application with subscription exporters from rahavard01/Xboard (ecf1129aa9b4f987421d902eb0a263daa0f49907) and the embedded cedar2025/Xboard-Node agent (0a29338e1f102a462363ce3527417029f89bab28).
 
 Upstream URLs:

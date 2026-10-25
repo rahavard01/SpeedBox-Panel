@@ -47,6 +47,14 @@ type SpeedboxRequest struct {
  Swapped bool `json:"swapped"`
  Side string `json:"side"`
  BridgePort int `json:"bridge_port"`
+ CDN *SpeedboxCDN `json:"cdn,omitempty"`
+}
+type SpeedboxCDN struct {
+ Domain string `json:"domain"`
+ Port int `json:"port"`
+ EdgeIP string `json:"edge_ip"`
+ CertFile string `json:"cert_file"`
+ KeyFile string `json:"key_file"`
 }
 type sbTestState struct {
  State string `json:"state"`
@@ -175,7 +183,12 @@ func sbApply(r SpeedboxRequest)(any,error){
   if _,ok:=Find(sbCompanion(r.Name));ok{if err:=Delete(sbCompanion(r.Name));err!=nil{return nil,err}}
   form:=NewTunnel{Role:r.Role,Transport:r.Transport,Name:r.Name,Token:r.Token,ServerAddr:r.Host,TunnelPort:strconv.Itoa(r.Port),Ports:r.Ports,Preset:PresetTurbo}
   if r.Role=="server" { form.Tune=&FineTune{};raw:=[]byte(fmt.Sprintf(`{"acceptUDP":%t}`,r.UDP));_=json.Unmarshal(raw,form.Tune) }
-  if _,_,_,err:=ApplyTunnel(form);err!=nil{return nil,err}
+  spec,err:=specFromNew(form);if err!=nil{return nil,err}
+  if err=sbConfigureCDN(&spec,r.CDN);err!=nil{return nil,err}
+  if !fileExists(app.ConfigPath(spec.Name)) {
+   if err=refuseBusyForwards(spec);err!=nil{return nil,err}
+   if _,err=spec.Save();err!=nil{return nil,err}
+  } else if err=applySpec(spec);err!=nil{return nil,err}
  }else{return nil,fmt.Errorf("unsupported tunnel kind")}
  return sbStatus(r)
 }
@@ -203,6 +216,7 @@ func sbSwappedSpecs(r SpeedboxRequest)(TunnelSpec,l3Spec,error){
   Ports:fmt.Sprintf("127.0.0.1:%d=127.0.0.1:%d",r.BridgePort,r.BridgePort)}
  if iran{form.Role="client"}else{form.Tune=&FineTune{};_=json.Unmarshal([]byte(`{"acceptUDP":true}`),form.Tune)}
  carrier,err:=specFromNew(form);if err!=nil{return TunnelSpec{},l3Spec{},err}
+ if err=sbConfigureCDN(&carrier,r.CDN);err!=nil{return TunnelSpec{},l3Spec{},err}
  q:=r;q.Transport="udp";q.Role="kharej";if iran{q.Role="iran"}
  q.Host="127.0.0.1";q.Port=r.BridgePort;q.Swapped=true
  main,err:=sbDirectSpec(q);if err!=nil{return TunnelSpec{},l3Spec{},err}
@@ -262,4 +276,20 @@ func speedboxTestIface(id string,index int)string{
  if len(id)>8{id=id[:8]}
  for attempt:=0;attempt<256;attempt++{name:=fmt.Sprintf("sbt%s%02x%02x",id,index,attempt);if len(name)>15{name=name[:15]};if _,err:=net.InterfaceByName(name);err!=nil{return name}}
  return "sbt"+randomToken(8)
+}
+
+// A CDN terminates TLS. Preserve the domain for both SNI and WebSocket Host;
+// only the optional edge override changes the socket destination.
+func sbConfigureCDN(s *TunnelSpec,c *SpeedboxCDN)error{
+ if c==nil{return nil}
+ if !isWS(s.Transport)||c.Domain==""||net.ParseIP(c.Domain)!=nil||strings.ContainsAny(c.Domain,"/:\\ \r\n")||c.Port<1||c.Port>65535{return fmt.Errorf("invalid CDN method or domain")}
+ if s.Role=="client" {s.RemoteAddr=net.JoinHostPort(c.Domain,strconv.Itoa(c.Port));s.EdgeIP=c.EdgeIP}
+ if needsTLS(s.Transport) {
+  s.SimpleAuth=true
+  if s.Role=="server" {
+   for _,path:=range []string{c.CertFile,c.KeyFile}{if !filepath.IsAbs(path)||strings.ContainsAny(path,"\r\n"){return fmt.Errorf("CDN certificate files required")}}
+   s.TLSCert=c.CertFile;s.TLSKey=c.KeyFile;s.ACMEDomain="";s.ACMEEmail=""
+  }
+ }
+ return nil
 }

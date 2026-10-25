@@ -23,8 +23,10 @@
 
   <meta name="csrf-token" content="{{ csrf_token() }}">
 
+  <script src="/speedbox/certificate-dns.js?v={{ filemtime(public_path('speedbox/certificate-dns.js')) }}"></script>
   <script src="/speedbox/node-editor.js?v={{ filemtime(public_path('speedbox/node-editor.js')) }}"></script>
   <script src="/speedbox/emergency-configs.js?v={{ filemtime(public_path('speedbox/emergency-configs.js')) }}"></script>
+  <script src="/speedbox/tunnel-cdn.js?v={{ filemtime(public_path('speedbox/tunnel-cdn.js')) }}"></script>
   <script src="/speedbox/wattunnel.js?v={{ filemtime(public_path('speedbox/wattunnel.js')) }}"></script>
   <script src="/speedbox/network-tunnels.js?v={{ filemtime(public_path('speedbox/network-tunnels.js')) }}"></script>
   <script src="/speedbox/tunnels.js?v={{ filemtime(public_path('speedbox/tunnels.js')) }}"></script>

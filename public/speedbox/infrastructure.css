@@ -538,3 +538,13 @@
 .speedbox-infrastructure-overlay .node-warp-account{padding-top:8px}
 .speedbox-infrastructure-overlay .node-warp-account summary{color:#c2baca}
 @media(max-width:480px){.speedbox-infrastructure-overlay .node-warp-actions{display:grid;grid-template-columns:1fr 1fr}.speedbox-infrastructure-overlay .node-warp-actions .button:only-child{grid-column:1/-1}}
+
+/* Shared provider-specific certificate credentials in nodes and CDN tunnels. */
+.speedbox-infrastructure-overlay .certificate-dns-fields{display:contents}
+.speedbox-infrastructure-overlay .certificate-dns-field{min-width:0}
+.speedbox-infrastructure-overlay .certificate-dns-field>.form-input{width:100%;min-width:0;box-sizing:border-box}
+.speedbox-infrastructure-overlay .certificate-dns-hint{grid-column:1/-1;margin:0;text-align:right;font-size:11px;line-height:1.9;color:var(--muted);overflow-wrap:anywhere}
+.speedbox-infrastructure-overlay .certificate-dns-optional{font-size:10px;font-weight:400;color:var(--muted)}
+
+.speedbox-infrastructure-overlay .certificate-dns-field>.certificate-dns-hint{grid-column:2}
+@media(max-width:540px){.speedbox-infrastructure-overlay .certificate-dns-field>.certificate-dns-hint{grid-column:1/-1}}

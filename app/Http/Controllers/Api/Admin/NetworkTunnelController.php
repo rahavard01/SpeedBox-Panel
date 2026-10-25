@@ -65,6 +65,7 @@ final class NetworkTunnelController extends Controller
         $op=DB::transaction(function()use($request,$tunnel,$network,$manager){
             $data=$network->prepare($request,$tunnel);
             $data=$network->allocate([...$data,'id'=>$tunnel->id],$tunnel->subnet);
+            \App\Services\TunnelCdn::assertReceipt($data,['engine'=>$tunnel->engine,'kind'=>!empty($data['reverse'])?'reverse':'direct','transport'=>$data['transport'],'orientation'=>'normal'],(int)$tunnel->iran_server_id,(int)$tunnel->foreign_server_id,$tunnel);
             return $manager->queue('apply',$tunnel,null,['settings'=>$data,'name'=>$data['name']]);
         });
         return response()->json(['message'=>'تغییرات در صف قرار گرفت؛ پس از بررسی دو سمت ثبت می‌شوند.','data'=>$op],202);

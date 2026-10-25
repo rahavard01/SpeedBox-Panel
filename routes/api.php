@@ -330,6 +330,8 @@ Route::middleware(['auth:sanctum', CheckTokenExpiration::class, CheckUserBanned:
             Route::get('/tunnels', [\App\Http\Controllers\Api\Admin\TunnelController::class, 'index']);
             Route::post('/network-tunnel-tests', [\App\Http\Controllers\Api\Admin\NetworkTunnelController::class, 'test'])->middleware('throttle:5,1');
             Route::get('/network-tunnel-tests/{tunnelTest}', [\App\Http\Controllers\Api\Admin\NetworkTunnelController::class, 'testShow'])->whereNumber('tunnelTest');
+            Route::post('/tunnel-cdn-tests', [\App\Http\Controllers\Api\Admin\TunnelCdnController::class, 'store'])->middleware('throttle:5,1');
+            Route::get('/tunnel-cdn-tests/{tunnelTest}', [\App\Http\Controllers\Api\Admin\TunnelCdnController::class, 'show'])->whereNumber('tunnelTest');
             Route::post('/tunnel-tests', [\App\Http\Controllers\Api\Admin\TunnelController::class, 'test'])->middleware('throttle:5,1');
             Route::get('/tunnel-tests/{tunnelTest}', [\App\Http\Controllers\Api\Admin\TunnelController::class, 'testShow'])->whereNumber('tunnelTest');
             Route::post('/tunnels', [\App\Http\Controllers\Api\Admin\TunnelController::class, 'store']);

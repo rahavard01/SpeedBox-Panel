@@ -14,13 +14,13 @@ class RunNetworkTunnelOperation implements ShouldQueue,ShouldBeEncrypted
 {
     use Dispatchable,InteractsWithQueue,Queueable,SerializesModels;
     public int $tries=1;
-    public int $timeout=300;
+    public int $timeout=600;
     public function __construct(public readonly int $operationId){$this->onQueue('deployments');}
 
     /** Durable one-host-at-a-time continuation; a killed worker never loses the rollback phase. */
     public function handle(NetworkTunnelRemote $remote,NetworkTunnelManager $network,TunnelManager $manager): void
     {
-        $lock=Cache::lock('speedbox-network-operation-'.$this->operationId,330);
+        $lock=Cache::lock('speedbox-network-operation-'.$this->operationId,630);
         if(!$lock->get())return;
         try {
             $op=TunnelOperation::findOrFail($this->operationId);
@@ -30,7 +30,7 @@ class RunNetworkTunnelOperation implements ShouldQueue,ShouldBeEncrypted
             if ($op->action==='status') {
                 $op->update(['status'=>'running']);$snapshots=[];
                 foreach (['iran','foreign'] as $side) {
-                    try {$snapshots[$side]=$remote->call($tunnel->$side,['action'=>'status','config'=>$network->config($tunnel,$side)]);}
+                    try {$snapshots[$side]=$remote->call($tunnel->$side,['action'=>'status','config'=>$network->config($tunnel,$side)]);if(($tunnel->settings['connection_mode']??'direct')==='cdn')$snapshots[$side]['cdn']=app(\App\Services\TunnelCdnRemote::class)->status($tunnel,$tunnel->settings,$side);}
                     catch (Throwable) {$snapshots[$side]=['error'=>'دسترسی به این سمت تأیید نشد.','checked_at'=>time()];}
                 }
                 $network->saveSnapshot($tunnel,$snapshots);
@@ -71,6 +71,7 @@ class RunNetworkTunnelOperation implements ShouldQueue,ShouldBeEncrypted
                         // Save the host before requesting its prepare: an interrupted reply must be recoverable.
                         if(!in_array($side,$state['prepared'],true))$state['prepared'][]=$side;
                         $op->update(['payload'=>$state,'progress'=>25+$state['side']*10,'message'=>'در حال بررسی پیش‌نیازها و نگه‌داشتن تنظیمات بازگشت…']);
+                        app(\App\Services\TunnelCdnRemote::class)->revision($tunnel,$settings,$side,'snapshot',$state['revision']);
                         $answer=$remote->call($server,['action'=>'prepare','operation'=>$op->action,'revision'=>$state['revision'],'config'=>$config]);
                         foreach($answer['checks']??[] as $check)if(($check['ok']??false)!==true)throw new \RuntimeException('پیش‌نیاز سرور آماده نیست: '.$check['name']);
                         $this->advance($state,'execute');break;
@@ -90,12 +91,17 @@ class RunNetworkTunnelOperation implements ShouldQueue,ShouldBeEncrypted
                                 if(empty($answer['status']['optimized']))throw new \RuntimeException('بهینه‌سازی سرور '.$side.' کامل تأیید نشد؛ گزارش تنظیمات را بررسی کنید.');
                             } else $state['hosts'][$side]=['skipped'=>true];
                         } else {
+                            if(in_array($op->action,['apply','reapply','engine-update'],true))app(\App\Services\TunnelCdnRemote::class)->prepare($tunnel,$settings,$side);
                             $state['hosts'][$side]=$remote->call($server,['action'=>$op->action==='engine-update'?'reapply':$op->action,'kind'=>$state['kind']??null,'revision'=>$state['revision'],'config'=>$config]);
                             if($op->action==='reset-quota')$state['hosts'][$side]=$remote->call($server,['action'=>'status','config'=>$config]);
                         }
                         $this->advance($state,$mutating?'verify':'done');break;
                     case 'verify':
                         $state['snapshots'][$side]=$op->action==='delete'?['deleted'=>true,'checked_at'=>time()]:$remote->call($server,['action'=>'status','config'=>$config]);
+                        if(($settings['connection_mode']??'direct')==='cdn'){
+                            $state['snapshots'][$side]['cdn']=app(\App\Services\TunnelCdnRemote::class)->status($tunnel,$settings,$side);
+                            if(isset($state['snapshots'][$side]['cdn']['cdn_verified'])&&!$state['snapshots'][$side]['cdn']['cdn_verified'])$state['snapshots'][$side]['connected']=false;
+                        }
                         if($tunnel->engine==='wattunnel'&&$op->action!=='delete'&&($settings['enabled']??true)&&empty($state['snapshots'][$side]['connected'])) {
                             $state['verify_attempts'][$side]=($state['verify_attempts'][$side]??0)+1;
                             if($state['verify_attempts'][$side]<10){$op->update(['message'=>'در انتظار تأیید ارتباط رمز‌شدهٔ WatTunnel…']);break;}
@@ -107,15 +113,17 @@ class RunNetworkTunnelOperation implements ShouldQueue,ShouldBeEncrypted
                     case 'commit':
                         // Persist only after both hosts were applied and structurally verified.
                         if($state['side']===0 && empty($state['database_committed'])) {
+                            if(($settings['connection_mode']??'direct')==='cdn'||($tunnel->settings['connection_mode']??'direct')==='cdn')app(\App\Services\TunnelCdnRemote::class)->commit($tunnel,$settings);
                             if($op->action==='delete')$tunnel->update(['status'=>'deleted','message'=>'اتصال از دو سرور حذف شد.']);
                             else {$tunnel->update(['settings'=>$settings,'name'=>$state['name']??$tunnel->name,'kind'=>!empty($settings['reverse'])?'reverse':'direct','transport'=>$settings['transport']]);$network->saveSnapshot($tunnel->fresh(),$state['snapshots']);}
                             $state['database_committed']=true;$op->update(['payload'=>$state]);
                         }
-                        try{$remote->call($server,['action'=>'commit','revision'=>$state['revision'],'config'=>$config]);}catch(Throwable $cleanup){$state['cleanup_errors'][$side]=$cleanup->getMessage();}
+                        try{app(\App\Services\TunnelCdnRemote::class)->revision($tunnel,$settings,$side,'commit',$state['revision'],($state['old_settings']['connection_mode']??'direct')==='cdn');$remote->call($server,['action'=>'commit','revision'=>$state['revision'],'config'=>$config]);}catch(Throwable $cleanup){$state['cleanup_errors'][$side]=$cleanup->getMessage();}
                         $this->advance($state,'done');break;
                     case 'rollback':
                         $op->update(['progress'=>85,'message'=>'عملیات کامل نشد؛ در حال بازگرداندن تنظیمات دو سمت…']);
                         if(in_array($side,$state['prepared'],true)) {
+                            app(\App\Services\TunnelCdnRemote::class)->revision($tunnel,$settings,$side,'rollback',$state['revision']);
                             try{$remote->call($server,['action'=>'rollback','revision'=>$state['revision'],'config'=>$config]);}
                             catch(Throwable $error){$state['rollback_errors'][$side]=$error->getMessage();}
                         }

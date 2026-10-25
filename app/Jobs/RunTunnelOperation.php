@@ -14,12 +14,12 @@ class RunTunnelOperation implements ShouldQueue, ShouldBeEncrypted
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
     public int $tries = 1;
-    public int $timeout = 300;
+    public int $timeout = 600;
     public function __construct(public readonly int $operationId) { $this->onQueue('deployments'); }
 
     public function handle(BackpackRemote $remote, TunnelManager $manager): void
     {
-        $lock = Cache::lock('speedbox-tunnel-operation-'.$this->operationId, 330);
+        $lock = Cache::lock('speedbox-tunnel-operation-'.$this->operationId, 630);
         if (!$lock->get()) return;
         try {
             $op = TunnelOperation::findOrFail($this->operationId);
@@ -157,10 +157,11 @@ class RunTunnelOperation implements ShouldQueue, ShouldBeEncrypted
         if ($op->deadline->isPast()) throw new \RuntimeException('deadline');
         if ($op->action === 'apply') {
             $revision = str_pad(dechex($op->id),32,'0',STR_PAD_LEFT);
-            $snapshots=[];
+            $snapshots=[];$wasCdn=($t->settings['connection_mode']??'direct')==='cdn';
             try {
                 foreach ($servers as $side=>$server) {
                     $remote->ensure($server);
+                    app(\App\Services\TunnelCdnRemote::class)->revision($t,$settings,$side,'snapshot',$revision);
                     $remote->call($server,['action'=>'snapshot','name'=>$t->remote_name,'revision'=>$revision]);
                     $snapshots[$side]=$server;
                 }
@@ -170,14 +171,26 @@ class RunTunnelOperation implements ShouldQueue, ShouldBeEncrypted
                 foreach ($order as $side) {
                     $op->update(['progress'=>$side===$order[0]?35:70,'message'=>'در حال اعمال تنظیمات سمت '.($side==='iran'?'ایران':'خارج').'…']);
                     $this->refreshReservations($servers[$side],$remote,$manager,$settings);
+                    app(\App\Services\TunnelCdnRemote::class)->prepare($t,$settings,$side);
                     $result[$side]=$remote->call($servers[$side],$this->applyRequest($t,$settings,$side));
                     if (empty($result[$side]['active'])) throw new \RuntimeException('service_inactive');
                 }
+                if(($settings['connection_mode']??'direct')==='cdn'){
+                    $dialer=\App\Services\TunnelCdnRemote::listenerIran($t,$settings)?'foreign':'iran';
+                    for($attempt=0;$attempt<15;$attempt++){
+                        $route=app(\App\Services\TunnelCdnRemote::class)->status($t,$settings,$dialer);
+                        if(!empty($route['cdn_verified']))break;
+                        usleep(1000000);
+                    }
+                    if(empty($route['cdn_verified']))throw new \RuntimeException('CDN route not verified');
+                    $result[$dialer]['cdn']=$route;
+                }
+                if(($settings['connection_mode']??'direct')==='cdn'||($t->settings['connection_mode']??'direct')==='cdn')app(\App\Services\TunnelCdnRemote::class)->commit($t,$settings);
                 $t->update(['settings'=>$settings,'name'=>$op->payload['name'] ?? $t->name,'status'=>'checking','remote_status'=>$result,'message'=>'تنظیمات دو سمت اعمال شد؛ وضعیت اتصال را بررسی کنید.']);
-                foreach ($servers as $server) { $this->refreshReservations($server,$remote,$manager);try {$remote->call($server,['action'=>'commit','name'=>$t->remote_name,'revision'=>$revision]);} catch(Throwable) {} }
+                foreach ($servers as $side=>$server) { $this->refreshReservations($server,$remote,$manager);try {app(\App\Services\TunnelCdnRemote::class)->revision($t,$settings,$side,'commit',$revision,$wasCdn);$remote->call($server,['action'=>'commit','name'=>$t->remote_name,'revision'=>$revision]);} catch(Throwable) {} }
             } catch (Throwable $e) {
                 $restored=[];
-                foreach ($snapshots as $side=>$server) { try { $remote->call($server,['action'=>'rollback','name'=>$t->remote_name,'revision'=>$revision]);$restored[$side]=true; } catch(Throwable) {$restored[$side]=false;} }
+                foreach ($snapshots as $side=>$server) { try { app(\App\Services\TunnelCdnRemote::class)->revision($t,$settings,$side,'rollback',$revision); $remote->call($server,['action'=>'rollback','name'=>$t->remote_name,'revision'=>$revision]);$restored[$side]=true; } catch(Throwable) {$restored[$side]=false;} }
                 $message = in_array(false,$restored,true) ? 'اعمال تنظیمات کامل نشد؛ بازگردانی یکی از دو سمت نیازمند بررسی است.' : 'اعمال تنظیمات کامل نشد؛ تنظیمات قبلی دو سمت بازگردانده شد.';
                 $t->update(['status'=>'needs_review','message'=>$message]);foreach($servers as $server)$this->refreshReservations($server,$remote,$manager);$manager->finish($op,'failed',$message,['rollback'=>$restored]);return;
             }
@@ -186,6 +199,7 @@ class RunTunnelOperation implements ShouldQueue, ShouldBeEncrypted
                 try {
                     $result[$side]=$remote->call($server,['action'=>$op->action,'name'=>$t->remote_name,
                         'target_ports'=>$side==='foreign'?array_column($settings['mappings'],'target_port'):[], 'udp'=>(bool)($settings['accept_udp']??false)]);
+                    if($op->action==='status'&&($settings['connection_mode']??'direct')==='cdn')$result[$side]['cdn']=app(\App\Services\TunnelCdnRemote::class)->status($t,$settings,$side);
                     if ($op->action === 'logs' && isset($result[$side]['text'])) {
                         $result[$side]['text'] = preg_replace('~backpack://[^\s]+~', '[setup-link]', str_replace($t->secret, '[secret]', $result[$side]['text']));
                     }
@@ -231,15 +245,18 @@ class RunTunnelOperation implements ShouldQueue, ShouldBeEncrypted
         $n = (int)$t->subnet * 4; $a='10.203.'.intdiv($n,256).'.'.($n%256+1); $b='10.203.'.intdiv($n,256).'.'.($n%256+2);
         // /30 allocation is confined to 10.203/16, bounded by the allocator.
         $maps=implode(',',array_map(fn($m)=>$m['public_port'].'='.$m['target_port'],$settings['mappings']));
-        return ['action'=>'apply','name'=>$t->remote_name,'kind'=>$t->kind,'transport'=>$t->transport,'token'=>$t->secret,
+        $request=['action'=>'apply','name'=>$t->remote_name,'kind'=>$t->kind,'transport'=>$t->transport,'token'=>$t->secret,
             'bridge_port'=>40000+(int)$t->subnet,
             'role'=>$t->kind==='reverse'?($side==='iran'?'server':'client'):($side==='iran'?'iran':'kharej'),
             'swapped'=>!$normal,'host'=>$peerHost,'port'=>$settings['tunnel_port'],'ports'=>$maps,'udp'=>(bool)($settings['accept_udp']??false),
             'local_ip'=>($side==='iran'?$a:$b).'/30','peer_ip'=>$side==='iran'?$b:$a];
+        if(($settings['connection_mode']??'direct')==='cdn')$request['cdn']=['domain'=>$settings['cdn']['domain'],'port'=>(int)$settings['cdn']['port'],'edge_ip'=>$settings['cdn']['edge_ip']??'','cert_file'=>'/etc/speedbox-tunnel-cdn/'.$t->remote_name.'/fullchain.pem','key_file'=>'/etc/speedbox-tunnel-cdn/'.$t->remote_name.'/privkey.pem'];
+        return $request;
     }
 
     private function connectionState(array $r): string
     {
+        foreach(['iran','foreign'] as $side)if(isset($r[$side]['cdn']['cdn_verified'])&&!$r[$side]['cdn']['cdn_verified'])return 'needs_review';
         if (empty($r['iran']['active']) || empty($r['foreign']['active'])) return 'offline';
         $states = [data_get($r,'iran.metrics.connected'), data_get($r,'foreign.metrics.connected')];
         if (in_array(false, $states, true)) return 'offline';

@@ -7,7 +7,7 @@ const { chromium } = await import(process.env.SPEEDBOX_TEST_PLAYWRIGHT || 'playw
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const manifest=JSON.parse(readFileSync(path.join(root,'public/build/manifest.json')));
 const css=manifest['resources/js/app.js'].css.map(x=>`<link rel="stylesheet" href="/build/${x}">`).join('');
-const html=`<!doctype html><html lang="fa" dir="rtl"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">${css}<link rel="stylesheet" href="/speedbox/infrastructure.css"><link rel="stylesheet" href="/speedbox/panel-controls.css"><style>body{margin:0;background:#17171c;padding:20px}.speedbox-infrastructure-overlay{position:relative}.infrastructure-modal{margin:auto;background:#222228;border:1px solid #555;border-radius:16px}.modal-fields{background:transparent}</style><div class="speedbox-infrastructure-overlay"><section class="create-modal infrastructure-modal node-modal"><div class="announcement-modal-heading"><h3 class="topup-title">ویرایش نود</h3></div><div id="modalBody"></div></section></div><script src="/speedbox/node-editor.js"></script><script src="/speedbox/infrastructure.js"></script></html>`;
+const html=`<!doctype html><html lang="fa" dir="rtl"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">${css}<link rel="stylesheet" href="/speedbox/infrastructure.css"><link rel="stylesheet" href="/speedbox/panel-controls.css"><style>body{margin:0;background:#17171c;padding:20px}.speedbox-infrastructure-overlay{position:relative}.infrastructure-modal{margin:auto;background:#222228;border:1px solid #555;border-radius:16px}.modal-fields{background:transparent}</style><div class="speedbox-infrastructure-overlay"><section class="create-modal infrastructure-modal node-modal"><div class="announcement-modal-heading"><h3 class="topup-title">ویرایش نود</h3></div><div id="modalBody"></div></section></div><script src="/speedbox/certificate-dns.js"></script><script src="/speedbox/node-editor.js"></script><script src="/speedbox/infrastructure.js"></script></html>`;
 const server=createServer((req,res)=>{
  const url=new URL(req.url,'http://localhost');
  if(url.pathname==='/'){res.setHeader('Content-Type','text/html;charset=utf-8');res.end(html);return;}
@@ -21,6 +21,7 @@ const browser=await chromium.launch({executablePath:process.env.SPEEDBOX_TEST_CH
 let assertions=0;const check=(x,message)=>{assert.ok(x,message);assertions++;};
 async function mount(page,{parent=false,stale=false}={}){
  await page.goto(origin);
+ await page.evaluate(definition=>window.fixtureKernels=definition,JSON.parse(readFileSync(path.join(root,'agent/internal/model/kernel-capabilities.json'),'utf8')));
  await page.evaluate(({parent,stale})=>{
   window.calls=[];window.toastMessages=[];window.pending=false;window.polls=0;window.stale=stale;
   const payload={id:7,name:'Test node',type:'vless',machine_id:1,kernel:'xray',host:'node.test',port:'443',server_port:443,rate:1,rate_time_enable:false,show:true,enabled:true,warp_enabled:false,protocol_settings:{network:'tcp',tls:0},custom_outbounds:[{tag:'manual',protocol:'socks',settings:{servers:[{address:'127.0.0.1',port:1080}]}}],custom_routes:[{type:'field',domain:['example.test'],outboundTag:'manual'}],...(parent?{parent_id:9}:{})};
@@ -35,7 +36,7 @@ async function mount(page,{parent=false,stale=false}={}){
    }
    return{message:'saved'};
   };
-  window.disposeNode=SpeedboxNodeEditor.mount({node:payload,state:{nodes:parent?[{id:9,name:'Parent',type:'vless',machine_id:1,kernel:'xray',rate:1,warp_enabled:true}]:[],groups:[],routes:[],machines:[{id:1,name:'Host 1',is_active:true},{id:2,name:'Host 2',is_active:true}]},api,openModal:(title,body)=>document.getElementById('modalBody').innerHTML=body,closeModal:()=>{},toast:(message)=>window.toastMessages.push(message),reload:()=>{},enhanceControls:()=>{},isSaving:()=>false});
+  window.disposeNode=SpeedboxNodeEditor.mount({node:payload,state:{kernelCapabilities:window.fixtureKernels,nodes:parent?[{id:9,name:'Parent',type:'vless',machine_id:1,kernel:'xray',rate:1,warp_enabled:true}]:[],groups:[],routes:[],machines:[{id:1,name:'Host 1',is_active:true},{id:2,name:'Host 2',is_active:true}]},api,openModal:(title,body)=>document.getElementById('modalBody').innerHTML=body,closeModal:()=>{},toast:(message)=>window.toastMessages.push(message),reload:()=>{},enhanceControls:()=>{},isSaving:()=>false});
  },{parent,stale});
 }
 try{

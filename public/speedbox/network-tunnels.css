@@ -217,10 +217,6 @@
 .wat-carriers label{display:flex;gap:8px;align-items:center}
 .speedbox-infrastructure .tunnel-toolbar .network-filters>.seg-btn{display:inline-flex;align-items:center;justify-content:center;line-height:20px;min-height:40px;box-sizing:border-box}
 .speedbox-infrastructure-overlay .tunnel-modal .wat-editor .form-grid{display:grid;grid-template-columns:minmax(0,1fr);gap:18px}
-.speedbox-infrastructure-overlay .tunnel-modal .wat-editor .field,.speedbox-infrastructure-overlay .tunnel-modal .wat-editor .form-grid>.field{display:grid;grid-template-columns:minmax(0,1fr);align-items:center;gap:10px;min-width:0;max-width:100%;margin:0}
-.speedbox-infrastructure-overlay .tunnel-modal .wat-editor .field>label{padding:0 6px;line-height:1.5;white-space:normal;text-align:right}
-.speedbox-infrastructure-overlay .tunnel-modal .wat-editor .field>:is(input,select,.speedbox-select){width:100%;min-width:0;max-width:none;box-sizing:border-box}
-.speedbox-infrastructure-overlay .tunnel-modal .wat-editor .field>small{grid-column:1/-1;min-width:0;overflow-wrap:anywhere;margin:0}
 .speedbox-infrastructure-overlay .tunnel-modal .wat-editor .network-section{margin-top:18px}
 .speedbox-infrastructure-overlay .tunnel-modal .wat-editor .network-advanced-content{display:grid;gap:16px;padding-top:16px}
 .speedbox-infrastructure-overlay .tunnel-modal .wat-editor .wat-map{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto;gap:12px;align-items:end;padding:12px;border:1px solid rgba(255,255,255,.14);border-radius:12px}
@@ -236,3 +232,12 @@
 @media(min-width:769px){.speedbox-infrastructure-overlay .tunnel-modal .wat-editor select.infrastructure-native-select{width:1px!important;min-width:0!important;height:1px!important;min-height:0!important}}
 
 .speedbox-infrastructure-overlay .modal-backdrop:has(.tunnel-modal){overflow-anchor:none}
+
+/* WatTunnel uses BackPack's label/input layout, including certificate text areas. */
+.speedbox-infrastructure-overlay .tunnel-modal .wat-editor .network-advanced .form-grid>.field{grid-template-columns:minmax(155px,1fr) minmax(0,1.1fr);gap:10px;align-items:center}
+.speedbox-infrastructure-overlay .tunnel-modal .wat-editor .network-advanced .form-grid>.field>label{padding:0;font-size:11px;line-height:1.8}
+.speedbox-infrastructure-overlay .tunnel-modal .wat-editor textarea.form-input{width:100%;min-width:0;box-sizing:border-box}
+@media(max-width:540px){
+ .speedbox-infrastructure-overlay .tunnel-modal .wat-editor .network-advanced .form-grid>.field{grid-template-columns:minmax(0,1fr)}
+ .speedbox-infrastructure-overlay .tunnel-modal :is([data-tunnel-setup],[data-wat-editor]) .field>small{grid-column:1/-1}
+}

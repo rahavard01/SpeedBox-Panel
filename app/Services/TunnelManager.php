@@ -55,7 +55,8 @@ class TunnelManager
             $op = TunnelOperation::create(['action' => $action, 'tunnel_id' => $tunnel?->id, 'test_id' => $test?->id,
                 'status' => 'queued', 'progress' => 0, 'payload' => $payload, 'deadline' => now()->addMinutes($test ? 40 : ($maintenance ? 45 : 10)), 'message' => 'در صف عملیات سرورها']);
             foreach ($ids as $id) DB::table('speedbox_tunnel_leases')->insert(['managed_server_id' => $id, 'operation_id' => $op->id]);
-            if ($action==='network-test') RunNetworkTunnelTest::dispatch($op->id)->afterCommit();
+            if ($action==='cdn-test') \App\Jobs\RunTunnelCdnTest::dispatch($op->id)->afterCommit();
+            elseif ($action==='network-test') RunNetworkTunnelTest::dispatch($op->id)->afterCommit();
             elseif ($network) RunNetworkTunnelOperation::dispatch($op->id)->afterCommit();
             elseif ($maintenance) RunTunnelMaintenance::dispatch($op->id)->afterCommit();
             elseif ($action==='reconfigure') RunTunnelReconfigure::dispatch($op->id)->afterCommit();
@@ -121,6 +122,7 @@ class TunnelManager
             $status = in_array($r['s'] ?? '', ['ok','unstable','down','skipped','testing'], true) ? $r['s'] : 'down';
             $rows[] = ['id' => $orientation.':'.$kind.':'.$transport, 'kind' => $kind, 'transport' => $transport,
                 'label' => ($kind === 'reverse' ? 'Reverse ' : 'Direct ').strtoupper($transport), 'orientation' => $orientation,
+                'cdn_selectable'=>TunnelCdn::supported('backpack',$kind,$transport),
                 'status' => $status, 'selectable' => $supported && in_array($status, ['ok','unstable'], true),
                 'reason' => !$supported ? 'ساخت خودکار این روش به تنظیمات تکمیلی نیاز دارد و در این نسخه فعال نیست.'
                     : ($status === 'skipped' ? 'این روش روی دو سرور آمادهٔ آزمایش نبود.' : ''),

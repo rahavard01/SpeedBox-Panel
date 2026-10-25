@@ -334,3 +334,16 @@
 
 
 
+
+/* Inline CDN settings share the existing tunnel and node form controls. */
+.speedbox-infrastructure-overlay .tunnel-cdn-settings { grid-column:1/-1; margin-top:18px; }
+.speedbox-infrastructure-overlay .tunnel-cdn-section { margin-top:16px; padding:16px; border:1px solid rgba(255,255,255,.1); border-radius:10px; }
+.speedbox-infrastructure-overlay .tunnel-cdn-heading { display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:16px; }
+.speedbox-infrastructure-overlay .tunnel-cdn-heading h4,.speedbox-infrastructure-overlay .tunnel-cdn-certificate h4 { margin:0 0 12px; }
+.speedbox-infrastructure-overlay .tunnel-cdn-certificate { margin-top:18px; }
+.speedbox-infrastructure-overlay .tunnel-modal .tunnel-cdn-section>.tunnel-cdn-port-note { margin:18px 0 0; text-align:center; }
+.speedbox-infrastructure-overlay .tunnel-cdn-check { display:flex; align-items:center; flex-wrap:wrap; gap:12px; margin-top:18px; }
+.speedbox-infrastructure-overlay [data-cdn-status] { flex-basis:100%; font-size:12px; line-height:1.9; overflow-wrap:anywhere; }
+.speedbox-infrastructure-overlay .tunnel-cdn-section textarea { min-height:110px; direction:ltr; text-align:left; }
+.speedbox-infrastructure-overlay .tunnel-cdn-detail { margin:16px 0; }
+@media(max-width:767px){.speedbox-infrastructure-overlay .tunnel-cdn-section{padding:12px}.speedbox-infrastructure-overlay .tunnel-cdn-check .button{max-width:100%;white-space:normal}}

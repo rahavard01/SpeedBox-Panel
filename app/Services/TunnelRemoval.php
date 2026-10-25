@@ -23,6 +23,9 @@ class TunnelRemoval
                 if (!$server) throw new \RuntimeException('missing_server');
                 $answer=$remote->call($server,$request);
                 if (empty($answer['deleted'])) throw new \RuntimeException('unconfirmed_cleanup');
+                if(($tunnel->settings['connection_mode']??'direct')==='cdn'){
+                    $cdn=app(TunnelCdnRemote::class);$cdn->ensure($server);$cleaned=$cdn->call($server,['action'=>'delete','id'=>$tunnel->remote_name]);if(empty($cleaned['deleted']))throw new \RuntimeException('certificate_cleanup_not_confirmed');
+                }
                 $results[$side]=['cleaned'=>true,'checked_at'=>time()];
             } catch (Throwable $error) {
                 $results[$side]=['cleaned'=>false,'checked_at'=>time(),'reason'=>$error->getCode()===1001?'unreachable':'cleanup_not_confirmed'];

@@ -21,7 +21,7 @@ class TunnelController extends Controller
             foreach ($t->settings['mappings'] as $mapping) $ports = [...$ports,...range((int)$mapping['target_port'],(int)($mapping['target_end'] ?? $mapping['target_port']))];
             $t->nodes = ProxyServer::where('machine_id', $t->foreign?->machine_id)->whereIn('server_port', $ports)->get(['id','name','host','port','server_port','machine_id']);
         }
-        return response()->json(['data' => $tunnels, 'tests' => TunnelConnectionTest::latest()->limit(10)->get()->map(fn($test)=>$test->operations()->where('action','network-test')->exists()?app(\App\Services\NetworkTunnelTest::class)->publicTest($test):[...$test->toArray(),'engine'=>'backpack']),
+        return response()->json(['data' => $tunnels, 'tests' => TunnelConnectionTest::whereDoesntHave('operations',fn($q)=>$q->where('action','cdn-test'))->latest()->limit(10)->get()->map(fn($test)=>$test->operations()->where('action','network-test')->exists()?app(\App\Services\NetworkTunnelTest::class)->publicTest($test):[...$test->toArray(),'engine'=>'backpack']),
             'alerting' => app(\App\Services\TunnelAlertSettings::class)->capability(),
             'host_status' => DB::table('speedbox_tunnel_host_status')->get()->mapWithKeys(fn($row)=>[$row->managed_server_id=>json_decode($row->snapshot,true)])->all(),
             'servers' => ManagedServer::where('status', '!=', 'removing')->get(['id','name','host','machine_id'])]);
@@ -50,7 +50,7 @@ class TunnelController extends Controller
     {
         abort_unless($tunnel->engine==='backpack',422,'این مسیر فقط برای بک‌پک است.');
         abort_if($tunnel->status==='deleted',422,'این تونل حذف شده است.');
-        return response()->json(['data'=>TunnelConnectionTest::whereDoesntHave('operations',fn($q)=>$q->where('action','network-test'))->where('iran_server_id',$tunnel->iran_server_id)
+        return response()->json(['data'=>TunnelConnectionTest::whereDoesntHave('operations',fn($q)=>$q->whereIn('action',['network-test','cdn-test']))->where('iran_server_id',$tunnel->iran_server_id)
             ->where('foreign_server_id',$tunnel->foreign_server_id)->where('status','completed')
             ->where('updated_at','>',now()->subHours(24))->orderByDesc('id')->limit(20)->get()]);
     }
@@ -59,12 +59,13 @@ class TunnelController extends Controller
     {
         $selection = $request->validate(['test_id' => 'required|integer|exists:speedbox_tunnel_tests,id', 'result_id' => 'required|string|max:100', 'accept_unstable' => 'sometimes|boolean']);
         $test = TunnelConnectionTest::findOrFail($selection['test_id']);
-        abort_if($test->operations()->where('action','network-test')->exists(),422,'نتیجهٔ GOST یا GRE برای ساخت BackPack قابل استفاده نیست.');
+        abort_if($test->operations()->whereIn('action',['network-test','cdn-test'])->exists(),422,'نتیجهٔ GOST یا GRE برای ساخت BackPack قابل استفاده نیست.');
         abort_unless($test->status === 'completed' && $test->updated_at->greaterThan(now()->subHours(24)), 422, 'ابتدا بررسی اتصال را کامل کنید؛ نتیجه باید مربوط به ۲۴ ساعت اخیر باشد.');
         $row = collect($test->results)->firstWhere('id', $selection['result_id']);
-        abort_unless($row && $row['selectable'], 422, 'یک روش قابل استفاده از نتیجهٔ تست انتخاب کنید.');
-        abort_if($row['status'] === 'unstable' && !$request->boolean('accept_unstable'), 422, 'این روش ناپایدار بود؛ انتخاب آن را تأیید کنید.');
+        abort_unless($row && (($row['selectable']??false)||$request->input('connection_mode')==='cdn'&&\App\Services\TunnelCdn::supported('backpack',$row['kind'],$row['transport'])), 422, 'یک روش قابل استفاده از نتیجهٔ تست انتخاب کنید.');
+        abort_if($request->input('connection_mode')!=='cdn' && $row['status'] === 'unstable' && !$request->boolean('accept_unstable'), 422, 'این روش ناپایدار بود؛ انتخاب آن را تأیید کنید.');
         $settings = $this->settings($request, $row['kind'], $row['transport'],null,$row['orientation']);
+        \App\Services\TunnelCdn::assertReceipt($settings,['engine'=>'backpack','kind'=>$row['kind'],'transport'=>$row['transport'],'orientation'=>$row['orientation']],$test->iran_server_id,$test->foreign_server_id);
         [$tunnel,$op] = DB::transaction(function () use ($request,$test,$row,$settings,$manager) {
             $this->lockServers($test->iran_server_id, $test->foreign_server_id);
             $this->portsAvailable($test->iran_server_id, $settings);
@@ -97,17 +98,18 @@ class TunnelController extends Controller
             $method=['kind'=>$tunnel->kind,'transport'=>$tunnel->transport,'orientation'=>$tunnel->orientation];
             if($request->has('test_id')) {
                 $test=TunnelConnectionTest::findOrFail($request->integer('test_id'));
-                abort_if($test->operations()->where('action','network-test')->exists(),422,'این نتیجه مربوط به BackPack نیست.');
+                abort_if($test->operations()->whereIn('action',['network-test','cdn-test'])->exists(),422,'این نتیجه مربوط به BackPack نیست.');
                 abort_unless($test->iran_server_id===$tunnel->iran_server_id && $test->foreign_server_id===$tunnel->foreign_server_id,422,'نتیجهٔ تست باید متعلق به همین سرور ایران و خارج باشد.');
                 abort_unless($test->status==='completed' && $test->updated_at->greaterThan(now()->subHours(24)),422,'نتیجهٔ تکمیل‌شدهٔ ۲۴ ساعت اخیر را انتخاب کنید یا دوباره تست بگیرید.');
                 $row=collect($test->results??[])->firstWhere('id',$request->input('result_id'));
-                abort_unless($row && ($row['selectable']??false) && in_array($row['status']??'',['ok','unstable'],true),422,'یک روش قابل استفاده از نتیجهٔ تست انتخاب کنید.');
-                abort_if($row['status']==='unstable' && !$request->boolean('accept_unstable'),422,'انتخاب روش ناپایدار را تأیید کنید.');
+                abort_unless($row && (($row['selectable']??false)&&in_array($row['status']??'',['ok','unstable'],true)||$request->input('connection_mode')==='cdn'&&\App\Services\TunnelCdn::supported('backpack',$row['kind'],$row['transport'])),422,'یک روش قابل استفاده از نتیجهٔ تست انتخاب کنید.');
+                abort_if($request->input('connection_mode')!=='cdn' && $row['status']==='unstable' && !$request->boolean('accept_unstable'),422,'انتخاب روش ناپایدار را تأیید کنید.');
                 $supported=($row['kind']??'')==='reverse'?TunnelManager::REVERSE:(($row['kind']??'')==='direct'?TunnelManager::DIRECT:[]);
                 abort_unless(in_array($row['transport']??'',$supported,true) && in_array($row['orientation']??'',['normal','swapped'],true),422,'این روش برای ورود کاربران از ایران قابل استفاده نیست.');
                 $method=['kind'=>$row['kind'],'transport'=>$row['transport'],'orientation'=>$row['orientation']];
             }
             $settings=$this->settings($request,$method['kind'],$method['transport'],$tunnel,$method['orientation']);
+            \App\Services\TunnelCdn::assertReceipt($settings,['engine'=>'backpack',...$method],$tunnel->iran_server_id,$tunnel->foreign_server_id,$tunnel);
             $this->portsAvailable($tunnel->iran_server_id, $settings, $tunnel->id);
             $changed=$method!==['kind'=>$tunnel->kind,'transport'=>$tunnel->transport,'orientation'=>$tunnel->orientation];
             return $manager->queue($changed?'reconfigure':'apply',$tunnel,null,['settings'=>$settings,'name'=>$request->input('name'),'method'=>$method]);
@@ -145,7 +147,7 @@ class TunnelController extends Controller
         return response()->json(['message' => 'درخواست توقف ثبت شد.']);
     }
 
-    private function settings(Request $request, string $kind, string $transport, ?ServerTunnel $existing=null,string $orientation='normal'): array
+    public function settings(Request $request, string $kind, string $transport, ?ServerTunnel $existing=null,string $orientation='normal'): array
     {
         $data = $request->validate(['name' => 'required|string|max:100', 'public_host' => ['required','string','max:253',function ($a,$v,$fail) {
             if (!filter_var($v,FILTER_VALIDATE_IP) && !filter_var($v,FILTER_VALIDATE_DOMAIN,FILTER_FLAG_HOSTNAME)) $fail('IP یا دامنهٔ معتبر وارد کنید؛ بدون http و شماره پورت.');
@@ -164,6 +166,7 @@ class TunnelController extends Controller
         $data['telegram_alerts']=app(\App\Services\TunnelAlertSettings::class)->resolve($request,$existing);
         $data['enabled']=true;
         unset($data['name']); $data['peer_host'] = $data['peer_host'] ?? '';
+        $data=[...$data,...\App\Services\TunnelCdn::normalize($request,'backpack',$kind,$transport,$existing)];
         return $data;
     }
 

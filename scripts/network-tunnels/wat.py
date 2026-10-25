@@ -11,6 +11,10 @@ def validate(c):
     if not re.fullmatch('[a-f0-9]{64}',c.get('secret','')):raise ValueError('invalid WatTunnel credential')
     s=c['settings']
     if s.get('version') not in SUPPORTED_VERSIONS or s.get('transport') not in CARRIERS or s.get('protocol') not in ('tcp','udp','both'):raise ValueError('invalid WatTunnel method')
+    if s.get('connection_mode','direct') not in ('direct','cdn'):raise ValueError('invalid connection mode')
+    if s.get('connection_mode')=='cdn':
+        cd=s.get('cdn',{})
+        if s['transport'] not in ('ws','wss','grpc') or not re.fullmatch(r'[a-zA-Z0-9.-]{1,253}',cd.get('domain','')) or not 1<=int(cd.get('port',0))<=65535 or s.get('tls_pin'):raise ValueError('invalid CDN configuration')
     origin=c.get('origin_ports',[])
     if not isinstance(origin,list) or len(origin)>256 or any(type(p) is not int or not 1<=p<=65535 for p in origin):raise ValueError('invalid trusted origin ports')
     if origin and s['version'] not in ORIGIN_VERSIONS:raise ValueError('origin metadata requires matching WatTunnel peers')
@@ -64,12 +68,16 @@ def arguments(c,key_file):
         args+=['-peer',s['peer_host'] if iran else s['local_endpoint']]
     elif listener:args+=['-listen',endpoint('::' if s['ip_family']=='ipv6' else '0.0.0.0',s['tunnel_port'])]
     else:args+=['-peer',endpoint(peer,s['tunnel_port'])]
+    if s.get('connection_mode')=='cdn' and not listener:
+        cd=s['cdn'];args[args.index('-peer')+1]=endpoint(cd.get('edge_ip') or cd['domain'],cd['port'])
     if s['hedge']:args+=['-hedge']
     # The dialling process owns TLS options in either direction.
     if not listener:
         args+=['-fp',s['fingerprint'],'-tls-frag',str(s['tls_frag'])]
         for flag,key in [('sni','sni'),('tls-pin','tls_pin'),('host','host_header')]:
-            if s.get(key):args+=['-'+flag,s[key]]
+            value=s.get(key)
+            if s.get('connection_mode')=='cdn' and flag in ('sni','host'):value=s['cdn']['domain']
+            if value:args+=['-'+flag,value]
         if s['tls_small_ch']:args+=['-tls-small-ch']
     if iran:
         args+=['-bind','::' if s['ip_family']=='ipv6' else '0.0.0.0','-sessions',str(s['sessions'])]
@@ -86,7 +94,9 @@ def service_text(h,c):
     p=h.paths(c['id']);key=p['config'].with_suffix('.key');s=c['settings']
     argv=[str(h.OPT/('wattun-'+s['version'])),*arguments(c,key)]
     if s['transport'] in ('tls','wss','h2','grpc') and (c['side']=='iran')==s['reverse']:
-        argv+=['-tls-cert',str(p['config'].with_suffix('.crt')),'-tls-key',str(p['config'].with_suffix('.tls-key'))]
+        home=h.Path('/etc/speedbox-tunnel-cdn')/c['id']
+        crt,key=(home/'fullchain.pem',home/'privkey.pem') if s.get('connection_mode')=='cdn' else (p['config'].with_suffix('.crt'),p['config'].with_suffix('.tls-key'))
+        argv+=['-tls-cert',str(crt),'-tls-key',str(key)]
     caps='CAP_NET_BIND_SERVICE'+(' CAP_NET_RAW' if s['transport']=='icmp' else '')
     return '# speedbox-network:managed=1\n[Unit]\nDescription=SpeedBox WatTunnel '+c['id']+'\nAfter=network-online.target\nWants=network-online.target\n[Service]\nType=simple\nRestart=on-failure\nRestartSec=3\nExecStart='+' '.join(h.unit_argument(x) for x in argv)+'\nUMask=0077\nNoNewPrivileges=true\nCapabilityBoundingSet='+caps+'\nProtectSystem=strict\nProtectHome=true\nPrivateTmp=true\nLimitNOFILE=262144\n[Install]\nWantedBy=multi-user.target\n'
 
@@ -143,6 +153,10 @@ def preflight(h,c):
 def prepare_files(h,c):
     p=h.paths(c['id']);s=c['settings'];h.atomic(p['config'].with_suffix('.key'),c['secret']+'\n')
     if s['transport'] not in ('tls','wss','h2','grpc') or (c['side']=='iran')!=s['reverse']:return
+    if s.get('connection_mode')=='cdn':
+        home=h.Path('/etc/speedbox-tunnel-cdn')/c['id']
+        if not (home/'fullchain.pem').is_file() or not (home/'privkey.pem').is_file():raise RuntimeError('CDN certificate is not prepared')
+        return
     cert=p['config'].with_suffix('.crt');key=p['config'].with_suffix('.tls-key')
     if cert.exists()!=key.exists():raise RuntimeError('incomplete WatTunnel certificate pair')
     if cert.exists():return

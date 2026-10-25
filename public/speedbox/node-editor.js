@@ -73,7 +73,7 @@ window.SpeedboxNodeEditor = (() => {
       return `<div class="field ${wide?'full':''}">${protocolPicker?'':`<label>${label}</label>`}<select data-path="${esc(path)}" ${protocolPicker?`data-protocol-picker aria-label="${esc(label)}"`:""} ${custom?'data-allow-custom':''} ${number?'data-number':''} ${multiple?'multiple':''}>${choices.map(o=>{const [v,l,color]=Array.isArray(o)?o:[o,o];return `<option value="${esc(v)}" ${color?`data-color="${color}"`:''} ${(multiple?(value||[]).map(String).includes(String(v)):String(value??'')===String(v))?'selected':''}>${esc(l)}</option>`;}).join('')}</select></div>`;
     };
     const toggle=(path,label,value)=>`<div class="switch-field"><span>${label}</span><label class="switch-line ios"><input type="checkbox" data-path="${esc(path)}" aria-label="${label}" ${value?'checked':''}></label></div>`;
-    const area=(path,label,value,format='text')=>`<div class="field full"><label>${label}</label><textarea data-path="${esc(path)}" data-format="${format}" dir="ltr">${esc(format==='lines'?(value||[]).join('\n'):format==='json'?JSON.stringify(value??{},null,2):format==='env'?Object.entries(value||{}).map(([key,v])=>`${key}=${v??''}`).join('\n'):value)}</textarea></div>`;
+    const area=(path,label,value,format='text',{placeholder=''}={})=>`<div class="field full"><label>${label}</label><textarea data-path="${esc(path)}" data-format="${format}" dir="ltr" ${placeholder?`placeholder="${esc(placeholder)}"`:""}>${esc(format==='lines'?(value||[]).join('\n'):format==='json'?JSON.stringify(value??{},null,2):format==='env'?Object.entries(value||{}).map(([key,v])=>`${key}=${v??''}`).join('\n'):value)}</textarea></div>`;
     const pf=(path,label,opts={})=>text('protocol_settings.'+path,label,get(draft.protocol_settings,path),opts);
     const ps=(path,label,options,opts={})=>select('protocol_settings.'+path,label,get(draft.protocol_settings,path),options,opts);
     const pt=(path,label)=>toggle('protocol_settings.'+path,label,get(draft.protocol_settings,path));
@@ -332,11 +332,11 @@ window.SpeedboxNodeEditor = (() => {
         let html='';
         if(active==='certificate') {
           html=select('cert_config.cert_mode','روش گواهی',cert.cert_mode,[['none','بدون مدیریت گواهی'],['http','HTTP-01 (ACME)'],['dns','DNS-01 (ACME)'],['self','گواهی خودامضا'],['content','محتوای گواهی'],...(cert.cert_mode==='file'?[['file','فایل گواهی']]:[])],{wide:true});
-          if(cert.cert_mode!=='none')html+=text('cert_config.domain','دامنه',cert.domain);
-          if(['http','dns'].includes(cert.cert_mode))html+=text('cert_config.email','ایمیل ACME',cert.email);
+          if(cert.cert_mode!=='none')html+=text('cert_config.domain','آدرس دامنه',cert.domain);
+          if(['http','dns'].includes(cert.cert_mode))html+=text('cert_config.email','ایمیل ACME',cert.email,{placeholder:'اختیاری'});
           if(cert.cert_mode==='http')html+=text('cert_config.http_port','پورت چالش HTTP',cert.http_port,{number:true,min:1});
-          if(cert.cert_mode==='dns')html+=text('cert_config.dns_provider','ارائه‌دهنده DNS',cert.dns_provider)+area('cert_config.dns_env','متغیرهای DNS (هر خط KEY=VALUE)',cert.dns_env,'env');
-          if(cert.cert_mode==='content')html+=area('cert_config.cert_content','محتوای گواهی',cert.cert_content)+area('cert_config.key_content','محتوای کلید خصوصی',cert.key_content);
+          if(cert.cert_mode==='dns')html+=window.SpeedboxCertificateDns.render(cert,{context:'node',prefix:'node-dns'});
+          if(cert.cert_mode==='content')html+=area('cert_config.cert_content','محتوای گواهی',cert.cert_content,'text',{placeholder:'-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----'})+area('cert_config.key_content','محتوای کلید خصوصی',cert.key_content,'text',{placeholder:'-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----'});
           if(cert.cert_mode==='file')html+=text('cert_config.cert_file','مسیر فایل گواهی',cert.cert_file||'',{wide:true})+text('cert_config.key_file','مسیر فایل کلید خصوصی',cert.key_file||'',{wide:true});
         }
         if(active==='multiplex') {
@@ -346,6 +346,7 @@ window.SpeedboxNodeEditor = (() => {
         if(active==='outbounds')html=area('custom_outbounds','خروجی‌های سفارشی',working.custom_outbounds,'json')+(draft.warp_enabled?'<p class="node-warp-note">خروجی خودکار WARP جداگانه اعمال می‌شود؛ نیازی به وارد کردن آن در این کادر نیست.</p>':'');
         if(active==='routing')html=area('custom_routes','مسیرهای سفارشی',working.custom_routes,'json')+(draft.warp_enabled?'<p class="node-warp-note">مسیرهای خودکار WARP پس از قواعد دستی اعمال می‌شوند؛ نیازی به وارد کردن آن‌ها در این کادر نیست.</p>':'');
         target.innerHTML=html;
+        if(active==='certificate'&&cert.cert_mode==='dns')window.SpeedboxCertificateDns.bind(target,cert,{context:'node',onChange:draw});
         bind(target,working,input=>{delete errors[input.dataset.path];if(input.tagName==='SELECT'||input.type==='checkbox')draw();});
         target.querySelectorAll('[data-format=json]').forEach(input=>input.addEventListener('input',()=>{try{const data=JSON.parse(input.value);if(!data||typeof data!=='object'||(input.dataset.path.startsWith('custom_')&&!Array.isArray(data))||(input.dataset.path==='cert_config.dns_env'&&Array.isArray(data)))throw Error();delete errors[input.dataset.path];input.setCustomValidity('');}catch(_){errors[input.dataset.path]=true;input.setCustomValidity('ساختار JSON معتبر نیست.');}}));
         target.querySelectorAll('[data-format=env]').forEach(input=>input.addEventListener('input',()=>{if(input.validity.valid)delete errors[input.dataset.path];else errors[input.dataset.path]=true;}));
