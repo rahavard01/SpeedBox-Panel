@@ -362,6 +362,7 @@ Route::middleware(['auth:sanctum', CheckTokenExpiration::class, CheckUserBanned:
             Route::delete('/servers/{managedServer}', [InfrastructureController::class, 'deleteServer']);
             Route::post('/servers/{managedServer}/deploy', [InfrastructureController::class, 'deploy']);
             Route::get('/servers/{managedServer}/deployments', [InfrastructureController::class, 'deployments']);
+            Route::get('/server-removals/{id}', [InfrastructureController::class, 'serverRemoval'])->whereNumber('id');
 
             Route::get('/machines', [InfrastructureController::class, 'machines']);
             Route::get('/machines/{machine}/warp', [\App\Http\Controllers\Api\Admin\MachineWarpController::class, 'show'])->whereNumber('machine');

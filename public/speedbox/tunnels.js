@@ -93,7 +93,7 @@ window.SpeedboxTunnels = (() => {
     const preview=['localhost','127.0.0.1','[::1]'].includes(location.hostname)&&['1','full','empty'].includes(previewValue);
     if(preview){api=previewBackend(previewValue,()=>data.servers);openNode=async()=>toast('در پیش‌نمایش محلی، ساخت و ویرایش نود واقعی اجرا نمی‌شود.','info');}
     let disposed=false,timer=null,busy=false,version=0,refreshTimer=null;
-    let shellBound=false;
+    let shellBound=false,timerDelete=null;
     const closeActionMenus=()=>content.querySelectorAll('.tunnel-actions[open]').forEach(menu=>menu.open=false);
     const actionMobile=window.matchMedia('(max-width:767px), (hover:none) and (pointer:coarse)');
     const syncActionAccessibility=()=>{
@@ -173,8 +173,9 @@ window.SpeedboxTunnels = (() => {
       if(test){await pollTest(false);}
       schedule();return true;
     }
-    function schedule(){clearTimeout(timer);if(disposed)return;timer=setTimeout(async()=>{if(disposed)return;try{if(!busy){if(test&&active(testOperation))await pollTest(true);const pending=data.data.some(t=>active(t.operation))||data.tests.some(t=>['queued','running'].includes(t.status));if(pending)await refreshCards();}}catch(e){/* Background refresh retries silently; the engine keeps running. */}schedule();},4000);}
-    async function refreshCards(){const answer=await api('/tunnels');if(disposed)return;data=answer;renderCards();renderHistory();if(logOperation){const op=data.data.find(t=>t.operation?.id===logOperation)?.operation;if(op&&!active(op)){logOperation=null;showLogs(op);}}if(maintenance)await refreshMaintenance();}
+    function schedule(){clearTimeout(timer);if(disposed)return;timer=setTimeout(async()=>{if(disposed)return;try{if(!busy){if(test&&active(testOperation))await pollTest(true);const pending=data.data.some(t=>active(t.operation))||data.tests.some(t=>['queued','running'].includes(t.status));if(pending||Date.now()-lastCardsRefresh>=15000)await refreshCards();}}catch(e){/* Background refresh retries silently; the engine keeps running. */}schedule();},4000);}
+    let lastCardsRefresh=Date.now();
+    async function refreshCards(){lastCardsRefresh=Date.now();const answer=await api('/tunnels');if(disposed)return;data=answer;renderCards();renderHistory();if(logOperation){const op=data.data.find(t=>t.operation?.id===logOperation)?.operation;if(op&&!active(op)){logOperation=null;showLogs(op);}}if(maintenance)await refreshMaintenance();}
     async function pollTest(render=true){if(!test)return;const id=test.id;const answer=await api(`/tunnel-tests/${id}`);if(disposed||test?.id!==id)return;test=answer.data;testOperation=answer.operation;data.tests=[test,...data.tests.filter(t=>t.id!==test.id)].slice(0,10);renderHistory();if(render&&wizard&&(!draft||switching))renderWizard();}
     function renderCards(){
       return retainView(()=>{
@@ -385,7 +386,24 @@ window.SpeedboxTunnels = (() => {
     }
 
     async function operation(t,action){const answer=await api(`/tunnels/${t.id}/actions`,{method:'POST',body:JSON.stringify({action})});if(disposed)return;toast(answer.message);if(action==='logs'){if(active(answer.data))logOperation=answer.data.id;else showLogs(answer.data);}await refreshCards();}
-    function confirmDelete(t){openModal('حذف تونل',`<p>تونل «${esc(t.name)}» از هر دو سرور حذف شود؟</p><p class="tunnel-muted">نودها حذف نمی‌شوند، اما اتصال آن‌ها از این تونل قطع می‌شود.</p><div class="form-actions"><button type="button" class="button server-delete-confirm" data-confirm-tunnel-delete>حذف از دو سرور</button></div>`,modalOptions());modalBody().querySelector('[data-confirm-tunnel-delete]').onclick=safe(async()=>{const answer=await api(`/tunnels/${t.id}/actions`,{method:'POST',body:JSON.stringify({action:'delete',confirm:true})});closeModal();toast(answer.message);await refreshCards();});}
+    function confirmDelete(t){
+      let closed=false;const options={...modalOptions(),onClose:()=>{closed=true;}};
+      openModal('حذف تونل',`<p>تونل «${esc(t.name)}» حذف شود؟ پاک‌سازی روی هر دو سرور امتحان می‌شود؛ عدم دسترسی مانع حذف از پنل نمی‌شود.</p><div class="form-actions"><button type="button" class="button server-delete-confirm" data-confirm-tunnel-delete>حذف</button></div>`,options);
+      modalBody().querySelector('[data-confirm-tunnel-delete]').onclick=safe(async()=>{
+        const answer=await api(`/tunnels/${t.id}/actions`,{method:'POST',body:JSON.stringify({action:'delete',confirm:true})});
+        if(closed||disposed)return;
+        openModal('حذف تونل','<p>در حال حذف تونل…</p>',options);
+        const poll=async()=>{
+          if(closed||disposed)return;
+          try{
+            const {data}=await api(`/tunnel-operations/${answer.data.id}`);
+            if(closed||disposed)return;
+            if(!active(data)){await refreshCards();if(!closed)openModal('نتیجهٔ حذف',`<p>${esc(data.message)}</p>`,options);return;}
+          }catch(e){if(e.name==='AbortError')return;}
+          timerDelete=setTimeout(poll,2000);
+        };poll();
+      });
+    }
     function details(t){
       const s=t.settings;
       openModal('جزئیات تونل BackPack',`<div class="tunnel-details"><section class="tunnel-detail-summary"><header><h3>${esc(t.name)}</h3>${badge(t.status)}</header><p class="tunnel-muted">${esc(t.message)}</p><dl><dt>سرور ایران</dt><dd>${esc(t.iran?.name)}</dd><dt>سرور خارج</dt><dd>${esc(t.foreign?.name)}</dd><dt>آدرس کاربران</dt><dd>${s.mappings.map(m=>`<bdi class="tunnel-detail-endpoint" dir="ltr">${esc(endpoint(s.public_host,m.public_port,m.public_end))}</bdi>`).join('')}</dd><dt>پورت ارتباط دو سرور</dt><dd><bdi dir="ltr">${s.tunnel_port}</bdi></dd></dl></section><div class="tunnel-end-status">${[['iran','سرور ایران'],['foreign','سرور خارج']].map(([side,label])=>{const r=t.remote_status?.[side],m=r?.metrics;return `<section><h4>${label}</h4><p>${r?.error?esc(r.error):!r?'هنوز بررسی نشده':r.active?'سرویس روشن است':'سرویس متوقف است'}</p><dl><dt>وضعیت ارتباط</dt><dd>${m?.connected===true?'برقرار':m?.connected===false?'قطع':'تأیید نشده'}</dd><dt>دریافت / ارسال</dt><dd><bdi dir="ltr">${bytes(m?.bytes_in)} / ${bytes(m?.bytes_out)}</bdi></dd><dt>آخرین بررسی</dt><dd>${timeValue(r?.checked_at)}</dd></dl></section>`;}).join('')}</div><section class="tunnel-node-options"><header><h4>استفاده برای نود</h4><p>نود روی سرور خارج اجرا می‌شود؛ آدرس اتصال کاربران، سرور ایران است.</p></header><div class="tunnel-node-grid"><div class="field"><label for="tunnel-node-mapping">پورت موردنظر</label><select class="form-input" id="tunnel-node-mapping">${s.mappings.map((m,i)=>`<option value="${i}">${m.public_port} ← ${m.target_port}</option>`).join('')}</select></div><button type="button" class="button secondary" data-create-tunnel-node ${!t.foreign?.machine_id?'disabled':''}>ساخت نود جدید</button><div class="field"><label for="tunnel-existing-node">نود موجود روی سرور خارج</label><select class="form-input" id="tunnel-existing-node"><option value="">انتخاب کنید</option>${(t.nodes||[]).map(n=>`<option value="${n.id}">${esc(n.name)} — ${n.server_port}</option>`).join('')}</select></div><button type="button" class="button secondary" data-edit-tunnel-node>استفاده برای نود موجود</button></div><p class="tunnel-muted">فرم نود باز می‌شود؛ تغییرات پس از بررسی و ذخیرهٔ شما اعمال خواهند شد. تنظیمات TLS و دامنهٔ آن را هم بررسی کنید.</p></section></div>`,{kind:'tunnel'});
@@ -394,7 +412,7 @@ window.SpeedboxTunnels = (() => {
       body.querySelector('[data-edit-tunnel-node]').onclick=safe(async()=>{const node=t.nodes.find(n=>n.id===Number(body.querySelector('#tunnel-existing-node').value));if(!node)throw Error('یک نود موجود انتخاب کنید.');const p=prefill();if(node.server_port!==p.server_port)throw Error('پورت مقصد تونل باید با پورت اجرای این نود برابر باشد.');await openNode(node,p);});
     }
     function showLogs(op){const result=op.result||{};openModal('گزارش دو سرور',`<div class="tunnel-log-columns">${[['iran','سرور ایران'],['foreign','سرور خارج']].map(([k,l])=>`<section><h4>${l}</h4><pre class="log-box" dir="ltr">${esc(result[k]?.text||result[k]?.error||'گزارشی دریافت نشد.')}</pre></section>`).join('')}</div>`);}
-    return {load,dispose(){actionMobile.removeEventListener('change',syncActionAccessibility);window.removeEventListener('resize',closeActionMenus);window.removeEventListener('scroll',closeActionMenusOnScroll,true);network?.dispose();disposed=true;maintenance=null;wizard=false;version++;clearTimeout(timer);clearTimeout(refreshTimer);}};
+    return {load,dispose(){clearTimeout(timerDelete);actionMobile.removeEventListener('change',syncActionAccessibility);window.removeEventListener('resize',closeActionMenus);window.removeEventListener('scroll',closeActionMenusOnScroll,true);network?.dispose();disposed=true;maintenance=null;wizard=false;version++;clearTimeout(timer);clearTimeout(refreshTimer);}};
   }
   return {mount};
 })();

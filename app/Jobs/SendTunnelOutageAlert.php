@@ -30,13 +30,17 @@ class SendTunnelOutageAlert implements ShouldQueue,ShouldBeEncrypted
             $state = DB::table('speedbox_tunnel_alerts')->where('tunnel_id',$this->tunnelId)->first();
             if (!$tunnel || !$state || $state->incident !== $this->incident || $state->failures < 2 || !$monitor->eligible($tunnel)) return;
             if ($monitor->quiet($tunnel,true) || !$state->observed_at || now()->diffInSeconds($state->observed_at,true) > 180) return;
-            if ($monitor->health($tunnel) !== false) return;
+            if (!\App\Services\TunnelHealth::fresh($tunnel)) return;
+            $unreachable=\App\Services\TunnelHealth::unreachable($tunnel);
+            if (!$unreachable && $monitor->health($tunnel) !== false) return;
             if ($state->next_delivery_at && now()->lt($state->next_delivery_at)) return;
             $delivered = json_decode($state->delivered_to ?? '[]',true) ?: [];
-            $engine = ['backpack'=>'BackPack','gost'=>'GOST','gre'=>'GRE'][$tunnel->engine] ?? $tunnel->engine;
-            $text = "🔴 قطع ارتباط تونل\n\n🏷 {$tunnel->name}\n🔗 نوع: {$engine}\n🇮🇷 ایران: ".($tunnel->iran?->name ?? '—')
+            $engine = ['backpack'=>'BackPack','gost'=>'GOST','gre'=>'GRE','wattunnel'=>'WatTunnel'][$tunnel->engine] ?? $tunnel->engine;
+            $title=$unreachable?'🟠 عدم دسترسی به سرور تونل':'🔴 قطع ارتباط تونل';
+            $note=$unreachable?'در دو بررسی پیاپی، دسترسی به سرور تأیید نشد؛ وضعیت تونل قابل بررسی نیست.':'ارتباط در دو بررسی پیاپی قطع بوده است.';
+            $text = $title."\n\n🏷 {$tunnel->name}\n🔗 نوع: {$engine}\n🇮🇷 ایران: ".($tunnel->iran?->name ?? '—')
                 ."\n🌐 خارج: ".($tunnel->foreign?->name ?? '—')."\n🕒 "."\u{2066}".\App\Support\JalaliDateFormatter::forTelegram(now(),'Y/m/d — H:i')."\u{2069}"
-                ."\n\n⚠️ ارتباط در دو بررسی پیاپی قطع بوده است. جهت بررسی به پنل مراجعه کنید.";
+                ."\n\n⚠️ ".$note." جهت بررسی به پنل مراجعه کنید.";
             $url = rtrim((string) config('app.url'),'/').'/admin/infrastructure/tunnels';
             $keyboard = filter_var($url,FILTER_VALIDATE_URL) && str_starts_with($url,'https://')
                 ? ['reply_markup'=>json_encode(['inline_keyboard'=>[[['text'=>'🔎 بررسی تونل‌ها','url'=>$url]]]],JSON_UNESCAPED_UNICODE)] : [];

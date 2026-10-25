@@ -123,13 +123,96 @@ class TunnelManagementTest extends TestCase
         $this->assertContains([$this->iran->id,'rollback'],$calls);$this->assertContains([$this->foreign->id,'rollback'],$calls);
         $this->assertSame(0,DB::table('speedbox_tunnel_leases')->count());$this->assertStringNotContainsString('private-token',$op->fresh()->toJson());
     }
-    public function test_partial_delete_is_retryable_and_never_deletes_node_records():void
+    public function test_partial_delete_retires_tunnel_and_releases_hosts():void
     {
         $t=$this->createTunnel();$op=app(TunnelManager::class)->queue('delete',$t,null);
         $remote=\Mockery::mock(BackpackRemote::class);$remote->shouldReceive('call')->andReturnUsing(function($s,$r){if($s->id===$this->foreign->id)throw new \RuntimeException('offline');return ['deleted'=>true];});
         (new RunTunnelOperation($op->id))->handle($remote,app(TunnelManager::class));
-        $this->assertSame('needs_review',$t->fresh()->status);$this->assertSame('failed',$op->fresh()->status);$this->assertSame(0,DB::table('speedbox_tunnel_leases')->count());
-        $retry=app(TunnelManager::class)->queue('delete',$t,null);$this->assertSame('queued',$retry->fresh()->status);
+        $this->assertSame('deleted',$t->fresh()->status);$this->assertSame('succeeded',$op->fresh()->status);$this->assertSame(0,DB::table('speedbox_tunnel_leases')->count());
+        $this->assertTrue($op->fresh()->result['cleanup']['iran']['cleaned']);
+        $this->assertFalse($op->fresh()->result['cleanup']['foreign']['cleaned']);
+        $this->withToken($this->token)->deleteJson('/api/admin/infrastructure/servers/'.$this->foreign->id)->assertAccepted();
+    }
+
+    public function test_both_unreachable_hosts_do_not_keep_a_tunnel_active():void
+    {
+        $t=$this->createTunnel();$op=app(TunnelManager::class)->queue('delete',$t,null);
+        $remote=\Mockery::mock(BackpackRemote::class);$remote->shouldReceive('call')->twice()->andThrow(new \RuntimeException('offline',1001));
+        (new RunTunnelOperation($op->id))->handle($remote,app(TunnelManager::class));
+        $this->assertSame('deleted',$t->fresh()->status);
+        $this->assertCount(2,$op->fresh()->result['cleanup']);
+        $this->assertSame(0,DB::table('speedbox_tunnel_leases')->count());
+    }
+
+    public function test_network_deletion_and_failed_status_do_not_revert_to_green():void
+    {
+        foreach(['gost','gre','wattunnel'] as $i=>$engine){
+            $t=$this->createTunnel();$t->update(['engine'=>$engine,'status'=>'connected','remote_name'=>'sb-'.str_repeat((string)($i+1),32),'subnet'=>1600+$i]);
+            $network=app(\App\Services\NetworkTunnelManager::class);$manager=app(TunnelManager::class);
+            $remote=\Mockery::mock(\App\Services\NetworkTunnelRemote::class);
+            $calls=[];$remote->shouldReceive('call')->andReturnUsing(function($server,$request)use(&$calls){$calls[]=$server->id;if($server->id===$this->foreign->id)throw new \RuntimeException('offline',1001);return ['active'=>true,'connected'=>true,'deleted'=>true];});
+            $op=$manager->queue('status',$t,null);
+            (new \App\Jobs\RunNetworkTunnelOperation($op->id))->handle($remote,$network,$manager);
+            $this->assertSame('needs_review',$t->fresh()->status,$engine);
+            $this->assertCount(2,$calls);$calls=[];
+            $op=$manager->queue('delete',$t->fresh(),null);
+            (new \App\Jobs\RunNetworkTunnelOperation($op->id))->handle($remote,$network,$manager);
+            $this->assertSame('deleted',$t->fresh()->status,$engine);
+            $this->assertTrue($op->fresh()->result['cleanup']['iran']['cleaned']);
+            $this->assertFalse($op->fresh()->result['cleanup']['foreign']['cleaned']);
+            $this->assertSame([$this->iran->id,$this->foreign->id],$calls);
+        }
+    }
+
+    public function test_old_green_status_is_projected_as_unverified():void
+    {
+        $t=$this->createTunnel();$t->update(['status'=>'connected','remote_status'=>['_checked_at'=>time()-181]]);
+        $this->withToken($this->token)->getJson('/api/admin/infrastructure/tunnels')->assertOk()->assertJsonPath('data.0.status','needs_review');
+        $this->assertSame('connected',$t->fresh()->status); // Projection must not falsify the stored observation.
+    }
+
+    public function test_retired_server_is_removed_even_when_ssh_fails_and_nodes_are_detached():void
+    {
+        $node=\App\Models\ProxyServer::create(['name'=>'kept','type'=>'vless','kernel'=>'xray','machine_id'=>$this->iran->machine_id,'host'=>'192.0.2.1','port'=>'443','server_port'=>443,'enabled'=>true]);
+        $response=$this->withToken($this->token)->deleteJson('/api/admin/infrastructure/servers/'.$this->iran->id)->assertAccepted();
+        $id=$response->json('data.id');
+        $ssh=\Mockery::mock(\App\Services\SshExecutor::class)->makePartial();
+        $ssh->shouldReceive('run')->once()->andThrow(new \RuntimeException('offline'));
+        (new \App\Jobs\UninstallManagedServer($id))->handle($ssh,app(\App\Services\ManagedServerRemoval::class));
+        $this->assertNull($this->iran->fresh());
+        $this->assertNotNull($node->fresh());$this->assertNull($node->fresh()->machine_id);$this->assertFalse($node->fresh()->enabled);
+        $this->getJson('/api/admin/infrastructure/server-removals/'.$id)->assertOk()->assertJsonPath('data.status','succeeded')->assertJsonPath('data.cleanup_confirmed',false);
+    }
+
+    public function test_ssh_cleanup_budget_caps_the_entire_call_and_restores_normal_options():void
+    {
+        $dir=sys_get_temp_dir().'/speedbox-budget-'.bin2hex(random_bytes(8));mkdir($dir,0700);
+        file_put_contents($dir.'/sshpass',"#!/bin/sh\nshift\nexec \"\$@\"\n");
+        file_put_contents($dir.'/ssh',"#!/bin/sh\ncase \"\$*\" in *budget-sleep*) exec sleep 3;; *ConnectTimeout=5*) printf short;; *) printf normal;; esac\n");
+        chmod($dir.'/sshpass',0700);chmod($dir.'/ssh',0700);
+        $path=getenv('PATH');$serverPath=$_SERVER['PATH']??null;$envPath=$_ENV['PATH']??null;
+        putenv('PATH='.$dir.':'.$path);$_SERVER['PATH']=$_ENV['PATH']=$dir.':'.$path;
+        try {
+            $ssh=app(\App\Services\SshExecutor::class);$started=microtime(true);$timedOut=false;
+            try {$ssh->withinBudget(1,fn()=>$ssh->run($this->iran,'budget-sleep',15));}
+            catch (\Symfony\Component\Process\Exception\ProcessTimedOutException) {$timedOut=true;}
+            $this->assertTrue($timedOut);$this->assertLessThan(2.5,microtime(true)-$started);
+            $this->assertSame('short',$ssh->withinBudget(2,fn()=>$ssh->run($this->iran,'budget-ok',15)));
+            $this->assertSame('normal',$ssh->run($this->iran,'budget-ok',15));
+        } finally {putenv('PATH='.$path);if($serverPath===null)unset($_SERVER['PATH']);else $_SERVER['PATH']=$serverPath;if($envPath===null)unset($_ENV['PATH']);else $_ENV['PATH']=$envPath;unlink($dir.'/sshpass');unlink($dir.'/ssh');rmdir($dir);}
+    }
+
+    public function test_bounded_tunnel_requests_use_one_stdin_connection_without_sftp():void
+    {
+        foreach([BackpackRemote::class,\App\Services\NetworkTunnelRemote::class] as $class){
+            $ssh=\Mockery::mock(\App\Services\SshExecutor::class)->makePartial();
+            $ssh->shouldNotReceive('upload');
+            $ssh->shouldReceive('run')->once()->andReturnUsing(function($server,$command,$timeout,$input){
+                $this->assertSame(15,$timeout);$this->assertSame('delete',json_decode($input,true)['action']);
+                return json_encode(['ok'=>true,'data'=>['deleted'=>true]]);
+            });
+            $this->assertTrue((new $class($ssh))->call($this->iran,['action'=>'delete','name'=>'fixture'])['deleted']);
+        }
     }
     public function test_cancel_cleans_both_temporary_tests_and_releases_hosts():void
     {

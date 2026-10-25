@@ -144,12 +144,14 @@ final class NetworkTunnelManager
 
     public function saveSnapshot(ServerTunnel $tunnel,array $snapshots): void
     {
+        $snapshots['_checked_at']=now()->timestamp;
         $iran=$snapshots['iran']??[];$foreign=$snapshots['foreign']??[];
         $status=!($tunnel->settings['enabled']??true)?'stopped':
             ((empty($iran['active'])||((in_array($tunnel->engine,['gre','wattunnel'],true)||$tunnel->transport==='grpc')&&empty($foreign['active'])))?'offline':
                 (($iran['connected']??null)===true?'connected':'degraded'));
         $message=match($status){'connected'=>'سرویس و دسترسی TCP مقصد بررسی شد؛ اتصال پروتکل نود را با کلاینت هم آزمایش کنید.',
             'stopped'=>'اتصال متوقف است.','offline'=>'سرویس یکی از سمت‌ها فعال نیست.',default=>'سرویس بررسی شد؛ ارتباط کامل هنوز تأیید نشده است.'};
+        if (isset($iran['error'])||isset($foreign['error'])) {$status='needs_review';$message='دسترسی به یکی از سرورها تأیید نشد.';}
         if($tunnel->engine==='wattunnel'&&$status==='connected')$message='ارتباط رمز‌شدهٔ دو سرور برقرار است؛ دسترسی سرویس مقصد را با کلاینت هم آزمایش کنید.';
         if($tunnel->engine==='gre' && (int)($tunnel->settings['quota_gb']??0)>0 && (!empty($iran['quota_exhausted'])||!empty($foreign['quota_exhausted']))) {
             $stopped=($tunnel->settings['quota_mode']??'warn')==='enforce';

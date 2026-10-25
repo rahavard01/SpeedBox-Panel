@@ -68,6 +68,15 @@ class BackpackRemote
 
     public function call(ManagedServer $server, array $request): array
     {
+        if (!in_array($request['action']??'', ['delete','status'], true)) return $this->callUnbounded($server,$request);
+        $raw=$this->ssh->withinBudget(15,fn()=>$this->ssh->run($server,$this->sudo($server).'/opt/speedbox-backpack/backpack speedbox-json -',15,json_encode($request,JSON_THROW_ON_ERROR)));
+        $answer=json_decode($raw,true,64,JSON_THROW_ON_ERROR);
+        if (($answer['ok']??false)!==true || !is_array($answer['data']??null)) throw new RuntimeException('invalid_response');
+        return $answer['data'];
+    }
+
+    private function callUnbounded(ManagedServer $server, array $request): array
+    {
         $binary=in_array($request['action']??'',['test-ready','spawn-host','spawn-peer','test-state','test-stop'],true)?$this->testBinary($server):'/opt/speedbox-backpack/backpack';
         if ($binary==='/opt/speedbox-backpack/backpack') {
         return $this->temporary($server, function ($dir) use ($server, $request,$binary) {

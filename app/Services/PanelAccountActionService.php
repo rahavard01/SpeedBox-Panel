@@ -409,28 +409,17 @@ class PanelAccountActionService
 
             $isAdmin = ((int)($panelUser->role ?? 2) === 1);
 
-            $isTargetVolumeAccount = false;
-
-            if ($isAdmin && !empty($user->plan_id)) {
-                $isTargetVolumeAccount = DB::table('panel_plan')
-                    ->where('plan_key', 'volume_gig')
-                    ->where('v2_plan_id', (int) $user->plan_id)
-                    ->exists();
+            $resolver=app(AccountTariffResolver::class);
+            $accountGroup=$resolver->group($user);
+            if (!$accountGroup) {
+                DB::rollBack();
+                return ['ok'=>false,'message'=>'طرح این اکانت قابل تشخیص نیست؛ طرح اکانت را در پنل بررسی کنید.'];
             }
-
-            $partnerPlanType = $panelUser->partner_plan_type ?? 'time';
-
-            $isVolumePartner = (!$isAdmin && $partnerPlanType === 'volume');
-            $isBothPartner = (!$isAdmin && $partnerPlanType === 'both');
-
-            $userGroupType = (string)($user->account_group_type ?? 'time');
-
-            $isVolumeMode = $isAdmin
-                ? $isTargetVolumeAccount
-                : (
-                    $isVolumePartner
-                    || ($isBothPartner && $userGroupType === 'volume')
-                );
+            $isVolumeMode=$resolver->isVolume($user);
+            if (!app(PartnerTariffAccessService::class)->canCreateType($panelUser,$isVolumeMode?'volume':'time')) {
+                DB::rollBack();
+                return ['ok'=>false,'message'=>'این نوع پلن برای شما فعال نیست'];
+            }
 
             if (
                 $blockExpiredTimeAccount
@@ -448,10 +437,15 @@ class PanelAccountActionService
 
             $planKeyForTopup = $isVolumeMode ? 'volume_gig' : 'gig';
 
-            $tariffGroupId = $this->resolveTariffGroupId(
-                $tariffGroupId,
-                $isVolumeMode ? 'volume' : 'time'
-            );
+            // Time top-ups always use the account's own group. Volume purchases may
+            // explicitly select another allowed volume group, but never a global default.
+            $tariffGroupId=(!$isVolumeMode || !$tariffGroupId)?(int)$accountGroup->id:(int)$tariffGroupId;
+            $selectedGroup=DB::table('panel_tariff_groups')->where('id',$tariffGroupId)
+                ->where('group_type',$isVolumeMode?'volume':'time')->where('enable',1)->first();
+            if (!$selectedGroup) {
+                DB::rollBack();
+                return ['ok'=>false,'message'=>'طرح اکانت غیرفعال است یا با نوع اکانت مطابقت ندارد'];
+            }
 
             if (!app(PartnerTariffAccessService::class)->canSeeTariffGroup($panelUser, (int)$tariffGroupId)) {
                 DB::rollBack();

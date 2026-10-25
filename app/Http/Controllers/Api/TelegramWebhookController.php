@@ -1350,12 +1350,9 @@ class TelegramWebhookController extends Controller
 
             $partnerPlanType = $user->partner_plan_type ?? 'time';
 
-            $isVolumeMode = $isAdmin
-                ? $this->isV2UserVolumePlan($v2User)
-                : (
-                    $partnerPlanType === 'volume'
-                    || ($partnerPlanType === 'both' && $this->isV2UserVolumePlan($v2User))
-                );
+            $resolver=app(\App\Services\AccountTariffResolver::class);
+            $isVolumeMode=$resolver->isVolume($v2User);
+            if (!$isVolumeMode) $payload['tariff_group_id']=(int)($resolver->group($v2User)->id??0);
 
             $payload['is_volume_mode'] = $isVolumeMode ? 1 : 0;
             $payload['traffic_group_type'] = $isVolumeMode ? 'volume' : 'time';
@@ -3578,24 +3575,7 @@ class TelegramWebhookController extends Controller
 
     protected function isV2UserVolumePlan(object $v2User): bool
     {
-        if ((string)($v2User->account_group_type ?? '') === 'volume') {
-            return true;
-        }
-
-        $planId = (int)($v2User->plan_id ?? 0);
-
-        if ($planId <= 0) {
-            return false;
-        }
-
-        return DB::table('panel_plan as p')
-            ->join('panel_tariff_groups as g', 'g.id', '=', 'p.tariff_group_id')
-            ->where('p.plan_key', 'volume_gig')
-            ->where('p.v2_plan_id', $planId)
-            ->where('p.enable', 1)
-            ->where('g.group_type', 'volume')
-            ->where('g.enable', 1)
-            ->exists();
+        return app(\App\Services\AccountTariffResolver::class)->isVolume($v2User);
     }
 
     protected function v2UserPlanTitle(object $v2User): string

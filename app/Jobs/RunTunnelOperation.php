@@ -25,6 +25,7 @@ class RunTunnelOperation implements ShouldQueue, ShouldBeEncrypted
             $op = TunnelOperation::findOrFail($this->operationId);
             if (!in_array($op->status,['queued','running'])) return;
             $op->update(['status'=>'running']);
+            if ($op->action==='delete') { app(\App\Services\TunnelRemoval::class)->run($op,$remote,$manager);return; }
             if ($op->test_id) $this->test($op,$remote,$manager);
             else $this->tunnel($op,$remote,$manager);
         } catch (Throwable $e) {
@@ -192,6 +193,7 @@ class RunTunnelOperation implements ShouldQueue, ShouldBeEncrypted
             }
             $failed = isset($result['iran']['error']) || isset($result['foreign']['error']);
             if ($op->action === 'status') {
+                $result['_checked_at']=now()->timestamp;
                 $t->update(['remote_status'=>$result,'status'=>$failed?'needs_review':$this->connectionState($result),
                     'message'=>$failed?'دریافت وضعیت یکی از دو سرور کامل نشد.':$this->connectionMessage($result)]);
             } elseif ($op->action !== 'logs') {

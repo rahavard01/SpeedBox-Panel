@@ -12,6 +12,23 @@ class SshExecutor
     private array $temporaryFiles = [];
     private array $verifiedHostKeys = [];
     private ?string $pinnedHostFile = null;
+    private ?float $budgetDeadline = null;
+
+    public function withinBudget(int $seconds, callable $callback): mixed
+    {
+        $previous=$this->budgetDeadline;
+        $this->budgetDeadline=min($previous??INF,microtime(true)+$seconds);
+        try { return $callback(); }
+        finally { $this->budgetDeadline=$previous;$this->cleanup(); }
+    }
+
+    private function timeoutFor(int $timeout): float
+    {
+        if ($this->budgetDeadline===null) return $timeout;
+        $remaining=$this->budgetDeadline-microtime(true);
+        if ($remaining<=0) throw new RuntimeException('مهلت پاک‌سازی یا بررسی تمام شد.',1002);
+        return min($timeout,$remaining);
+    }
 
     public function __construct()
     {
@@ -27,6 +44,7 @@ class SshExecutor
     {
         $endpoint=['host'=>$server->host,'port'=>(int)$server->ssh_port];
         $this->verifyHostKey($server,$endpoint);
+        if ($this->budgetDeadline!==null) $command='timeout --signal=TERM --kill-after=1s '.max(1,(int)$this->timeoutFor($timeout)-1).'s sh -c '.escapeshellarg($command);
         $process = new Process([
             ...$this->authPrefix($server),
             'ssh',
@@ -34,7 +52,7 @@ class SshExecutor
             $server->ssh_user.'@'.$endpoint['host'],
             $command,
         ], null, $this->environment($server));
-        $process->setTimeout($timeout);
+        $process->setTimeout($this->timeoutFor($timeout));
         if ($input !== null) $process->setInput($input);
         try {
             $process->run();
@@ -43,7 +61,7 @@ class SshExecutor
         }
 
         if (!$process->isSuccessful()) {
-            throw new RuntimeException(trim($process->getOutput()."\n".$process->getErrorOutput()) ?: 'اجرای دستور SSH ناموفق بود.');
+            throw new RuntimeException(trim($process->getOutput()."\n".$process->getErrorOutput()) ?: 'اجرای دستور SSH ناموفق بود.',$process->getExitCode()===255?1001:1002);
         }
 
         return trim($process->getOutput());
@@ -65,7 +83,7 @@ class SshExecutor
                 $localPath,
                 "{$server->ssh_user}@{$scpHost}:{$remotePath}",
             ], null, $this->environment($server));
-            $process->setTimeout($timeout);
+            $process->setTimeout($this->timeoutFor($timeout));
             try {
                 $process->run();
             } finally {
@@ -97,7 +115,7 @@ class SshExecutor
         return [
             '-p', (string) $endpoint['port'],
             '-o', 'BatchMode='.($server->auth_type === 'key' && !$server->private_key_passphrase ? 'yes' : 'no'),
-            '-o', 'ConnectTimeout=15',
+            '-o', 'ConnectTimeout='.($this->budgetDeadline===null?15:5),
             '-o', 'ServerAliveInterval=20',
             '-o', 'StrictHostKeyChecking='.($this->pinnedHostFile?'yes':'accept-new'),
             '-o', 'UserKnownHostsFile='.($this->pinnedHostFile?:storage_path('app/private/known_hosts')),
@@ -111,7 +129,7 @@ class SshExecutor
         return [
             '-P', (string) $endpoint['port'],
             '-o', 'BatchMode='.($server->auth_type === 'key' && !$server->private_key_passphrase ? 'yes' : 'no'),
-            '-o', 'ConnectTimeout=15',
+            '-o', 'ConnectTimeout='.($this->budgetDeadline===null?15:5),
             '-o', 'StrictHostKeyChecking='.($this->pinnedHostFile?'yes':'accept-new'),
             '-o', 'UserKnownHostsFile='.($this->pinnedHostFile?:storage_path('app/private/known_hosts')),
             ...($server->host_fingerprint?['-o','HostKeyAlias=speedbox-managed-'.$server->id]:[]),
@@ -153,8 +171,8 @@ class SshExecutor
         if (is_string($key)) {
             $this->pinKey($key);return;
         }
-        $scan = new Process(['ssh-keyscan', '-p', (string) $endpoint['port'], '-T', '8', $endpoint['host']]);
-        $scan->setTimeout(15);
+        $scan = new Process(['ssh-keyscan', '-p', (string) $endpoint['port'], '-T', $this->budgetDeadline===null?'8':'5', $endpoint['host']]);
+        $scan->setTimeout($this->timeoutFor($this->budgetDeadline===null?15:5));
         $scan->run();
         if (!$scan->isSuccessful() || trim($scan->getOutput()) === '') {
             throw new RuntimeException('خواندن کلید میزبان SSH ناموفق بود.',1001);

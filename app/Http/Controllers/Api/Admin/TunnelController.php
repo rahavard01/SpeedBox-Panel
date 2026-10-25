@@ -14,6 +14,7 @@ class TunnelController extends Controller
     {
         $tunnels = ServerTunnel::with(['iran:id,name,host,machine_id','foreign:id,name,host,machine_id'])->latest()->get();
         foreach ($tunnels as $t) {
+            \App\Services\TunnelHealth::display($t);
             $blocking=DB::table('speedbox_tunnel_leases')->whereIn('managed_server_id',[$t->iran_server_id,$t->foreign_server_id])->value('operation_id');
             $t->operation = $blocking ? TunnelOperation::find($blocking) : $t->operations()->latest()->first();
             $ports = [];

@@ -40,7 +40,7 @@ class TunnelOutageMonitor
 
     public function tick(): void
     {
-        if (!app(TunnelAlertSettings::class)->capability()['available'] || config('queue.default') === 'sync') return;
+        if (config('queue.default') === 'sync' || !Schema::hasTable('speedbox_tunnel_alerts')) return;
         $lock = Cache::lock('speedbox-tunnel-alert-tick',55);
         if (!$lock->get()) return;
         try {
@@ -49,10 +49,10 @@ class TunnelOutageMonitor
                 ->whereNotIn('speedbox_tunnels.status',['deleted','stopped','queued'])
                 ->orderBy('alerts.next_probe_at')->orderBy('speedbox_tunnels.id')->get(['speedbox_tunnels.*']);
             foreach ($tunnels as $tunnel) {
-                if (!$this->eligible($tunnel)) { $this->reset($tunnel->id); continue; }
+                if (!($tunnel->settings['enabled']??true)) { $this->reset($tunnel->id); continue; }
                 $state = DB::table('speedbox_tunnel_alerts')->where('tunnel_id',$tunnel->id)->first();
                 if ($this->quiet($tunnel,true)) { $this->reset($tunnel->id); continue; }
-                if ($state?->incident && (!$state->next_delivery_at || now()->gte($state->next_delivery_at))) {
+                if ($this->eligible($tunnel) && app(TunnelAlertSettings::class)->capability()['available'] && $state?->incident && (!$state->next_delivery_at || now()->gte($state->next_delivery_at))) {
                     SendTunnelOutageAlert::dispatch($tunnel->id,$state->incident);
                 }
                 if ($state?->next_probe_at && now()->lt($state->next_probe_at)) continue;
@@ -73,28 +73,33 @@ class TunnelOutageMonitor
         $tunnel = ServerTunnel::find($operation->tunnel_id);
         if (!$tunnel) return;
         if (!$this->eligible($tunnel) || $this->quiet($tunnel)) { $this->reset($tunnel->id); return; }
-        // An SSH failure is an unknown observation, not proof the tunnel is down.
+        // Lack of access has its own incident type; never label it confirmed tunnel loss.
         $health = $operation->status === 'succeeded' ? $this->health($tunnel) : null;
-        DB::transaction(function () use ($operation,$tunnel,$health) {
+        $kind=TunnelHealth::unreachable($tunnel)?'unreachable':($health===false?'down':($health===true?'up':'unknown'));
+        $operation->update(['result'=>[...($operation->result??[]),'observation'=>$kind]]);
+        DB::transaction(function () use ($operation,$tunnel,$health,$kind) {
             DB::table('speedbox_tunnel_alerts')->insertOrIgnore(['tunnel_id'=>$tunnel->id,'created_at'=>now(),'updated_at'=>now()]);
             $state = DB::table('speedbox_tunnel_alerts')->where('tunnel_id',$tunnel->id)->lockForUpdate()->first();
             if ($state->last_operation_id && $operation->id <= $state->last_operation_id) return;
+            $previous=$state->last_operation_id?TunnelOperation::find($state->last_operation_id):null;
+            $previousKind=$previous?->result['observation']??null;
             $values = ['last_operation_id'=>$operation->id,'observed_at'=>now(),'updated_at'=>now()];
-            if ($health === true) $values += ['failures'=>0,'incident'=>null,'delivered_to'=>null,'next_delivery_at'=>null];
-            elseif ($health === null) $values['failures'] = 0;
+            if ($kind === 'up') $values += ['failures'=>0,'incident'=>null,'delivered_to'=>null,'next_delivery_at'=>null];
+            elseif ($kind==='unknown') $values += ['failures'=>0,'incident'=>null,'delivered_to'=>null,'next_delivery_at'=>null];
             else {
                 // Two independently scheduled checks; duplicate/rapid observations cannot trip it.
-                $failures = $state->observed_at && now()->diffInSeconds($state->observed_at,true) < 45
-                    ? $state->failures : min(2,$state->failures + 1);
+                $failures = $previousKind!==$kind?1:($state->observed_at && now()->diffInSeconds($state->observed_at,true) < 45
+                    ? $state->failures : min(2,$state->failures + 1));
                 $values['failures'] = $failures;
-                if ($failures >= 2 && !$state->incident) {
+                if ($previousKind!==$kind) $values += ['incident'=>null,'delivered_to'=>null,'next_delivery_at'=>null];
+                if ($failures >= 2 && (!$state->incident || $previousKind!==$kind)) {
                     $values += ['incident'=>(string) Str::uuid(),'delivered_to'=>null,'next_delivery_at'=>now()];
                 }
             }
             DB::table('speedbox_tunnel_alerts')->where('tunnel_id',$tunnel->id)->update($values);
         });
         $state = DB::table('speedbox_tunnel_alerts')->where('tunnel_id',$tunnel->id)->first();
-        if ($state?->incident && $state->failures >= 2 && (!$state->next_delivery_at || now()->gte($state->next_delivery_at))) {
+        if (app(TunnelAlertSettings::class)->capability()['available'] && $state?->incident && $state->failures >= 2 && (!$state->next_delivery_at || now()->gte($state->next_delivery_at))) {
             SendTunnelOutageAlert::dispatch($tunnel->id,$state->incident)->afterCommit();
         }
     }

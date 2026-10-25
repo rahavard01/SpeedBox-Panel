@@ -93,7 +93,7 @@ window.SpeedboxEmergencyConfigs = {
     }
 
     function remove(row) {
-      openModal('حذف کانفیگ اضطراری',`<div class="emergency-delete-content"><span class="emergency-delete-icon">${icon('trash-alt')}</span><p>کانفیگ «${escape(row.name)}» حذف شود؟</p><small>در دریافت بعدی اشتراک، این کانفیگ نمایش داده نمی‌شود.</small></div><div class="form-actions"><button type="button" class="button entity-delete" data-emergency-confirm-delete>حذف</button><button type="button" class="button cancel" data-close>انصراف</button></div>`,{kind:'emergency-delete'});
+      openModal('حذف کانفیگ اضطراری',`<div class="emergency-delete-content"><span class="emergency-delete-icon">${icon('trash-alt')}</span><p>کانفیگ «${escape(row.name)}» حذف شود؟</p><small>در دریافت بعدی اشتراک، این کانفیگ نمایش داده نمی‌شود.</small></div><div class="form-actions"><button type="button" class="button server-delete-confirm" data-emergency-confirm-delete>حذف</button><button type="button" class="button cancel" data-close>انصراف</button></div>`,{kind:'emergency-delete'});
       modalBody().querySelector('[data-emergency-confirm-delete]').onclick=()=>operation(async()=>{
         await api(`/emergency-configs/${row.id}`,{method:'DELETE'});
         if (disposed) return;

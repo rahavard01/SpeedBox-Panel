@@ -26,6 +26,17 @@ class RunNetworkTunnelOperation implements ShouldQueue,ShouldBeEncrypted
             $op=TunnelOperation::findOrFail($this->operationId);
             if(!in_array($op->status,['queued','running']))return;
             $tunnel=ServerTunnel::findOrFail($op->tunnel_id);
+            if ($op->action==='delete') { app(\App\Services\TunnelRemoval::class)->run($op,$remote,$manager);return; }
+            if ($op->action==='status') {
+                $op->update(['status'=>'running']);$snapshots=[];
+                foreach (['iran','foreign'] as $side) {
+                    try {$snapshots[$side]=$remote->call($tunnel->$side,['action'=>'status','config'=>$network->config($tunnel,$side)]);}
+                    catch (Throwable) {$snapshots[$side]=['error'=>'دسترسی به این سمت تأیید نشد.','checked_at'=>time()];}
+                }
+                $network->saveSnapshot($tunnel,$snapshots);
+                $unavailable=isset($snapshots['iran']['error'])||isset($snapshots['foreign']['error']);
+                $manager->finish($op,$unavailable?'failed':'succeeded',$tunnel->message,['hosts'=>$snapshots]);return;
+            }
             $state=$op->payload??[];
             if(!isset($state['phase']))$state=[...$state,'phase'=>$op->action==='engine-update'?'inspect-update':'ensure','side'=>0,'revision'=>bin2hex(random_bytes(16)),
                 'old_settings'=>$tunnel->settings,'old_name'=>$tunnel->name,'old_status'=>$tunnel->status,'old_message'=>$tunnel->message,'prepared'=>[],'hosts'=>[]];

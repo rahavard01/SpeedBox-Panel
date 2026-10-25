@@ -993,8 +993,13 @@ class UserBotWebhookController extends Controller
                     ->filter(fn ($p) => $this->ownerCanSeeUserBotPlan($setting, (string) $p->plan_key))
                     ->values();
 
+                $trafficPlans = app(\App\Services\UserBot\UserBotTrafficPricing::class)->forAccount(
+                    $trafficPlans,
+                    (object) ($session->account_snapshot ?: [])
+                );
+
                 if ($trafficPlans->isEmpty()) {
-                    $bot->sendMessage($chatId, "⚠️ تعرفه ترافیک اضافه فعال نیست", UserBotKeyboard::user($isVolumeAccount));
+                    $bot->sendMessage($chatId, "⚠️ تعرفه فروش ترافیک برای طرح اکانت شما فعال نیست؛ با پشتیبانی تماس بگیرید", UserBotKeyboard::user($isVolumeAccount));
                     return response()->json(['ok' => true]);
                 }
 
@@ -2108,6 +2113,26 @@ class UserBotWebhookController extends Controller
             'account_sub_link' => $resolved['sub_link'] ?? $session->account_sub_link,
             'account_snapshot' => $snapshot,
         ]);
+
+        $stateData = $session->state_data ?: [];
+        $selected = $session->state === 'traffic_waiting_gb'
+            ? ($stateData['traffic_plan'] ?? null)
+            : (($stateData['order_type'] ?? null) === 'buy_traffic'
+                ? ($stateData['selected_plan'] ?? null)
+                : null);
+
+        if (is_array($selected) && !app(\App\Services\UserBot\UserBotTrafficPricing::class)->matchesAccount(
+            (object) $snapshot,
+            (string) ($selected['plan_key'] ?? '')
+        )) {
+            $session->update(['state' => null, 'state_data' => null]);
+            $bot->sendMessage(
+                $chatId,
+                '⚠️ طرح اکانت با تعرفه انتخاب‌شده مطابقت ندارد؛ خرید ترافیک را دوباره شروع کنید',
+                UserBotKeyboard::user($this->isSnapshotVolumeAccount($snapshot))
+            );
+            return true;
+        }
 
         if ($this->isSnapshotVolumeAccount($snapshot)) {
             return false;

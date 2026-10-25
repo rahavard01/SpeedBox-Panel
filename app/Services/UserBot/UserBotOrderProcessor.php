@@ -113,6 +113,17 @@ class UserBotOrderProcessor
             return ['ok' => false, 'message' => 'صاحب ربات پیدا نشد'];
         }
 
+        $account = DB::table('v2_user')
+            ->whereRaw('LOWER(`email`) = ?', [strtolower(trim((string) $order->account_email))])
+            ->first();
+
+        if (!$account || !app(UserBotTrafficPricing::class)->matchesAccount($account, (string) $order->plan_key)) {
+            return [
+                'ok' => false,
+                'message' => 'طرح اکانت با تعرفه سفارش مطابقت ندارد؛ سفارش باید بررسی شود',
+            ];
+        }
+
         [$tariffGroupId] = $this->parsePlanKey((string) $order->plan_key);
 
         $result = app(PanelAccountActionService::class)->topupTrafficForPanelUser(

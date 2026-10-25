@@ -229,6 +229,7 @@ async function watCases(page,width){
  const cancellation=await page.locator('.tunnel-modal [data-close]').evaluate(e=>getComputedStyle(e).backgroundColor);
  check(deletion.kind.includes('server-delete-confirm')&&deletion.color!==cancellation,'network delete confirmation uses the same distinct shared style as server and plan deletion');
  await page.locator('[data-confirm-network]').click();await card.waitFor({state:'detached'});
+ await page.getByText('نتیجهٔ حذف',{exact:true}).waitFor();await page.keyboard.press('Escape');
 }
 
 async function summaryCases(page){

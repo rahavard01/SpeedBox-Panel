@@ -121,6 +121,26 @@ PY;
 
     public function call(ManagedServer $server,array $request): array
     {
+        if (!in_array($request['action']??'', ['delete','status'], true)) return $this->callUnbounded($server,$request);
+        // One authenticated connection; compatibility with hosts without SFTP is retained.
+        $script=<<<'PY'
+import json,subprocess,sys,tempfile
+request=json.load(sys.stdin)
+with tempfile.NamedTemporaryFile(mode='w',prefix='speedbox-request-',suffix='.json') as f:
+    json.dump(request,f);f.flush()
+    result=subprocess.run(['python3','/opt/speedbox-network/host.py',f.name],capture_output=True,text=True)
+    sys.stdout.write(result.stdout);sys.stderr.write(result.stderr)
+    sys.exit(result.returncode)
+PY;
+        $command=($server->ssh_user==='root'?'':'sudo -n ').'python3 -c '.escapeshellarg($script);
+        $raw=$this->ssh->withinBudget(15,fn()=>$this->ssh->run($server,$command,15,json_encode($request,JSON_THROW_ON_ERROR)));
+        $answer=json_decode($raw,true,64,JSON_THROW_ON_ERROR);
+        if (($answer['ok']??false)!==true || !is_array($answer['data']??null)) throw new RuntimeException('پاسخ ابزار شبکه معتبر نیست.');
+        return $answer['data'];
+    }
+
+    private function callUnbounded(ManagedServer $server,array $request): array
+    {
         return $this->temporary($server,function($dir)use($server,$request){
             $local=tempnam(storage_path('app/private'),'network-');
             if($local===false)throw new RuntimeException('ساخت فایل موقت کامل نشد.');
@@ -128,7 +148,7 @@ PY;
                 chmod($local,0600);file_put_contents($local,json_encode($request,JSON_THROW_ON_ERROR),LOCK_EX);
                 $this->ssh->upload($server,$local,$dir.'/request.json');
                 $command=($server->ssh_user==='root'?'':'sudo -n ').'python3 /opt/speedbox-network/host.py '.escapeshellarg($dir.'/request.json');
-                try{$raw=$this->ssh->run($server,$command,150);}catch(RuntimeException $e){$raw=$e->getMessage();}
+                try{$raw=$this->ssh->run($server,$command,150);}catch(RuntimeException $e){$raw=$e->getMessage();if(!is_array(json_decode($raw,true)))throw $e;}
                 $reply=json_decode($raw,true,64);
                 if(!is_array($reply)||($reply['ok']??false)!==true)throw new RuntimeException($reply['error']??'پاسخ ابزار شبکه معتبر نیست؛ Python 3، systemd و دسترسی SSH را بررسی کنید.');
                 return $reply['data'];

@@ -94,24 +94,24 @@ class InfrastructureController extends Controller
     public function deleteServer(Request $request, ManagedServer $managedServer, ManagedServerRemoval $removal): JsonResponse
     {
         $request->validate(['panel_only' => ['sometimes', 'boolean']]);
-        $panelOnly = $request->boolean('panel_only');
-        $deployment = DB::transaction(function () use ($managedServer, $request, $panelOnly, $removal) {
+        $deployment = DB::transaction(function () use ($managedServer, $request) {
             $server = ManagedServer::whereKey($managedServer->id)->lockForUpdate()->firstOrFail();
             \App\Services\TunnelManager::protectServer($server->id, true);
             abort_if($server->machine?->managedServers()->where('id', '!=', $server->id)->exists(), 422, 'این ماشین با سرور دیگری مشترک است؛ ابتدا ارتباط مشترک را اصلاح کنید.');
             abort_if($server->deployments()->whereIn('status', ['queued', 'running'])->exists(), 409, 'عملیات قبلی این سرور هنوز تمام نشده است.');
-            if ($panelOnly) {
-                $removal->removeLocked($server);
-                return null;
-            }
             $server->update(['status' => 'removing']);
             return ServerDeployment::create(['managed_server_id' => $server->id, 'requested_by' => $request->user()?->id, 'action' => 'uninstall', 'kernel' => 'singbox', 'status' => 'queued']);
         });
-        if ($panelOnly) {
-            return response()->json(['message' => 'سرور فقط از پنل حذف شد. نودهای متصل حذف نشدند و برای اتصال به سرور دیگری غیرفعال شدند.']);
-        }
         UninstallManagedServer::dispatch($deployment->id);
-        return response()->json(['message' => 'پاک‌سازی کامل سرور در صف قرار گرفت؛ رکورد پنل پس از موفقیت حذف می‌شود.', 'data' => $deployment], 202);
+        return response()->json(['message' => 'حذف سرور در صف قرار گرفت.', 'data' => $deployment], 202);
+    }
+
+    public function serverRemoval(int $id): JsonResponse
+    {
+        $receipt=\Illuminate\Support\Facades\Cache::get('speedbox-server-removal-'.$id);
+        if ($receipt) return response()->json(['data'=>$receipt])->header('Cache-Control','no-store');
+        $deployment=ServerDeployment::whereKey($id)->where('action','uninstall')->firstOrFail();
+        return response()->json(['data'=>['status'=>$deployment->status,'message'=>$deployment->status==='failed'?'حذف کامل نشد؛ دوباره تلاش کنید.':'در حال حذف سرور…']])->header('Cache-Control','no-store');
     }
 
     public function deploy(Request $request, ManagedServer $managedServer): JsonResponse

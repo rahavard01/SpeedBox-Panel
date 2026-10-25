@@ -40,7 +40,7 @@ jobs:
           python3 scripts/tests/node-warp-host.test.py
       - name: Tunnel API, paired rollback and artifact verification
         run: |
-          php artisan test --filter='TunnelManagementTest|TrustedTunnelOriginTest'
+          php artisan test --filter='TunnelManagementTest|TrustedTunnelOriginTest|AccountTopupParityTest'
           python3 scripts/verify-backpack.py
           php scripts/tests/tunnel-alerts-and-tags.test.php
           php scripts/tests/tunnel-runtime.test.php
@@ -78,6 +78,7 @@ jobs:
           export SPEEDBOX_TEST_JSDOM="$RUNNER_TEMP/ui-deps/node_modules/jsdom/lib/api.js"
           node --experimental-vm-modules scripts/tests/online-presence-ui.test.mjs
           node --experimental-vm-modules scripts/tests/user-experience-ui.test.mjs
+          node scripts/tests/removal-ui.test.mjs
       - name: Build tunnel UI fixtures
         timeout-minutes: 4
         run: |

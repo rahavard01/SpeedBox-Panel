@@ -309,7 +309,7 @@
 .speedbox-infrastructure-overlay .plan-modal .field{grid-template-columns:minmax(0,1fr);gap:9px;text-align:right}
 .speedbox-infrastructure-overlay .plan-modal .field>label{padding:0}
 :where(.speedbox-infrastructure,.speedbox-infrastructure-overlay) .plan-form-hint{display:block;grid-column:1/-1;line-height:1.9;font-size:11px;color:var(--muted);margin:0;text-align:right}
-.speedbox-infrastructure-overlay .server-delete-modal .form-actions>.button{display:inline-flex;align-items:center;justify-content:center;height:38px;padding:8px 20px;line-height:20px;font-size:12px;border-radius:12px;margin:0;box-shadow:none}
+.speedbox-infrastructure-overlay :is(.server-delete-modal,.emergency-delete-modal) .form-actions>.button{display:inline-flex;align-items:center;justify-content:center;height:38px;padding:8px 20px;line-height:20px;font-size:12px;border-radius:12px;margin:0;box-shadow:none}
 .speedbox-infrastructure-overlay .button.server-delete-confirm{background:rgba(214,135,33,.45);border:1px solid rgba(255,255,255,.4);color:#fff;font-weight:700;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
 .speedbox-infrastructure-overlay .button.server-delete-confirm:hover:not(:disabled){background:rgba(214,135,33,.7);border-color:#fff;color:#fff;box-shadow:none}
 .speedbox-infrastructure .panel-head .button.primary{height:38px;padding:0 24px;flex-shrink:0;line-height:1.5}

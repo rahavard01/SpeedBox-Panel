@@ -476,13 +476,29 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
   }
   function deleteServer(id){
     const server=state.servers.find(s=>s.id==id);if(!server)return;
-    openModal('حذف سرور',`<div class="field"><label for="serverDeleteMode">روش حذف</label><select id="serverDeleteMode"><option value="cleanup">پاک‌سازی سرور و حذف از پنل</option><option value="panel">حذف فقط از پنل (بدون نیاز به دسترسی سرور)</option></select></div><p class="server-delete-description" id="serverDeleteDescription"></p><div class="form-actions"><button type="button" class="button server-delete-confirm" data-confirm-server-delete>حذف</button><button type="button" class="button cancel" data-close>انصراف</button></div>`,{kind:'server-delete'});
-    const mode=scope.getElementById('serverDeleteMode'), description=scope.getElementById('serverDeleteDescription');
-    const update=()=>{description.textContent=mode.value==='panel'
-      ? `سرور «${server.name}» فقط از پنل حذف می‌شود و دسترسی آن به پنل قطع خواهد شد. این روش برای سرور منقضی‌شده یا بدون دسترسی است؛ فایل‌ها و سرویس‌های روی سرور پاک نمی‌شوند. نودهای متصل به این سرور حذف نمی‌شوند؛ اتصال آن‌ها قطع و تا انتخاب سرور جدید غیرفعال می‌شوند.`
-      : `سرویس مدیریت نود، هسته‌ها، فایل‌های اجرایی، اسکریپت نصب و تنظیمات آن از سرور «${server.name}» پاک می‌شوند. پس از موفقیت، سرور از پنل حذف می‌شود. نودهای متصل به این سرور حذف نمی‌شوند؛ اتصال آن‌ها قطع و تا انتخاب سرور جدید غیرفعال می‌شوند. اگر دسترسی به سرور ندارید، روش «حذف فقط از پنل» را انتخاب کنید.`;};
-    mode.onchange=update;update();
-    scope.querySelector('[data-confirm-server-delete]').onclick=async()=>{try{const r=await api(`/servers/${id}`,{method:'DELETE',body:JSON.stringify({panel_only:mode.value==='panel'})});toast(r.message);closeModal();await loadServers();}catch(e){if(e.name!=='AbortError')toast(e.message,'error');}};
+    const watch={closed:false};
+    const options={kind:'server-delete',onClose:()=>{watch.closed=true;}};
+    openModal('حذف سرور',`<p class="server-delete-description">سرور «${escape(server.name)}» حذف شود؟ پاک‌سازی امتحان می‌شود؛ عدم دسترسی مانع حذف از پنل نمی‌شود.</p><div class="form-actions"><button type="button" class="button server-delete-confirm" data-confirm-server-delete>حذف</button><button type="button" class="button cancel" data-close>انصراف</button></div>`,options);
+    scope.querySelector('[data-confirm-server-delete]').onclick=async()=>{
+      try{
+        const r=await api(`/servers/${id}`,{method:'DELETE',body:'{}'});
+        if(watch.closed)return;
+        if(!r.data?.id){openModal('نتیجهٔ حذف',`<p>${escape(r.message)}</p>`,options);await loadServers();return;}
+        openModal('حذف سرور','<p>در حال حذف سرور…</p>',options);
+        const poll=async()=>{
+          if(watch.closed||disposed)return;
+          try{
+            const {data}=await api(`/server-removals/${r.data.id}`);
+            if(watch.closed||disposed)return;
+            if(['succeeded','failed'].includes(data.status)){
+              openModal('نتیجهٔ حذف',`<p>${escape(data.message)}</p>`,options);
+              if(state.view==='servers')await loadServers();return;
+            }
+          }catch(e){if(e.name==='AbortError')return;}
+          later(poll,2000);
+        };poll();
+      }catch(e){if(e.name!=='AbortError')toast(e.message,'error');}
+    };
   }
   function bindServers(){
     scope.getElementById('addServer').onclick=()=>serverForm();

@@ -118,12 +118,36 @@ $sample->engine='gre';$sample->settings=[...$sample->settings,'quota_mode'=>'enf
 $assert($monitor->health($sample)===null,'a configured quota stop is not mislabeled as an accidental outage');
 
 // Scheduler creates real status jobs and skips unavailable bots/disabled tunnel flags.
+foreach(ServerTunnel::whereKeyNot($t->id)->get() as $other)$other->update(['settings'=>[...$other->settings,'enabled'=>false]]);
 $t->refresh();$monitor->reset($t->id);DB::table('speedbox_tunnel_alerts')->where('tunnel_id',$t->id)->update(['next_probe_at'=>now()->subMinute()]);
 Bus::fake();$monitor->tick();
-$assert(TunnelOperation::latest('id')->first()->action==='status' && DB::table('speedbox_tunnel_leases')->count()===2,'scheduler obtains the shared host leases for a fresh probe');
-$pending=TunnelOperation::latest('id')->first();$manager->finish($pending,'failed','fixture unavailable');
+$pending=TunnelOperation::where('tunnel_id',$t->id)->whereIn('status',['queued','running'])->latest('id')->first();
+$assert($pending?->action==='status' && DB::table('speedbox_tunnel_leases')->where('operation_id',$pending->id)->count()===2,'scheduler obtains the shared host leases for a fresh probe');
+foreach(TunnelOperation::whereIn('status',['queued','running'])->get() as $pending)$manager->finish($pending,'failed','fixture unavailable');
 $bot->update(['enabled'=>false]);$count=TunnelOperation::count();$monitor->tick();
 $assert(TunnelOperation::count()===$count,'inactive bot disables autonomous probes');$bot->update(['enabled'=>true]);
+
+// Polling remains active with Telegram disabled, and inaccessible endpoints get a distinct alert.
+foreach(TunnelOperation::whereIn('status',['queued','running'])->get() as $pending)$manager->finish($pending,'failed','fixture finish');
+TunnelOperation::query()->update(['updated_at'=>now()->subHour()]);
+App\Models\TunnelConnectionTest::query()->update(['updated_at'=>now()->subHour()]);
+$t->refresh();$t->update(['status'=>'connected','settings'=>[...$base,'enabled'=>true,'telegram_alerts'=>false]]);
+DB::table('speedbox_tunnel_alerts')->where('tunnel_id',$t->id)->update(['next_probe_at'=>now()->subMinute()]);
+$bot->update(['enabled'=>false]);$before=TunnelOperation::count();$monitor->tick();
+$assert(TunnelOperation::count()>$before,'health probes do not require Telegram capability or opt-in');
+foreach(TunnelOperation::whereIn('status',['queued','running'])->get() as $pending)$manager->finish($pending,'failed','fixture finish');
+$bot->update(['enabled'=>true]);$t->refresh();$t->update(['settings'=>[...$t->settings,'telegram_alerts'=>true]]);
+$monitor->reset($t->id);TunnelOperation::query()->update(['updated_at'=>now()->subHour()]);
+$unreachable=function()use($t,$manager){
+ $t->update(['status'=>'needs_review','remote_status'=>['_checked_at'=>now()->timestamp,'iran'=>['error'=>'unreachable'],'foreign'=>['active'=>true,'connected'=>true]]]);
+ $op=$manager->queue('status',$t->fresh(),null,['outage_probe'=>true]);$manager->finish($op,'failed','unreachable');
+};
+Carbon::setTestNow(now()->addMinute());$unreachable();$assert($state()->failures===1,'one inaccessible observation alone is insufficient');
+Carbon::setTestNow(now()->addMinute());$unreachable();$assert($state()->incident!==null,'two inaccessible observations open their own incident');
+Http::swap(new Illuminate\Http\Client\Factory());Http::preventStrayRequests();Http::fake(['api.telegram.org/*'=>Http::response(['ok'=>true],200)]);
+(new SendTunnelOutageAlert($t->id,$state()->incident))->handle($monitor);
+Http::assertSent(fn($r)=>str_contains($r['text'],'عدم دسترسی به سرور تونل')&&!str_contains($r['text'],'🔴 قطع ارتباط تونل'));
+$assert(true,'inaccessible-host notification is distinct from confirmed tunnel loss');
 
 // Emergency tags survive real CRUD and share the subscription's existing client gate.
 Schema::create('v2_settings',function(Blueprint $t){$t->id();$t->string('name')->unique();$t->text('value')->nullable();$t->timestamps();});
