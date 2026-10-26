@@ -6,6 +6,7 @@ try {
     $root = realpath($argv[2] ?? dirname(__DIR__));
     if ($root === false) throw new RuntimeException('Project directory missing.');
     $mode = $argv[1] ?? 'verify';
+    if (!in_array($mode, ['verify', 'extracted', 'archives'], true)) throw new RuntimeException('Unknown artifact verification mode.');
     $manifest = json_decode(file_get_contents($root.'/agent-dist/manifest.json'), true, 512, JSON_THROW_ON_ERROR);
     if (($manifest['format'] ?? null) !== 1 || !is_array($manifest['source_files'] ?? null)) {
         throw new RuntimeException('Unsupported agent manifest.');
@@ -35,9 +36,58 @@ try {
     foreach (['amd64' => 62, 'arm64' => 183] as $arch => $machine) {
         $archive = $root.'/agent-dist/linux-'.$arch.'.tar.gz';
         $entry = $manifest['archives'][$arch] ?? null;
-        if (!is_array($entry) || is_link($archive) || !is_file($archive) || filesize($archive) !== ($entry['bytes'] ?? -1)
-            || !hash_equals($entry['sha256'], hash_file('sha256', $archive))) {
-            throw new RuntimeException('Agent archive missing or checksum mismatch: linux-'.$arch.'.tar.gz');
+        if (!is_array($entry) || !is_int($entry['bytes'] ?? null) || $entry['bytes'] < 1
+            || !is_string($entry['sha256'] ?? null) || !preg_match('/^[a-f0-9]{64}$/D', $entry['sha256'])) {
+            throw new RuntimeException('Invalid agent archive manifest: '.$arch);
+        }
+        $inputs = [];
+        if (array_key_exists('parts', $entry)) {
+            if (!is_array($entry['parts']) || !array_is_list($entry['parts']) || count($entry['parts']) < 1 || count($entry['parts']) > 64) {
+                throw new RuntimeException('Invalid agent archive parts: '.$arch);
+            }
+            foreach ($entry['parts'] as $index => $part) {
+                $expectedName = 'linux-'.$arch.'.tar.gz.part-'.str_pad((string) $index, 3, '0', STR_PAD_LEFT);
+                if (!is_array($part) || ($part['file'] ?? null) !== $expectedName
+                    || !is_int($part['bytes'] ?? null) || $part['bytes'] < 1 || $part['bytes'] > 8 * 1024 * 1024
+                    || !is_string($part['sha256'] ?? null) || !preg_match('/^[a-f0-9]{64}$/D', $part['sha256'])) {
+                    throw new RuntimeException('Unsafe agent archive part: '.$arch);
+                }
+                $path = $root.'/agent-dist/'.$expectedName;
+                if (is_link($path) || !is_file($path) || filesize($path) !== $part['bytes']
+                    || !hash_equals($part['sha256'], hash_file('sha256', $path))) {
+                    throw new RuntimeException('Agent archive part missing or checksum mismatch: '.$expectedName);
+                }
+                $inputs[] = $path;
+            }
+        } else {
+            if (is_link($archive) || !is_file($archive)) throw new RuntimeException('Agent archive missing: '.$arch);
+            $inputs[] = $archive;
+        }
+        $context = hash_init('sha256'); $bytes = 0;
+        foreach ($inputs as $path) {
+            $stream = fopen($path, 'rb');
+            if ($stream === false) throw new RuntimeException('Agent archive unreadable: '.$arch);
+            $bytes += hash_update_stream($context, $stream);
+            fclose($stream);
+        }
+        if ($bytes !== $entry['bytes'] || !hash_equals($entry['sha256'], hash_final($context))) {
+            throw new RuntimeException('Agent archive checksum mismatch: '.$arch);
+        }
+        if ($mode === 'archives') {
+            $directory = realpath($argv[3] ?? '');
+            if ($directory === false || !is_dir($directory)) throw new RuntimeException('Archive staging directory missing.');
+            $destination = $directory.'/linux-'.$arch.'.tar.gz';
+            $target = fopen($destination, 'xb');
+            if ($target === false) throw new RuntimeException('Archive staging path already exists or is not writable.');
+            try {
+                foreach ($inputs as $path) {
+                    $stream = fopen($path, 'rb');
+                    if ($stream === false) throw new RuntimeException('Agent archive unreadable: '.$arch);
+                    try { if (stream_copy_to_stream($stream, $target) === false) throw new RuntimeException('Agent archive staging failed.'); }
+                    finally { fclose($stream); }
+                }
+            } finally { fclose($target); }
+            if (!hash_equals($entry['sha256'], hash_file('sha256', $destination))) throw new RuntimeException('Staged archive checksum mismatch: '.$arch);
         }
         if ($mode === 'extracted') {
             $directory = realpath($argv[3] ?? '');
@@ -59,7 +109,6 @@ try {
             }
         }
     }
-    if (!in_array($mode, ['verify', 'extracted'], true)) throw new RuntimeException('Unknown artifact verification mode.');
     echo 'AGENT ARTIFACTS OK: source and '.($mode === 'extracted' ? '4 Linux binaries' : '2 archives').PHP_EOL;
 } catch (Throwable $error) {
     fwrite(STDERR, 'AGENT ARTIFACTS FAILED: '.$error->getMessage().PHP_EOL);

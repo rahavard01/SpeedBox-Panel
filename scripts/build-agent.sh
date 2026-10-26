@@ -17,9 +17,11 @@ OUTPUT="$ROOT/storage/app/agent"
 mkdir -p "$OUTPUT"
 STAGE="$(mktemp -d "$OUTPUT/.release-XXXXXXXX")"
 trap 'rm -rf -- "$STAGE"' EXIT
+"$PHP" "$ROOT/scripts/agent-artifacts.php" archives "$ROOT" "$STAGE"
 for arch in amd64 arm64; do
-  tar --no-same-owner --no-same-permissions -xzf "$ROOT/agent-dist/linux-$arch.tar.gz" -C "$STAGE" -- "xboard-node-linux-$arch" "xbctl-linux-$arch"
+  tar --no-same-owner --no-same-permissions -xzf "$STAGE/linux-$arch.tar.gz" -C "$STAGE" -- "xboard-node-linux-$arch" "xbctl-linux-$arch"
 done
+rm -f -- "$STAGE/linux-amd64.tar.gz" "$STAGE/linux-arm64.tar.gz"
 "$PHP" "$ROOT/scripts/agent-artifacts.php" extracted "$ROOT" "$STAGE"
 chmod 0755 "$STAGE"/*
 "$STAGE/xboard-node-linux-$ARCH" -v | grep -Fq 'panel-speedbox-http-obfs-uuid-v1'

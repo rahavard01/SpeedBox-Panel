@@ -33,8 +33,19 @@ with tempfile.TemporaryDirectory(prefix='.package-', dir=output) as temporary:
                 with path.open('rb') as binary: tar.addfile(info, binary)
         manifest['archives'][arch] = {'bytes': archive.stat().st_size,
             'sha256': hashlib.sha256(archive.read_bytes()).hexdigest(), 'binaries': binaries}
+        parts = []
+        with archive.open('rb') as stream:
+            while chunk := stream.read(8 * 1024 * 1024):
+                name = archive.name + f'.part-{len(parts):03d}'
+                (stage/name).write_bytes(chunk)
+                parts.append({'file': name, 'bytes': len(chunk), 'sha256': hashlib.sha256(chunk).hexdigest()})
+        manifest['archives'][arch]['parts'] = parts
     (stage/'manifest.json').write_text(json.dumps(manifest, indent=2, sort_keys=True)+'\n', encoding='utf-8')
-    for name in ['linux-amd64.tar.gz', 'linux-arm64.tar.gz', 'manifest.json']:
+    for stale in output.glob('linux-*.tar.gz*'):
+        stale.unlink()
+    names = ['manifest.json']
+    names += [part['file'] for entry in manifest['archives'].values() for part in entry['parts']]
+    for name in names:
         os.replace(stage/name, output/name)
 print('AGENT RELEASE PACKAGED: commit agent-dist, agent source and build scripts together.')
 

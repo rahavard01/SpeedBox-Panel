@@ -55,6 +55,72 @@ class NodeWarpTest extends TestCase
         ], ...$changes];
     }
 
+    private function machineStatusPayload(array $changes = []): array
+    {
+        return [...[
+            'machine_id' => $this->machine->id, 'token' => $this->machine->token,
+            'cpu' => 12.5, 'mem' => ['total' => 8192, 'used' => 2048],
+        ], ...$changes];
+    }
+
+    public function test_machine_status_records_body_capabilities_and_existing_header_only_agents(): void
+    {
+        foreach ([false, true] as $headerOnly) {
+            $this->machine->update(['load_status' => []]);
+            $this->flushHeaders();
+            $payload = $this->machineStatusPayload();
+            if ($headerOnly) $this->withHeader('X-Speedbox-Capabilities', 'other-capability, warp-egress-v1');
+            else $payload['capabilities'] = ['warp-egress-v1'];
+            $this->postJson('/api/v2/server/machine/status', $payload)->assertOk();
+            $this->assertTrue($this->machine->fresh()->supportsWarp());
+            $this->assertSame(12.5, $this->machine->fresh()->load_status['cpu']);
+            $this->assertSame(8192, $this->machine->fresh()->load_status['mem']['total']);
+        }
+    }
+
+    public function test_machine_status_does_not_keep_support_after_a_downgrade_or_explicit_empty_list(): void
+    {
+        foreach ([false, true] as $explicitEmpty) {
+            $this->machine->update(['load_status' => ['capabilities' => ['warp-egress-v1']]]);
+            $this->flushHeaders();
+            $payload = $this->machineStatusPayload();
+            if ($explicitEmpty) {
+                $this->withHeader('X-Speedbox-Capabilities', 'warp-egress-v1');
+                $payload['capabilities'] = [];
+            }
+            $this->postJson('/api/v2/server/machine/status', $payload)->assertOk();
+            $this->assertFalse($this->machine->fresh()->supportsWarp());
+        }
+    }
+
+    public function test_unauthenticated_capability_report_does_not_change_the_machine(): void
+    {
+        $this->machine->update(['load_status' => []]);
+        $this->withHeader('X-Speedbox-Capabilities', 'warp-egress-v1')
+            ->postJson('/api/v2/server/machine/status', $this->machineStatusPayload(['token' => 'invalid-machine-token']))->assertUnauthorized();
+        $this->assertFalse($this->machine->fresh()->supportsWarp());
+        $this->assertSame([], $this->machine->fresh()->load_status);
+    }
+
+    public function test_real_status_request_unblocks_the_warp_software_confirmation(): void
+    {
+        $this->machine->update(['load_status' => []]);
+        $deployment = ServerDeployment::create(['managed_server_id' => ManagedServer::first()->id, 'action' => 'warp_prepare', 'kernel' => 'singbox', 'status' => 'running']);
+        $manifest = json_decode(file_get_contents(base_path('agent-dist/manifest.json')), true);
+        $hash = $manifest['archives']['amd64']['binaries']['xboard-node-linux-amd64']['sha256'];
+        $ssh = \Mockery::mock(SshExecutor::class);
+        $ssh->shouldReceive('run')->once()->andReturn($hash.'  /proc/123/exe');
+        $support = \Mockery::mock(EnsureMachineWarpSupport::class)->makePartial()->shouldAllowMockingProtectedMethods();
+        $support->shouldNotReceive('upgrade');
+        $support->shouldReceive('pause')->once()->andReturnUsing(function () {
+            $this->withHeader('X-Speedbox-Capabilities', 'warp-egress-v1')
+                ->postJson('/api/v2/server/machine/status', $this->machineStatusPayload())->assertOk();
+        });
+        $support->ensure($ssh, ManagedServer::with('machine')->first(), $deployment);
+        $this->assertTrue($this->machine->fresh()->supportsWarp());
+        $this->assertSame('running', $deployment->fresh()->status);
+    }
+
     public function test_toggle_preserves_custom_fields_and_only_affects_selected_node(): void
     {
         $body = $this->payload();

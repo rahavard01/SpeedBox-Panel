@@ -50,6 +50,13 @@ class MachineController extends Controller
             'net.out_speed' => ['nullable', 'numeric', 'min:0'],
         ]);
         $machine = $this->authenticate($request);
+        // Existing WARP-capable releases advertise the capability in the header
+        // but omit it from this report's body. Trust that header only after
+        // machine authentication; an explicit body list remains authoritative.
+        if (!array_key_exists('capabilities', $validated)) {
+            $advertised = array_map('trim', explode(',', $request->header('X-Speedbox-Capabilities', '')));
+            $validated['capabilities'] = in_array('warp-egress-v1', $advertised, true) ? ['warp-egress-v1'] : [];
+        }
         $now = time();
         $load = [...$validated, 'updated_at' => $now];
         $machine->forceFill(['load_status' => $load, 'last_seen_at' => $now])->save();

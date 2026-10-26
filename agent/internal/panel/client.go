@@ -347,6 +347,7 @@ func (c *Client) GetMachineNodes() (*MachineNodesResponse, error) {
 // netIn/netOut are bytes/sec; negative values mean "unavailable" (first sample).
 func (c *Client) ReportMachineStatus(cpu float64, mem, swap, disk [2]uint64, netIn, netOut float64) error {
 	payload := map[string]interface{}{
+		"capabilities": []string{"warp-egress-v1"},
 		"cpu":  cpu,
 		"mem":  map[string]interface{}{"total": mem[0], "used": mem[1]},
 		"swap": map[string]interface{}{"total": swap[0], "used": swap[1]},

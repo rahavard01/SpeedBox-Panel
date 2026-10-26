@@ -4,29 +4,68 @@
       "binaries": {
         "xbctl-linux-amd64": {
           "bytes": 7143586,
-          "sha256": "393818c8842272119f296e2e3ebe6e9d233dd9d5cde8fa5cee0236e22f6f15f8"
+          "sha256": "b08f9fd9f22509478545b89b7f1fc0c0cd42821216b0288ed0d5166cb6abc27d"
         },
         "xboard-node-linux-amd64": {
           "bytes": 66904226,
-          "sha256": "8ed70280aa90a49f78f5d020532792584edbfe3dd97bdbe1dfde84412e5b8c13"
+          "sha256": "066ca500283fe1df26e37155725f8cd83e6a989968f84405c65ab3aab3ae4943"
         }
       },
-      "bytes": 25971477,
-      "sha256": "b671095f665a1c91a3e86e955d7bfeefe362480192b98863cb3dd022b517d81e"
+      "bytes": 25971575,
+      "parts": [
+        {
+          "bytes": 8388608,
+          "file": "linux-amd64.tar.gz.part-000",
+          "sha256": "59460b64153bbdd29176f5171fc81b9f70d0238887d2b9b34aa0b5f95663c5d3"
+        },
+        {
+          "bytes": 8388608,
+          "file": "linux-amd64.tar.gz.part-001",
+          "sha256": "75f87bcb9bb84ed8107fca841f861bd452f8d4b2115c02600ee83d7e111fc1d2"
+        },
+        {
+          "bytes": 8388608,
+          "file": "linux-amd64.tar.gz.part-002",
+          "sha256": "002d080acdbc0b0a5b8dbfe990c853b97b115e99a72e77e1eb47358eb33b63bc"
+        },
+        {
+          "bytes": 805751,
+          "file": "linux-amd64.tar.gz.part-003",
+          "sha256": "2a2ee6acb7db7c40c1c08ad870fad7f95de09db4092e53d8b3ec0d494f686bcb"
+        }
+      ],
+      "sha256": "c19c986bba227bf6f3a513b1553d073f707a3bb23fa9b3c42c05d9d456be22eb"
     },
     "arm64": {
       "binaries": {
         "xbctl-linux-arm64": {
           "bytes": 6619298,
-          "sha256": "0a7795b2da2e16b9aac480d2bf684a1657e2a673024c513cae2d60d9dfa3a1b6"
+          "sha256": "211c039dfd5170ec038ab54063ea30b281d7072d4e52b61b43d4713225bb2715"
         },
         "xboard-node-linux-arm64": {
           "bytes": 61866146,
-          "sha256": "4b8b3503ae8cb56943a32abcdeaccc26a1b90834eaac7809a132ad0571080dd6"
+          "sha256": "f5c52ff16db251a7703f1059315d54697422ec6aa203c04d2a16269f5fcb54c4"
         }
       },
-      "bytes": 23384859,
-      "sha256": "6492ee6304465ee0e4d114c4ed9198d3df1235c8304a05b4b06da345ac9ffb04"
+      "bytes": 23386077,
+      "parts": [
+        {
+          "bytes": 8388608,
+          "file": "linux-arm64.tar.gz.part-000",
+          "sha256": "ba92bb901548f2b7e741bf2fd7e940d2156efa006d687b948089d580e7500b3b"
+        },
+        {
+          "bytes": 8388608,
+          "file": "linux-arm64.tar.gz.part-001",
+          "sha256": "627721167f2b9f2523a257d1e8ecbc021d0feb9ccf34ce4e998b11b2737b0adc"
+        },
+        {
+          "bytes": 6608861,
+          "file": "linux-arm64.tar.gz.part-002",
+          "sha256": "cc2883e7f29a152c30d62e56fddcd9c07fbafbaeab5027e9397f8ee6f262e216"
+        }
+      ],
+      "sha256": "3518dd61e8fb84ff9aef8c4b3fc48d0c57ac90adb1bea98173b9c03344d651ba"
     }
   },
   "format": 1,
@@ -146,8 +185,9 @@
     "agent/internal/nlog/nlog.go": "211142223c7708793c2ccf26bcb3aa3de1ce1c8f64ca18617b1928ee482dfdfb",
     "agent/internal/origin/registry.go": "cc7dc77004ad7131f142f54b014c43cba47e9dfc83069a0aea8a099e242d8555",
     "agent/internal/origin/registry_test.go": "7bbe204c6eee2f85cfe9a6500479e76946a644eb9450e6d6fa9f6bcca55362e5",
-    "agent/internal/panel/client.go": "cf014ec48808c17dc7a63b7767aa186005cbe874daf4d96111b27ef8f8d863c2",
+    "agent/internal/panel/client.go": "78043b5d3f75e1dd119d02622087d07bbecdeee3ba148b72c4aacad2f0f9f32f",
     "agent/internal/panel/client_test.go": "19f6b523fd97d290cfa7af758e6c9231eaeec7856992595f96884c1e8b0c448d",
+    "agent/internal/panel/machine_status_test.go": "85ba4de8167e46cdf114f1de14d6f68ea5831a815efb0106ab3a9d03143a8e7e",
     "agent/internal/panel/types.go": "45e25859389327ebbd8dc55b3643b5d8c8e2a4e4fd623dfbb32facb9937f223b",
     "agent/internal/panel/types_test.go": "3e2d2d835ea1b9939ea773d489e275e524453554720985fa40d69e2f486fccc1",
     "agent/internal/panel/ws.go": "dda733ec1976ce415ce7d7a6e5222d16e10cf22df53871a40eafe8ed5456c0a5",
@@ -158,10 +198,10 @@
     "agent/internal/service/uuid_rotation_test.go": "638ab458fa581860ef0b84b9bb6863d890513f519fc7f56249532880f19605d9",
     "agent/internal/tracker/tracker.go": "e52075dd2482712b239cfe7043626795429bfc3a0f1eef441f9a0e67d5ed7ec7",
     "agent/internal/tracker/tracker_test.go": "2a05026190894f66ea02f978796f9ad88201edab78b77c8c26a3ae0830d6abd1",
-    "scripts/agent-artifacts.php": "da5662c710978ef80d829b6c8cefeffddcd841e5a068fa107d7357b7a5c8f3ec",
+    "scripts/agent-artifacts.php": "9b510b05570d2439cd23ab23aa514d7e4fb5fc5035b4a6cbf7aab9e5ab6622fa",
     "scripts/build-agent-from-source.sh": "5efebd05b0659ff05c89b8c5748641671cf1e5bc0a735f896155b302b17af418",
-    "scripts/build-agent.sh": "14089d7b06d90e6e3e72f11a260858f1b24494cf049b71ec78867d26a3adb207",
-    "scripts/package-agent.py": "01045d0863110801c22c8c71f4f67b4ec43e588b6ca7a15f1c330cee20c98e92"
+    "scripts/build-agent.sh": "a740c3ff5ff2689ca123f5f96b94ef26981d5fb6c89fa97034204cb7790307fe",
+    "scripts/package-agent.py": "d8b1652f647977d137787645a73d69c97e2dd44a51ee68c33c54fdd85ed65595"
   },
   "version": "panel-speedbox-http-obfs-uuid-v1-nodes-v5-session-liveness"
 }
