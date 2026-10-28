@@ -45,6 +45,7 @@ PY;
 
     public function ensure(ManagedServer $server,string $engine,string $version): void
     {
+        if(in_array($engine,['gost','gre'],true))app(TunnelOriginRemote::class)->ensure($server);
         $sudo=$server->ssh_user==='root'?'':'sudo -n ';
         $this->temporary($server,function($dir)use($server,$sudo,$engine,$version){
             $this->ssh->upload($server,base_path('scripts/network-tunnels/host.py'),$dir.'/host.py');
@@ -128,12 +129,14 @@ import json,subprocess,sys,tempfile
 request=json.load(sys.stdin)
 with tempfile.NamedTemporaryFile(mode='w',prefix='speedbox-request-',suffix='.json') as f:
     json.dump(request,f);f.flush()
-    result=subprocess.run(['python3','/opt/speedbox-network/host.py',f.name],capture_output=True,text=True)
+    from pathlib import Path
+    argv=['python3','/opt/speedbox-origin/host.py','network',f.name] if Path('/opt/speedbox-origin/host.py').is_file() else ['python3','/opt/speedbox-network/host.py',f.name]
+    result=subprocess.run(argv,capture_output=True,text=True)
     sys.stdout.write(result.stdout);sys.stderr.write(result.stderr)
     sys.exit(result.returncode)
 PY;
         $command=($server->ssh_user==='root'?'':'sudo -n ').'python3 -c '.escapeshellarg($script);
-        $raw=$this->ssh->withinBudget(15,fn()=>$this->ssh->run($server,$command,15,json_encode($request,JSON_THROW_ON_ERROR)));
+        $raw=$this->ssh->withinBudget(30,fn()=>$this->ssh->run($server,$command,30,json_encode($request,JSON_THROW_ON_ERROR)));
         $answer=json_decode($raw,true,64,JSON_THROW_ON_ERROR);
         if (($answer['ok']??false)!==true || !is_array($answer['data']??null)) throw new RuntimeException('پاسخ ابزار شبکه معتبر نیست.');
         return $answer['data'];
@@ -147,7 +150,8 @@ PY;
             try {
                 chmod($local,0600);file_put_contents($local,json_encode($request,JSON_THROW_ON_ERROR),LOCK_EX);
                 $this->ssh->upload($server,$local,$dir.'/request.json');
-                $command=($server->ssh_user==='root'?'':'sudo -n ').'python3 /opt/speedbox-network/host.py '.escapeshellarg($dir.'/request.json');
+                $script='if [ -x /opt/speedbox-origin/host.py ]; then python3 /opt/speedbox-origin/host.py network '.escapeshellarg($dir.'/request.json').'; else python3 /opt/speedbox-network/host.py '.escapeshellarg($dir.'/request.json').'; fi';
+                $command=($server->ssh_user==='root'?'':'sudo -n ').'sh -c '.escapeshellarg($script);
                 try{$raw=$this->ssh->run($server,$command,150);}catch(RuntimeException $e){$raw=$e->getMessage();if(!is_array(json_decode($raw,true)))throw $e;}
                 $reply=json_decode($raw,true,64);
                 if(!is_array($reply)||($reply['ok']??false)!==true)throw new RuntimeException($reply['error']??'پاسخ ابزار شبکه معتبر نیست؛ Python 3، systemd و دسترسی SSH را بررسی کنید.');
@@ -165,3 +169,4 @@ PY;
         }
     }
 }
+

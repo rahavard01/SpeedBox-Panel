@@ -390,3 +390,15 @@ body:has(#app .topbar-holder) .side-drawer{right:0!important;max-width:100vw;box
  body:has(#app .topbar-holder) .side-drawer .drawer-header{padding:1.171303vw 1.171303vw .585652vw;margin-top:.292826vw}
  body:has(#app .topbar-holder) .side-drawer .drawer-avatar{width:3.221083vw;height:3.221083vw;margin-top:1.464129vw}
 }
+
+/* Keep focused mobile controls readable across both panels, including teleports.
+   The important layer beats small scoped !important rules. The unlayered copy
+   provides a fallback for older browsers without cascade-layer support. */
+@media (max-width:767px), (hover:none) and (pointer:coarse){
+ :root body :is(input:not([type=checkbox],[type=radio],[type=range],[type=color],[type=hidden],[type=button],[type=submit],[type=reset],[type=image],[type=file]),textarea,select){font-size:16px!important}
+}
+@layer speedbox-mobile-inputs{
+ @media (max-width:767px), (hover:none) and (pointer:coarse){
+  :root body :is(input:not([type=checkbox],[type=radio],[type=range],[type=color],[type=hidden],[type=button],[type=submit],[type=reset],[type=image],[type=file]),textarea,select){font-size:16px!important}
+ }
+}

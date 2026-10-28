@@ -34,9 +34,36 @@ describe the tested carrier; the additional forwarding layer can affect the
 final tunnel's throughput. End-to-end TCP/UDP routing is covered by
 `scripts/tests/tunnel-swapped-routing.test.py` in isolated network namespaces.
 
+Apply and reconfigure order follows the data listener. In swapped reverse,
+Iran's L3 listener is replaced before the foreign L3 dialer, even though the
+native carrier listens abroad. Reversing this order can attach the new dialer
+to the old Iran session and leave it waiting for recovery after Iran restarts.
+The authenticated activation probe waits at most 45 seconds for readiness,
+retaining staged ingress and failing normally if the path never verifies.
+This does not change client connection timeouts or native test budgets.
+
 GRE recovery keeps the ownership guard. Older alias-less probes are removed
 only when their saved config, endpoints, GRE keys, address and sole host route
 all match. Unknown interfaces remain untouched.
+
+Enabled GRE pairs now retry a failed native startup from the monitoring daemon,
+with exponential backoff capped at five minutes. A missing/down owned interface
+is treated as inactive even when a oneshot unit remains active. Manual stop and
+an enforced exhausted quota suppress retries. UI status reads do not reset the
+daemon's retry schedule. No global route or firewall flush is introduced.
+
+BackPack apply/start enable the owned main and companion services at boot;
+stop disables them. Applying or editing a stopped pair keeps it stopped.
+Revision snapshots retain activity and boot enablement independently, restoring
+both on rollback rather than starting every saved configuration.
+The same separation applies to native GOST/GRE/WatTunnel units and the source
+identity endpoints: an observed outage cannot rewrite the saved enabled policy
+or discard a staged ingress activation. Rollback restores current activity and
+boot enablement independently. A stop that leaves a native service active fails
+the operation rather than being reported as successful.
+Disabled and UDP-only managed node ports retain origin protection while being
+excluded from TCP target outage reports. Native UDP-only BackPack status,
+reconfigure and engine maintenance do not require a TCP backend to be listening.
 
 ## Live measurements and direct SSH
 

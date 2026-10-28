@@ -1,18 +1,8 @@
 import { readFileSync } from 'node:fs';
-import vm from 'node:vm';
 import assert from 'node:assert/strict';
-const { JSDOM } = await import(process.env.PARTNER_TEST_JSDOM || 'jsdom');
+import { loadSourceUi } from './helpers/source-ui.mjs';
+const { JSDOM } = await import(process.env.SPEEDBOX_TEST_JSDOM || process.env.PARTNER_TEST_JSDOM || 'jsdom');
 const read = file => readFileSync(new URL('../../' + file, import.meta.url), 'utf8');
-const manifest = JSON.parse(read('public/build/manifest.json'));
-let source = read('public/build/' + manifest['resources/js/app.js'].file)
-  .replace('Cs.mount("#app")', 'void 0').replace('Cs.use(us)', 'void 0');
-const start = source.indexOf('__name:"Panel"');
-const panel = source.slice(start - 100, start).match(/([\w$]+)=\{$/)[1];
-const hook = 'const speedboxPartner=speedboxCreatePartnerAccounts({rows:()=>cb.value,transactionHistory:Js,trafficHistory:Gs});';
-assert.ok(source.includes(hook));
-source = source.replace(hook, hook + 'window.__testNotices={refresh:xs,counts:()=>({announcements:R.value,tickets:B.value,total:S.value})};');
-source += '\nexport{ac as TestApp,us as TestRouter,et as TestToastState,' + panel + ' as TestPanel};';
-
 async function boot(saved = {}) {
   const dom = new JSDOM('<div id="fixture"></div>', { url:'http://fixture.test/panel', runScripts:'outside-only', pretendToBeVisual:true });
   const win = dom.window;
@@ -37,8 +27,8 @@ async function boot(saved = {}) {
     time=end;
   };
   win.eval(read('public/speedbox/register-infrastructure.js'));
-  const root = new vm.SourceTextModule(source,{context:dom.getInternalVMContext(),initializeImportMeta:meta=>{meta.url='http://fixture.test/app.js'}});
-  await root.link(()=>{throw Error('Unexpected import')});await root.evaluate();
+  const ui = await loadSourceUi(dom);
+  const root = {namespace: {v:ui.http,R:ui.Vue.nextTick,TestRouter:ui.router,TestToastState:{items:ui.useToast().toasts}}};
   const first = new Promise(resolve => {resolveFirst=resolve});
   root.namespace.v.get=async url=>{
     if(url==='/tickets/unread/count')return {data:response || await first};
@@ -47,11 +37,12 @@ async function boot(saved = {}) {
   };
   root.namespace.v.post=async()=>({data:{ok:true}});
   const flush = async()=>{for(let n=0;n<12;n++){await Promise.resolve();await root.namespace.R();}};
-  const app=root.namespace.TestApp({setup(){root.namespace.TestPanel.setup({role:2,userCode:'testrep'},{});return()=>null}});
+  const app=ui.Vue.createApp({...ui.Panel,setup(props,context){ui.Panel.setup(props,context);return()=>null}},{role:2,userCode:'testrep'});
   const errors=[];app.config.errorHandler=error=>errors.push(error);
   app.use(root.namespace.TestRouter);
   app.provide('bootstrap',{guest:false,user:{id:2,code:'testrep'},pending_counts:{announcements:1,tickets:2}});
-  app.mount('#fixture');
+  const panel=app.mount('#fixture');
+  win.__testNotices={refresh:()=>panel.speedboxRefreshPartnerNotices(true),counts:()=>({announcements:panel.bootstrapAnnouncements,tickets:panel.ticketUnreadCount,total:panel.totalHeaderBadge})};
   const snapshot = () => ({count:2,announcement_count:1,notifications:[{id:41,ticket_number:12345},{id:42,ticket_number:12346}],notification_ids:[41,42]});
   assert.equal(win.__testNotices.counts().total,3,'Initial badge includes both counts before delayed requests complete');
   await flush();assert.equal(win.__testNotices.counts().total,3,'A pending request does not replace the total with a partial count');

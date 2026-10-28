@@ -140,9 +140,9 @@ class InfrastructureController extends Controller
         return response()->json(['message' => 'درخواست در صف عملیات سرور قرار گرفت.', 'data' => $deployment], 202);
     }
 
-    public function deployments(ManagedServer $managedServer): JsonResponse
+    public function deployments(Request $request, ManagedServer $managedServer): JsonResponse
     {
-        return response()->json(['data' => $managedServer->deployments()->latest()->limit(30)->get()]);
+        return response()->json(['data' => $managedServer->deployments()->latest('id')->limit($request->boolean('latest') ? 1 : 30)->get()])->header('Cache-Control', 'no-store');
     }
 
     public function machines(): JsonResponse
@@ -191,26 +191,23 @@ class InfrastructureController extends Controller
     {
         $data = $this->validateNode($request);
         $data['sort'] ??= ((int) ProxyServer::max('sort')) + 1;
-        $node = ProxyServer::create($data);
+        $node=DB::transaction(function()use($data){$apply=app(\App\Services\NodeRuntimeApply::class);$before=$apply->capture([$data['parent_id']??null]);$node=ProxyServer::create($data);$apply->queue($before,$apply->capture([$node->id,$node->parent_id]));return $node;});
         return response()->json(['message' => 'نود ساخته شد؛ عامل سرور آن را خودکار دریافت می‌کند.', 'data' => $node->load('machine')], 201);
     }
 
     public function updateNode(Request $request, ProxyServer $node): JsonResponse
     {
-        $beforeMachine = $node->machine_id;
-        $beforeKernel = $node->kernel;
-        $data = $this->validateNode($request, $node);
-        DB::transaction(function () use ($node, $data) {
-            $node->update($data);
-            if (!$node->parent_id) ProxyServer::where('parent_id', $node->id)->update(['machine_id' => $node->machine_id, 'kernel' => $node->kernel, 'rate' => $node->rate, 'warp_enabled' => $node->warp_enabled]);
+        $data=$this->validateNode($request,$node);
+        $apply=app(\App\Services\NodeRuntimeApply::class);
+        DB::transaction(function()use($node,$data,$apply){
+            $locked=ProxyServer::whereKey($node->id)->lockForUpdate()->firstOrFail();
+            $ids=[$node->id,$locked->parent_id,$data['parent_id']??null];
+            $before=$apply->capture($ids);
+            $locked->update($data);
+            if(!$locked->parent_id)ProxyServer::where('parent_id',$locked->id)->update(['machine_id'=>$locked->machine_id,'kernel'=>$locked->kernel,'rate'=>$locked->rate,'warp_enabled'=>$locked->warp_enabled]);
+            $apply->queue($before,$apply->capture($ids));
         });
-        $this->nodeControl->clearNodeCache($node->id);
-        return response()->json([
-            'message' => ($beforeMachine !== $node->machine_id || $beforeKernel !== $node->kernel)
-                ? 'نود به‌روز شد؛ عامل آن را با هسته انتخاب‌شده دوباره اجرا می‌کند.'
-                : 'نود به‌روز شد و تنظیمات خودکار اعمال می‌شود.',
-            'data' => $node->fresh('machine'),
-        ]);
+        return response()->json(['message'=>'نود ذخیره شد؛ تغییرات اجرایی مرتبط برای اعمال فوری ارسال می‌شوند.','data'=>$node->fresh('machine')]);
     }
 
     public function cloneNode(ProxyServer $node): JsonResponse
@@ -241,8 +238,7 @@ class InfrastructureController extends Controller
     public function deleteNode(ProxyServer $node): JsonResponse
     {
         abort_if(ProxyServer::where('parent_id', $node->id)->exists(), 422, 'ابتدا نودهای زیرمجموعه را منتقل یا حذف کنید.');
-        $node->delete();
-        $this->nodeControl->clearNodeCache($node->id);
+        DB::transaction(function()use($node){$apply=app(\App\Services\NodeRuntimeApply::class);$ids=[$node->id,$node->parent_id];$before=$apply->capture($ids);$node->delete();$apply->queue($before,$apply->capture($ids));});
         return response()->json(['message' => 'نود حذف شد.']);
     }
 
@@ -375,13 +371,13 @@ class InfrastructureController extends Controller
             'action_value' => ['nullable', 'string', 'max:255'],
         ]);
         $serverRoute ??= new ServerRoute();
-        $serverRoute->fill($data)->save();
+        DB::transaction(function()use($serverRoute,$data){$apply=app(\App\Services\NodeRuntimeApply::class);$ids=ProxyServer::where(fn($q)=>$q->whereJsonContains('route_ids',(int)$serverRoute->id)->orWhereJsonContains('route_ids',(string)$serverRoute->id))->pluck('id')->all();$before=$apply->capture($ids);$serverRoute->fill($data)->save();$apply->queue($before,$apply->capture($ids));});
         return response()->json(['message' => 'قانون مسیریابی ذخیره شد.', 'data' => $serverRoute], $serverRoute->wasRecentlyCreated ? 201 : 200);
     }
 
     public function deleteRoute(ServerRoute $serverRoute): JsonResponse
     {
-        $serverRoute->delete();
+        DB::transaction(function()use($serverRoute){$apply=app(\App\Services\NodeRuntimeApply::class);$ids=ProxyServer::where(fn($q)=>$q->whereJsonContains('route_ids',(int)$serverRoute->id)->orWhereJsonContains('route_ids',(string)$serverRoute->id))->pluck('id')->all();$before=$apply->capture($ids);$serverRoute->delete();$apply->queue($before,$apply->capture($ids));});
         return response()->json(['message' => 'قانون مسیریابی حذف شد.']);
     }
 
@@ -550,9 +546,8 @@ class InfrastructureController extends Controller
         if (array_key_exists('enabled', $data) && $data['enabled'] && !$node->parent_id && $node->machine_id) {
             abort_if(ProxyServer::where('machine_id', $node->machine_id)->where('server_port', $node->server_port)->where('enabled', true)->where('id', '!=', $node->id)->where(fn ($q) => $q->whereNull('parent_id')->orWhere('parent_id', 0))->exists(), 422, 'پورت سرور توسط نود دیگری استفاده شده است.');
         }
-        $node->update($data);
-        if (array_key_exists('enabled', $data)) $this->nodeControl->clearNodeCache($node->id);
-        return response()->json(['message' => 'وضعیت نود ذخیره شد.', 'data' => $node]);
+        DB::transaction(function()use($node,$data){$node=ProxyServer::whereKey($node->id)->lockForUpdate()->firstOrFail();$apply=app(\App\Services\NodeRuntimeApply::class);$ids=[$node->id,$node->parent_id];$before=$apply->capture($ids);$node->update($data);$apply->queue($before,$apply->capture($ids));});
+        return response()->json(['message' => 'وضعیت نود ذخیره شد.', 'data' => $node->fresh()]);
     }
 
     public function sortNodes(Request $request): JsonResponse

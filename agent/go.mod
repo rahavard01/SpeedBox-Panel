@@ -2,6 +2,11 @@ module github.com/cedar2025/xboard-node
 
 go 1.26
 
+// Xray applies TCP_USER_TIMEOUT to its listener. Linux MPTCP listeners reject
+// that option even when accepted connections fall back to ordinary TCP.
+// Keep Go's implicit MPTCP listener default off so dead peers have a deadline.
+godebug multipathtcp=0
+
 require (
 	github.com/caddyserver/certmagic v0.25.2
 	github.com/fsnotify/fsnotify v1.9.0
@@ -264,3 +269,4 @@ require (
 replace github.com/sagernet/sing-box => github.com/cedar2025/sing-box v1.14.0-alpha.2.0.20260316103356-2e665cb7e295
 
 replace github.com/xtls/xray-core => github.com/cedar2025/Xray-core v0.0.0-20260409213332-f47935539965
+

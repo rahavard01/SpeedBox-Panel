@@ -107,7 +107,7 @@ type Kernel interface {
 // require a kernel restart/reconstruction if changed.
 func ComputeHash(nc *model.NodeSpec, users []model.UserSpec) string {
 	h := sha256.New()
-	configData, _ := json.Marshal(nc)
+	configData, _ := json.Marshal(model.KernelNodeSpec(nc))
 	h.Write(configData)
 	sorted := make([]model.UserSpec, len(users))
 	copy(sorted, users)
@@ -145,3 +145,14 @@ func UserDiff(oldUsers, newUsers []model.UserSpec) (toAdd, toRemove []model.User
 	return
 }
 
+// InboundHash excludes policy that Sing-box updates without replacing listeners.
+func InboundHash(nc *model.NodeSpec, users []model.UserSpec) string {
+	c := model.KernelNodeSpec(nc)
+	if c != nil {
+		c.WarpEnabled = false
+		c.Routes = nil
+		c.CustomRoutes = nil
+		c.CustomRouteRules = nil
+	}
+	return ComputeHash(c, users)
+}

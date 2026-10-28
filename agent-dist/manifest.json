@@ -3,69 +3,69 @@
     "amd64": {
       "binaries": {
         "xbctl-linux-amd64": {
-          "bytes": 7143586,
-          "sha256": "b08f9fd9f22509478545b89b7f1fc0c0cd42821216b0288ed0d5166cb6abc27d"
+          "bytes": 7147682,
+          "sha256": "20959c5127eb984ffbec9dea077eba6249af9d6b0c22d66a438985e6f80c2508"
         },
         "xboard-node-linux-amd64": {
-          "bytes": 66904226,
-          "sha256": "066ca500283fe1df26e37155725f8cd83e6a989968f84405c65ab3aab3ae4943"
+          "bytes": 66908322,
+          "sha256": "18eb6cad0b36e665ad9e832b6f3f171b65df7fac841634973142a296a8e45b63"
         }
       },
-      "bytes": 25971575,
+      "bytes": 25965187,
       "parts": [
         {
           "bytes": 8388608,
           "file": "linux-amd64.tar.gz.part-000",
-          "sha256": "59460b64153bbdd29176f5171fc81b9f70d0238887d2b9b34aa0b5f95663c5d3"
+          "sha256": "26c2a443fe41c6d84e5faac9c70ac2a08abc7bc0967988a00f07bc9138e80904"
         },
         {
           "bytes": 8388608,
           "file": "linux-amd64.tar.gz.part-001",
-          "sha256": "75f87bcb9bb84ed8107fca841f861bd452f8d4b2115c02600ee83d7e111fc1d2"
+          "sha256": "b7652a1439a83dcfc3db0fb77f95e37f07606901a9b66df6dedd88902890ea6a"
         },
         {
           "bytes": 8388608,
           "file": "linux-amd64.tar.gz.part-002",
-          "sha256": "002d080acdbc0b0a5b8dbfe990c853b97b115e99a72e77e1eb47358eb33b63bc"
+          "sha256": "8ffb8d4d80bf4e2adf7cea0d411496a22674ad49d11a0fcb292a21467bd17a84"
         },
         {
-          "bytes": 805751,
+          "bytes": 799363,
           "file": "linux-amd64.tar.gz.part-003",
-          "sha256": "2a2ee6acb7db7c40c1c08ad870fad7f95de09db4092e53d8b3ec0d494f686bcb"
+          "sha256": "6061303f9691d784e820ca63919338489828e333069d7d766d228b5f8a612623"
         }
       ],
-      "sha256": "c19c986bba227bf6f3a513b1553d073f707a3bb23fa9b3c42c05d9d456be22eb"
+      "sha256": "442999e9e492a29fcbceeb72a6e74357f9b222674cc1f8e6872dee9d0883db71"
     },
     "arm64": {
       "binaries": {
         "xbctl-linux-arm64": {
           "bytes": 6619298,
-          "sha256": "211c039dfd5170ec038ab54063ea30b281d7072d4e52b61b43d4713225bb2715"
+          "sha256": "adcd2320544e5023f39da26401f03c3a1d209b686ca600e3e4baaab524916256"
         },
         "xboard-node-linux-arm64": {
           "bytes": 61866146,
-          "sha256": "f5c52ff16db251a7703f1059315d54697422ec6aa203c04d2a16269f5fcb54c4"
+          "sha256": "17f9487d6c432bbf08c96bac75904a6eb23b214a4b114b5b207b93dc0deaae5e"
         }
       },
-      "bytes": 23386077,
+      "bytes": 23383376,
       "parts": [
         {
           "bytes": 8388608,
           "file": "linux-arm64.tar.gz.part-000",
-          "sha256": "ba92bb901548f2b7e741bf2fd7e940d2156efa006d687b948089d580e7500b3b"
+          "sha256": "572e009d1b0065ec0310d0a98f6d5beeeae416b7ca26c8f891e2a010d6a35e66"
         },
         {
           "bytes": 8388608,
           "file": "linux-arm64.tar.gz.part-001",
-          "sha256": "627721167f2b9f2523a257d1e8ecbc021d0feb9ccf34ce4e998b11b2737b0adc"
+          "sha256": "6ae4099ea56cc592d4d75b6250acf452d047fd3fed8dbfbe4d347b94d08930bd"
         },
         {
-          "bytes": 6608861,
+          "bytes": 6606160,
           "file": "linux-arm64.tar.gz.part-002",
-          "sha256": "cc2883e7f29a152c30d62e56fddcd9c07fbafbaeab5027e9397f8ee6f262e216"
+          "sha256": "d8efe21601185f1bbccf03e6d44dd7599933d250ec37c32f609201c6d04aa0bd"
         }
       ],
-      "sha256": "3518dd61e8fb84ff9aef8c4b3fc48d0c57ac90adb1bea98173b9c03344d651ba"
+      "sha256": "6da34b6990cfdefbeea03baa00f2e840d4d82955c8c51adda2a32aca41d00e78"
     }
   },
   "format": 1,
@@ -76,13 +76,14 @@
     "agent/Makefile": "993e904ed55a1e3e7e7699e86eb05327494ea9972c518e87273352036f710fb0",
     "agent/README.md": "4997ba860cfd14230e979e85e9f22c252d6b5571c59d7210a352abd6def487f1",
     "agent/cmd/xbctl/main.go": "e2dbf1be7405ec6269ccb4843b8699d7487d5bdbc52427c3a70cd0791ad3002e",
-    "agent/cmd/xbctl/node_tools.go": "3a2042930ed3d27a347daba68a61c037f6d739598c289ab8212e015aa0308a33",
-    "agent/cmd/xboard-node/main.go": "23056ace33299ae527ee27c70ea5962b0404ff56e20948da95aea346df49e5ff",
+    "agent/cmd/xbctl/node_tools.go": "57e6a986fba32a3ed0bbbfb002829fd8aefd8cc57aac837da4f3e5a96ef8aaa2",
+    "agent/cmd/xbctl/sync.go": "42319e94f6fa806ba81a5ba51ddd88382e25c067c2b49580ed018810f4069647",
+    "agent/cmd/xboard-node/main.go": "deea9bc7388685e21d657c29e5cc4b142c01c46a1a12f6fbf3cf1869a31c0db5",
     "agent/config.yml.example": "4775cb073a1cc091bddb27e974d0561960729a5d1a3179cdd9a5022abbd4a183",
     "agent/docs-custom-outbounds.md": "3fd117f5f441161bd8b369001ac45482af5b239404767c7838cf58e55d020e52",
     "agent/docs-custom-routes.md": "81359165ddfb1b0d542ba3ebb9039abd583effa57dd7b1e7c4daf34d230e7d92",
     "agent/docs-dns-providers.md": "aabbcb8217d5215278c847ac1ee57775b5833394abdbf05b273682b59dacda11",
-    "agent/go.mod": "205811d7750e75ecc3c7692087d6a1e536edaa3206cfb64b02963213de4086db",
+    "agent/go.mod": "b2e0334684fe99c1f07d60c92e95d27240bd2e8dab325566bf13f4a76b1eab85",
     "agent/go.sum": "5ff09d3f8858746dbf6fdd8fc46b5a496a9c06c068c2c5ea172a48a6b88cade0",
     "agent/install.sh": "9b885e44ba7155654657311e92a4a3268795fdc7636edcafc5977351be349caf",
     "agent/internal/admission/manager.go": "dcf81d217b2fc6cd21791a51bda0f2d817812ae14763bbf44451e8afdd862003",
@@ -116,9 +117,10 @@
     "agent/internal/config/config_test.go": "0af0a3b2df25669520ce6006f7199ca958e50c9fc3e5b44b758cc883b0051954",
     "agent/internal/config/standalone.go": "d953cd7bee145b799feed8c35e8f665d4e4e93c0887d9226b97c4f6e3640b4db",
     "agent/internal/config/watcher.go": "a01e5d87aa7407b2502bf9cb9f75925cb0623043fe830fb177434a3af6273c70",
+    "agent/internal/controlplane/fresh_test.go": "e55bca34ca0eadad49d707174ac566ddfa63acddbff4283a3628543af39e4ae5",
     "agent/internal/controlplane/local.go": "f19b8327fd4b2efd088710b19cab996cf144b82afd925487215e88e33a08c835",
     "agent/internal/controlplane/local_test.go": "531fb7a9cf98d6f88ed1d5ed9696dc8190d401c53c52c6b14b7daf86e33718e3",
-    "agent/internal/controlplane/machine.go": "2929da5e8d347e90670f1043022aacf02efaf74327c3016eadf6de52fad2fa6b",
+    "agent/internal/controlplane/machine.go": "6a3305cecf75936c4347ed6fb3ef6cce67020d43c6b1515f3f2cff764faa64ec",
     "agent/internal/controlplane/mailbox.go": "7cec1bab7cb128f8658d59fb867c908df4e79756fa99c03bbe721bb4bf7590b5",
     "agent/internal/controlplane/mailbox_test.go": "dfda36fb5a9fd3b2bdcf3041d424eee48d82c49b6f8e2dad5884dff7de08b5c8",
     "agent/internal/controlplane/panel.go": "f73d3c6b120fe45782b2c54e29ffc7ec24cb0794afd0ca6fa91bff5ee063aa1d",
@@ -128,13 +130,14 @@
     "agent/internal/kernel/customcfg.go": "804432ad33164e6b85ae306baab15c24b8c294c333a0d087c58ee5ff5d71c007",
     "agent/internal/kernel/geo.go": "29de4766c3c6ba1108f895841a17d2cadaa26efc84ca8a9ab1d5a1bc069cb588",
     "agent/internal/kernel/geodata/geodata.go": "14b4b26044f0555af4ec02e5a9609679ab7767dd3461a5da00a8326b9fbee766",
-    "agent/internal/kernel/kernel.go": "6dd2572b1549d2c9495891b08d30bec19db6a1c13ddf57b6c076af7ec66a0f9e",
+    "agent/internal/kernel/kernel.go": "0429415ccae470d9edf39a0837a6ecc3ff7d5fb6994ab770a0c2858bea14357d",
+    "agent/internal/kernel/runtime_hash_test.go": "3fe7b8f55a3919f0ae0baabb4076b7a96dd5922663099a4b03c337ee15fcdbf0",
     "agent/internal/kernel/singbox/config.go": "6e69cb0946726d535c3cbaa4530afc29464b556b2f5c34b7f0c6a09d6eb6e5c1",
     "agent/internal/kernel/singbox/config_test.go": "0ccb5ed6e3ff6f9f29339f9e27fc65c221e24582b29082973c70dc7fe871e0be",
     "agent/internal/kernel/singbox/conntracker.go": "d6fcfdd2fdeac18c767f198d78b289d6ea863a35c7571777acc154b20680b4f6",
     "agent/internal/kernel/singbox/origin.go": "a82a87ba2a8abb29e4db46a1cc0e464b5ca5c3ecad7aff849179a14c710d1e0d",
     "agent/internal/kernel/singbox/origin_test.go": "1bb3d8c2f7f58bdd4121abf77c2b4e22a89f413d12aed71fe73f30567ba4585b",
-    "agent/internal/kernel/singbox/singbox.go": "e1163752ce89c9c40450d3271e9968d4de792fea6478090f0c344b7e337ab9c0",
+    "agent/internal/kernel/singbox/singbox.go": "89b89deb781f441667e4862b8efb233b846b2a072ded00acdb3739fef3f74267",
     "agent/internal/kernel/singbox/singbox_test.go": "50332631bef00d7cd555c84574dde6fe206c54c546b9ede53fcc7765b120aad3",
     "agent/internal/kernel/singbox/udp_liveness_test.go": "af53018ee818b496505ea66456f17e928509f9e32734d9821fcbe82d6fd973af",
     "agent/internal/kernel/singbox/warp_reload_test.go": "a65ea8f915dade2fbd041588f2bbd75b371a2b3dbbf0749dd249a46bc6e488c1",
@@ -147,6 +150,7 @@
     "agent/internal/kernel/xray/config_test.go": "eefed1724fe34ea78f916cc75f0e25058bb17bc5ef6f490a9307ee9082c15fea",
     "agent/internal/kernel/xray/dispatcher.go": "7cc9a3fb333f7c7509a6283d1ba510e6c35d3749b4c1065cb584852ee49c6d66",
     "agent/internal/kernel/xray/dispatcher_test.go": "c040f44cc405f729e9dc441907c39dd883e265f545be9ce690cc32b6d575a8bd",
+    "agent/internal/kernel/xray/tcp_deadline_linux_test.go": "0b12d794a2455f583fb44affa0a6989d62aa69f7ee2ab33127add18403f20dff",
     "agent/internal/kernel/xray/trusted_origin_test.go": "d2aea90fba5fd361b85b4e1ecdb7b744e6bb85bb1cbf98dbeea6ca7a197cdc69",
     "agent/internal/kernel/xray/udp_liveness.go": "21188f7c9ff0cedc4411257ac6b324177c7e01757d9c79dbb908952e7208f3e0",
     "agent/internal/kernel/xray/udp_liveness_test.go": "4cb06ea68bcbfce833d629c50257cab0c8c6bc3570205118b9571ce4ff648b55",
@@ -160,7 +164,9 @@
     "agent/internal/limiter/speedtracker_test.go": "a2db4705a297c4c92c7b0aed725cd5419288d564bc5bc8d40f7e10544bbab2ba",
     "agent/internal/liveness/idle.go": "4d769ed7019e5b27d2c7afab2bc90e11c3457deddc77dd4668648fc34a5966f6",
     "agent/internal/liveness/idle_test.go": "7abd1d8e2bdc4e9a49858c3e9fd6b296e3f1c15354f282f9121860d73f60f016",
-    "agent/internal/machine/machine.go": "af33cedd122486160bd6bde568df51858526dba3b79c4663a06f3c29c42b37f6",
+    "agent/internal/machine/machine.go": "86b3a0387bcbd423549b6d5ccb0e32772a7f56a9d9c2a602659e52ad29acca98",
+    "agent/internal/machine/sync.go": "0ade94765b490d993563cb1a6059f5fa54390e5c384ec639603d2d4c084ff54b",
+    "agent/internal/model/canonical.go": "de4c0c441a06c5700a2681f1ae4099702541e4e46ac637a31f9b22ab444c34d5",
     "agent/internal/model/custom_config_tags.go": "fe47d609078dd52f3d219f0f02465a628207e8349a7568c54b85e1d5806246bd",
     "agent/internal/model/custom_config_tags_test.go": "6d6b483e0e3535129b7a68a1bffd38ff6852436f8e479449cc464da0f160a828",
     "agent/internal/model/custom_outbound_support.go": "f7c7aef64c7a1940d80077da2a09cdfffcd60b645f14f348d9f1adea808cbd16",
@@ -192,16 +198,20 @@
     "agent/internal/panel/types_test.go": "3e2d2d835ea1b9939ea773d489e275e524453554720985fa40d69e2f486fccc1",
     "agent/internal/panel/ws.go": "dda733ec1976ce415ce7d7a6e5222d16e10cf22df53871a40eafe8ed5456c0a5",
     "agent/internal/panel/ws_test.go": "8a570638d05c345112ef4317589018d7f9521481bf78a20a2f43c695283fbc5d",
+    "agent/internal/runtimecontrol/control.go": "9df5c694f6d05c340a20b4192108de2738cd458281b134b09b38d706b41966ab",
+    "agent/internal/runtimecontrol/control_test.go": "c01aac04abc2d05ea40839506e6d6b9122ccac766753b3a2f22680f5d2985c07",
     "agent/internal/service/first_users_test.go": "3f2dca069ca771c2790d9c236b5ad2e9e920a93f49c5b2df000db4b3e004accd",
-    "agent/internal/service/service.go": "7c6539bb5ee3104c0a2ab3f7c8c292137ab25ff731775b965ff7579827021260",
+    "agent/internal/service/service.go": "4f0b39228a4c8d9d174d2e04b722d3e8d63abe585bc26fea257eca26efbe525b",
     "agent/internal/service/service_test.go": "a320ca309e8dfd45ff3aaacf4dd5cdfd6d64c8521f94c3d1af0588d8300ff0ec",
+    "agent/internal/service/sync.go": "50e00ddc1589a049d01e828759af2bbd3b2a49cd5833f7c0ac954b1a25065289",
+    "agent/internal/service/sync_test.go": "259ff4c8bd14a5607804b2e33ddbf2200bc287ec97b48c7103b0f6fa14f55f2a",
     "agent/internal/service/uuid_rotation_test.go": "638ab458fa581860ef0b84b9bb6863d890513f519fc7f56249532880f19605d9",
     "agent/internal/tracker/tracker.go": "e52075dd2482712b239cfe7043626795429bfc3a0f1eef441f9a0e67d5ed7ec7",
     "agent/internal/tracker/tracker_test.go": "2a05026190894f66ea02f978796f9ad88201edab78b77c8c26a3ae0830d6abd1",
     "scripts/agent-artifacts.php": "9b510b05570d2439cd23ab23aa514d7e4fb5fc5035b4a6cbf7aab9e5ab6622fa",
-    "scripts/build-agent-from-source.sh": "5efebd05b0659ff05c89b8c5748641671cf1e5bc0a735f896155b302b17af418",
+    "scripts/build-agent-from-source.sh": "3f014e37a7714db73c2080b9a2ae9ef737f2e155608035056419c336d885a4c7",
     "scripts/build-agent.sh": "a740c3ff5ff2689ca123f5f96b94ef26981d5fb6c89fa97034204cb7790307fe",
-    "scripts/package-agent.py": "d8b1652f647977d137787645a73d69c97e2dd44a51ee68c33c54fdd85ed65595"
+    "scripts/package-agent.py": "d55ff7c15a825a3186698447d727e3d2927ae6d6590d4b5bf7c75ecd38ff39a8"
   },
-  "version": "panel-speedbox-http-obfs-uuid-v1-nodes-v5-session-liveness"
+  "version": "panel-speedbox-http-obfs-uuid-v1-node-sync-v1"
 }

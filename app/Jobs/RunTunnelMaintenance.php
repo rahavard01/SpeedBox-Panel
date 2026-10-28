@@ -140,7 +140,7 @@ class RunTunnelMaintenance implements ShouldQueue, ShouldBeEncrypted
     {
         $result=[];
         foreach(['iran','foreign'] as $side)$result[$side]=$remote->call($t->$side,['action'=>'status','name'=>$t->remote_name,
-            'target_ports'=>$side==='foreign'?array_column($t->settings['mappings'],'target_port'):[],'udp'=>(bool)$t->settings['accept_udp']]);
+            'target_ports'=>$side==='foreign'?array_column($t->settings['mappings'],'target_port'):[],'udp'=>\App\Services\TrustedTunnelOrigin::udpOnlyBackpack($t)||(bool)$t->settings['accept_udp']]);
         return $result;
     }
 

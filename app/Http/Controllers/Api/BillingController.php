@@ -168,7 +168,7 @@ class BillingController extends Controller
                 'signed_amount'     => $signed,                          // برای کارت موبایل صورت‌حساب
                 'balance_after'     => (int) $r->balance_after,
                 'status'            => $r->status ?? 'unknown',
-                'performed_by_role' => $r->performed_by_role ?? 'system',
+                'performed_by_role' => \App\Services\TransactionOperator::displayRole($r->performed_by_role ?? null, $meta),
                 'meta'              => [
                     'operator_source' => $meta['operator_source'] ?? null,
                 ],
@@ -338,8 +338,8 @@ class BillingController extends Controller
                 'signed_amount'     => $signed,
                 'balance_after'     => (int) $r->balance_after,
                 'status'            => $r->status ?? 'unknown',
-                'performed_by_role' => $r->performed_by_role ?? 'system',
-                'operator'          => $r->performed_by_role ?? 'system',
+                'performed_by_role' => \App\Services\TransactionOperator::displayRole($r->performed_by_role ?? null, $meta),
+                'operator'          => \App\Services\TransactionOperator::displayRole($r->performed_by_role ?? null, $meta),
                 'meta'              => $meta,
                 'user_code'         => $r->owner_code ?? '',
                 'username'          => $r->owner_email ?? '',

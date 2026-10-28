@@ -125,7 +125,15 @@ window.SpeedboxTunnels = (() => {
         else{summary.removeAttribute('tabindex');summary.removeAttribute('aria-hidden');}
       });
     };
-    const closeActionMenusOnScroll=event=>{if(!event.target?.closest?.('.tunnel-actions'))closeActionMenus();};
+    const closeActionMenusOnScroll=event=>{
+      if(event.target?.closest?.('.tunnel-actions'))return;
+      // A scroll queued before the click may arrive after the menu opens.
+      // Close only when the anchor actually moved since opening the menu.
+      content.querySelectorAll('.tunnel-actions[open]').forEach(menu=>{
+        const rect=menu.querySelector('summary').getBoundingClientRect(),anchor=menu._actionAnchor;
+        if(!anchor||Math.abs(rect.top-anchor.top)>1||Math.abs(rect.left-anchor.left)>1)menu.open=false;
+      });
+    };
     actionMobile.addEventListener('change',syncActionAccessibility);
     window.addEventListener('resize',closeActionMenus);
     window.addEventListener('scroll',closeActionMenusOnScroll,true);
@@ -228,6 +236,7 @@ window.SpeedboxTunnels = (() => {
         details.classList.toggle('opens-up',upward);
         menu.style.maxHeight=Math.max(0,upward?above:below)+'px';
         menu.style.visibility='';
+        details._actionAnchor={top:rect.top,left:rect.left};
       });
       const runAction=b=>safe(async()=>{
         const t=data.data.find(t=>t.id===Number(b.dataset.id));

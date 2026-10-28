@@ -106,23 +106,8 @@ class TunnelOutageMonitor
 
     public function health(ServerTunnel $tunnel): ?bool
     {
-        $states = [];
-        foreach (['iran','foreign'] as $side) {
-            $snapshot = $tunnel->remote_status[$side] ?? [];
-            if (isset($snapshot['error'])) return null;
-            if (!empty($tunnel->settings['restart_hours']) && !empty($snapshot['last_restart']) && time() - $snapshot['last_restart'] < 120) return null;
-            if (($tunnel->settings['quota_mode'] ?? '') === 'enforce' && !empty($snapshot['quota_exhausted'])) return null;
-            // GOST TCP/UDP forwards from Iran; the foreign side has no GOST unit.
-            $needsService = !($tunnel->engine === 'gost' && $side === 'foreign' && $tunnel->transport !== 'grpc');
-            if ($needsService && ($snapshot['active'] ?? null) === false) return false;
-            if ($needsService && ($snapshot['active'] ?? null) !== true) return null;
-            // Only Iran owns destination checks in GOST; foreign.connected is normally null.
-            if ($tunnel->engine === 'gost' && $side === 'foreign') continue;
-            $connected = $tunnel->engine === 'backpack' ? data_get($snapshot,'metrics.connected') : ($snapshot['connected'] ?? null);
-            if ($connected === false) return false;
-            $states[] = $connected;
-        }
-        return $states === ($tunnel->engine === 'gost' ? [true] : [true,true]) ? true : null;
+        foreach($tunnel->remote_status??[] as $snapshot)if(is_array($snapshot)&&!empty($tunnel->settings['restart_hours'])&&!empty($snapshot['last_restart'])&&time()-$snapshot['last_restart']<120)return null;
+        return TunnelHealth::connection($tunnel);
     }
 
     public function reset(int $id): void

@@ -38,6 +38,7 @@ class BackpackRemote
 
     public function ensure(ManagedServer $server): void
     {
+        app(TunnelOriginRemote::class)->ensure($server);
         $manifest = json_decode(file_get_contents(base_path('backpack-dist/manifest.json')), true, 16, JSON_THROW_ON_ERROR);
         $arch = trim($this->ssh->run($server, 'uname -m', 20));
         $arch = match ($arch) { 'x86_64' => 'amd64', 'aarch64', 'arm64' => 'arm64', default => throw new RuntimeException('unsupported_arch') };
@@ -69,7 +70,8 @@ class BackpackRemote
     public function call(ManagedServer $server, array $request): array
     {
         if (!in_array($request['action']??'', ['delete','status'], true)) return $this->callUnbounded($server,$request);
-        $raw=$this->ssh->withinBudget(15,fn()=>$this->ssh->run($server,$this->sudo($server).'/opt/speedbox-backpack/backpack speedbox-json -',15,json_encode($request,JSON_THROW_ON_ERROR)));
+        $command='if [ -x /opt/speedbox-origin/host.py ]; then python3 /opt/speedbox-origin/host.py backpack -; else /opt/speedbox-backpack/backpack speedbox-json -; fi';
+        $raw=$this->ssh->withinBudget(15,fn()=>$this->ssh->run($server,$this->sudo($server).'sh -c '.escapeshellarg($command),15,json_encode($request,JSON_THROW_ON_ERROR)));
         $answer=json_decode($raw,true,64,JSON_THROW_ON_ERROR);
         if (($answer['ok']??false)!==true || !is_array($answer['data']??null)) throw new RuntimeException('invalid_response');
         return $answer['data'];
@@ -86,7 +88,8 @@ class BackpackRemote
                 chmod($local, 0600);
                 file_put_contents($local, json_encode($request, JSON_THROW_ON_ERROR), LOCK_EX);
                 $this->ssh->upload($server, $local, $dir.'/request');
-                $raw = $this->ssh->run($server, $this->sudo($server).escapeshellarg($binary).' speedbox-json '.escapeshellarg($dir.'/request'), 100);
+                $command='if [ -x /opt/speedbox-origin/host.py ]; then python3 /opt/speedbox-origin/host.py backpack '.escapeshellarg($dir.'/request').'; else '.escapeshellarg($binary).' speedbox-json '.escapeshellarg($dir.'/request').'; fi';
+                $raw = $this->ssh->run($server, $this->sudo($server).'sh -c '.escapeshellarg($command), 150);
                 $answer = json_decode($raw, true, 64, JSON_THROW_ON_ERROR);
                 if (($answer['ok'] ?? false) !== true || !is_array($answer['data'] ?? null)) throw new RuntimeException('invalid_response');
                 return $answer['data'];
@@ -144,3 +147,4 @@ class BackpackRemote
         }
     }
 }
+

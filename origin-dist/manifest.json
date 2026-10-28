@@ -1,0 +1,43 @@
+{
+  "format": 2,
+  "source_files": {
+    "agent/go.mod": "b2e0334684fe99c1f07d60c92e95d27240bd2e8dab325566bf13f4a76b1eab85",
+    "agent/internal/origin/registry.go": "cc7dc77004ad7131f142f54b014c43cba47e9dfc83069a0aea8a099e242d8555",
+    "scripts/tunnel-origin/broker_contract_test.go": "26b70300c5471a976111b610eb61c9f815c910959d38e423b6d827a346b2e998",
+    "scripts/tunnel-origin/build.py": "c8839b0ec3423100ced65c4f0b16864e8a640ade14725cab71feb9ec0dd338fb",
+    "scripts/tunnel-origin/go.mod": "7229046022a13890bd160be4ed3450b6795ba3e9060182e2c8c3d48f825b4ca9",
+    "scripts/tunnel-origin/host.py": "9125d746bda87d31b0fa3f8456c58028a051c4a3d414a836fe23e85e7f179a16",
+    "scripts/tunnel-origin/main.go": "500aa1b6678c5af1201648e2fe21b77a15351eb992bd9b10b249a059eda8e876",
+    "scripts/tunnel-origin/main_test.go": "5d6fa2f2f4d2b8285bc186bf112b7003ce63007ac36d31a8e3e4ab60796faeea",
+    "scripts/tunnel-origin/probe.go": "da43f00bff829a55aa147a56b8df6731bb7503c74d34447003d65788a9c18df6",
+    "scripts/tunnel-origin/tls.go": "bda06689015b8f9dae4da4e1d69f3b284fcd9c4609f94abde677c3660b762aaa",
+    "scripts/tunnel-origin/udp.go": "c55aafeeee9fac629930bcfd4527fe6584d7424fd02e4bace75706dbca90abe4",
+    "scripts/verify-origin.py": "182fe4fd23e5c8731dfb2ffb110574baa2d16d84730dfa08c4f3740e4445f3b5"
+  },
+  "archives": {
+    "amd64": {
+      "file": "tunnel-origin-linux-amd64.gz",
+      "sha256": "9db0212102aac7d63da4e6de3ec5ca914462eebac25632383fd1e9c83aabadff",
+      "binary_sha256": "e318c73fc2c55a7a84eb6b89c8c2ae9aaec000a92a8653086442966be54fdd84",
+      "bytes": 5451938,
+      "selftest": {
+        "file": "selftest-linux-amd64.gz",
+        "sha256": "4503d9856a352c45c8f0938e320dfa7a630aebc8286a1a03c6227eec0e82a421",
+        "binary_sha256": "89bcff733a1a5e28d4b60f1476d3ae81820accc3c56faf3be03a9947f200d4fd",
+        "bytes": 6426786
+      }
+    },
+    "arm64": {
+      "file": "tunnel-origin-linux-arm64.gz",
+      "sha256": "012b37ecec07d444fee67adaab8437876e4fb9150f74066d7a68d93a81acea89",
+      "binary_sha256": "8468ceb3431a816bd821e6faac3d4b09d45bd02da6759bdaf731adf33c6ea2fc",
+      "bytes": 4980898,
+      "selftest": {
+        "file": "selftest-linux-arm64.gz",
+        "sha256": "83b6b93e31a12432de7010adc3b4439374747fc8d6e56ec58774d9d79c3f0e8b",
+        "binary_sha256": "cbafb6e205079390ec9d19a824003b516ac28cddb89208ad1cd7ed10c09fcfe5",
+        "bytes": 5898402
+      }
+    }
+  }
+}

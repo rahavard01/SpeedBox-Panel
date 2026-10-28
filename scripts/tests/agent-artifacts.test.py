@@ -18,6 +18,17 @@ def run(args, **kw):
     kw.setdefault('capture_output', True); kw.setdefault('text', True)
     return subprocess.run(args, check=True, **kw)
 
+def package_legacy_fixture(root):
+    run(['python3',str(root/'scripts/package-agent.py')])
+    # This suite exercises legacy complete archives. Multipart materialization
+    # and its failure modes have their own agent-artifact-parts suite.
+    manifest=json.loads((root/'agent-dist/manifest.json').read_text())
+    for arch,entry in manifest['archives'].items():
+        parts=entry.pop('parts')
+        (root/'agent-dist'/('linux-'+arch+'.tar.gz')).write_bytes(b''.join((root/'agent-dist'/part['file']).read_bytes() for part in parts))
+        for part in parts:(root/'agent-dist'/part['file']).unlink()
+    (root/'agent-dist/manifest.json').write_text(json.dumps(manifest))
+
 def fixture(root, native):
     (root/'scripts').mkdir(parents=True); (root/'agent').mkdir()
     (root/'agent/source.go').write_text('package fixture\n')
@@ -30,7 +41,7 @@ def fixture(root, native):
             if arch=='amd64':shutil.copyfile(native,path)
             else:
                 header=bytearray(64);header[:6]=b'\x7fELF\x02\x01';header[18:20]=machine.to_bytes(2,'little');path.write_bytes(header)
-    run(['python3',str(root/'scripts/package-agent.py')])
+    package_legacy_fixture(root)
     shutil.rmtree(root/'storage')
 
 def tool(path, body):
@@ -69,7 +80,7 @@ with tempfile.TemporaryDirectory(prefix='speedbox-agent-tests-') as temp:
             if scenario=='wrong-version':
                 c.write_text('#include <stdio.h>\nint main(void){puts("old-release");return 0;}\n')
                 run(['cc',str(c),'-o',str(fixture_out/'xboard-node-linux-amd64')])
-            if scenario!='wrong-architecture':run(['python3',str(root/'scripts/package-agent.py')])
+            if scenario!='wrong-architecture':package_legacy_fixture(root)
             if scenario=='wrong-architecture':
                 # Keep a known archive, alter its expected binary architecture in extracted mode below.
                 shutil.copyfile(root/'old-dist/linux-arm64.tar.gz',root/'agent-dist/linux-arm64.tar.gz')
@@ -125,7 +136,7 @@ with tempfile.TemporaryDirectory(prefix='speedbox-agent-tests-') as temp:
             import tarfile
             for arch in ['amd64','arm64']:
                 with tarfile.open(pub/'agent-dist'/('linux-'+arch+'.tar.gz')) as tar:tar.extractall(out,filter='data')
-            run(['python3',str(pub/'scripts/package-agent.py')])
+            package_legacy_fixture(pub)
             if scenario=='agent-corrupt':(pub/'agent-dist/linux-amd64.tar.gz').write_bytes(b'bad archive')
             if scenario=='agent-source-mismatch':(pub/'agent/source.go').write_text('unpackaged change\n')
         git('add','-A');git('commit','-qm','release');target=git('rev-parse','HEAD');git('push',str(origin),'main')

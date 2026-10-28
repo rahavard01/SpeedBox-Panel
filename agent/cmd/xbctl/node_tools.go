@@ -27,6 +27,11 @@ func runNodeTools(args []string) error {
 		return errors.New("نوع ابزار نود مشخص نشده است.")
 	}
 	switch args[0] {
+	case "sync":
+		return syncNodes(args[1:])
+	case "runtime-version":
+		fmt.Println("1")
+		return nil
 	case "version":
 		fmt.Println("1")
 		return nil

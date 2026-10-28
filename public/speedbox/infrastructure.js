@@ -85,7 +85,9 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
   function empty(title){ return `<div class="empty"><strong>${escape(title)}</strong></div>`; }
   function loadingTable(headers,kind=''){const markup=`<div class="table-wrap"><table><thead><tr>${headers.map(label=>`<th>${escape(label)}</th>`).join('')}</tr></thead><tbody><tr><td class="entity-loading-cell" colspan="${headers.length}">${loading()}</td></tr></tbody></table></div>`;return kind?entityCardLayout(markup,kind):markup;}
   function loading(){ return '<div class="loading" role="status" aria-live="polite"><i class="fas fa-spinner fa-spin" aria-hidden="true"></i><span>در حال دریافت اطلاعات…</span></div>'; }
+  let modalRevision=0;
   function openModal(title,body,options={}){
+    modalRevision++;
     const previousTitle=scope.getElementById('modalTitle').textContent;
     const previousBody=scope.getElementById('modalBody');
     const signature=form=>form?[form.id,...form.getAttributeNames().filter(n=>n.startsWith('data-')).sort()].join('|'):null;
@@ -118,7 +120,7 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
     const restore=()=>{
       if(modalBackdrop.hidden||modalBody.firstElementChild!==rendered)return;
       const next=focusName?[...modalBody.querySelectorAll('[name]')].find(el=>el.name===focusName):focusId?[...modalBody.querySelectorAll('[id]')].find(el=>el.id===focusId):null;
-      if(next&&!next.disabled){next.focus({preventScroll:true});if(selection&&typeof next.setSelectionRange==='function')try{next.setSelectionRange(...selection);}catch{}}
+      if(next&&!next.disabled&&(!mobileMedia.matches||document.activeElement===document.body||document.activeElement===focused)){next.focus({preventScroll:true});if(selection&&typeof next.setSelectionRange==='function')try{next.setSelectionRange(...selection);}catch{}}
       [modalBackdrop,overlay.querySelector('.infrastructure-modal'),modalBody,modalBody.querySelector('.modal-fields')].forEach((el,i)=>{if(el){el.scrollTop=scroll[i].top;el.scrollLeft=scroll[i].left;}});
     };
     const rendered=modalBody.firstElementChild;
@@ -126,7 +128,7 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
       for(const el of modalBody.querySelectorAll('details')){const states=disclosures.get(el.querySelector('summary')?.textContent);if(states?.length)el.open=states.shift();}
       restore();if(options.kind!=='tunnel')requestAnimationFrame(restore);}else modalBackdrop.scrollTop=0;
   }
-  function closeModal(force=false){ if(savingCount && force!==true)return; nodeEditorDispose?.();nodeEditorDispose=null;modalBackdrop.hidden=true; document.body.style.overflow='';const handler=modalCloseHandler;modalCloseHandler=null;handler?.(); }
+  function closeModal(force=false){ if(savingCount && force!==true)return; modalRevision++; nodeEditorDispose?.();nodeEditorDispose=null;modalBackdrop.hidden=true; document.body.style.overflow='';const handler=modalCloseHandler;modalCloseHandler=null;handler?.(); }
   modalBackdrop.addEventListener('click',e=>{if(e.target===modalBackdrop)closeModal()});
 
   async function loadView(){
@@ -235,7 +237,7 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
     calendarSession=null;
     menu.remove();picker.classList.remove('is-calendar-open');picker.onfocusout=null;
     card?.classList.remove('is-calendar-open');trigger.setAttribute('aria-expanded','false');
-    if(restoreFocus&&trigger.isConnected)trigger.focus();
+    if(restoreFocus&&trigger.isConnected)trigger.focus({preventScroll:true});
   }
   function openRankCalendar(trigger) {
     if(calendarSession?.trigger===trigger){closeRankCalendar(true);return;}
@@ -276,10 +278,10 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
       menu.querySelector('.jalali-calendar-grid').onkeydown=e=>{
         const days=[...menu.querySelectorAll('[data-calendar-day]')],index=days.indexOf(e.target);
         const steps={ArrowRight:-1,ArrowLeft:1,ArrowDown:7,ArrowUp:-7};
-        if(index>=0&&e.key in steps){e.preventDefault();days[Math.max(0,Math.min(days.length-1,index+steps[e.key]))].focus();}
+        if(index>=0&&e.key in steps){e.preventDefault();days[Math.max(0,Math.min(days.length-1,index+steps[e.key]))].focus({preventScroll:true});}
       };
       enhanceControls(menu);
-      menu.querySelector('.jalali-day.is-selected, .jalali-day')?.focus();
+      menu.querySelector('.jalali-day.is-selected, .jalali-day')?.focus({preventScroll:true});
     };
     hideRankTooltip();render();
   }
@@ -531,8 +533,40 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
     scope.getElementById('serverForm').onsubmit=async e=>{e.preventDefault();const body=Object.fromEntries(new FormData(e.target));try{const r=await api(server?`/servers/${server.id}`:'/servers',{method:server?'PUT':'POST',body:JSON.stringify(body)});toast(r.message);closeModal();await loadServers();}catch(err){toast(err.message,'error')}};
   }
   async function runDeployment(id,action){try{const r=await api(`/servers/${id}/deploy`,{method:'POST',body:JSON.stringify({action,kernel:'singbox'})});toast(r.message);await loadServers();}catch(e){toast(e.message,'error')}}
-  const deploymentActionLabel=action=>({install:'نصب',upgrade:'ارتقا',repair:'نصب مجدد',restart:'راه‌اندازی مجدد هسته‌ها',check:'بررسی وضعیت',uninstall:'حذف کامل سرویس مدیریت نود',warp_prepare:'آماده‌سازی WARP',warp_test:'تست اتصال WARP'}[action]||action);
-  async function showDeployments(id){try{const {data}=await api(`/servers/${id}/deployments`);openModal('گزارش عملیات',data.length?data.map(d=>`<div class="machine-item"><div class="machine-top"><b>${escape(deploymentActionLabel(d.action))} · ${jobDate(d.created_at)}</b>${badge(d.status)}</div>${deploymentProgress(d)}<pre class="log-box" dir="auto">${escape(d.log||'بدون گزارش')}</pre></div>`).join(''):empty('گزارشی وجود ندارد'))}catch(e){toast(e.message,'error')}}
+  const deploymentActionLabel=action=>({sync_nodes:'اعمال تنظیمات نود',install:'نصب',upgrade:'ارتقا',repair:'نصب مجدد',restart:'راه‌اندازی مجدد هسته‌ها',check:'بررسی وضعیت',uninstall:'حذف کامل سرویس مدیریت نود',warp_prepare:'آماده‌سازی WARP',warp_test:'تست اتصال WARP'}[action]||action);
+  async function showDeployments(id){
+    openModal('گزارش عملیات', '<div data-deployment-log aria-live="polite">'+loading()+'</div>');
+    const revision=modalRevision, target=scope.querySelector('[data-deployment-log]');
+    let hasSnapshot=false;
+    const active=()=>!disposed&&!modalBackdrop.hidden&&revision===modalRevision&&target.isConnected;
+    const poll=async()=>{
+      if(!active())return;
+      try{
+        const initial=!hasSnapshot;
+        const {data}=await api(`/servers/${id}/deployments${initial?'':'?latest=1'}`);
+        if(!active())return;
+        hasSnapshot=true;target.removeAttribute('data-error');
+        if(!data.length)target.innerHTML=empty('گزارشی وجود ندارد');
+        for(const d of data){
+          let row=target.querySelector(`[data-deployment-id="${Number(d.id)}"]`);
+          if(!row){
+            if(!target.querySelector('[data-deployment-id]'))target.replaceChildren();
+            row=document.createElement('div');row.className='machine-item';row.dataset.deploymentId=Number(d.id);
+            row.innerHTML='<div data-deployment-summary></div><pre class="log-box" dir="auto" tabindex="0" aria-label="گزارش عملیات"></pre>';if(initial)target.appendChild(row);else target.prepend(row);
+          }
+          row.querySelector('[data-deployment-summary]').innerHTML=`<div class="machine-top"><b>${escape(deploymentActionLabel(d.action))} · ${jobDate(d.created_at)}</b>${badge(d.status)}</div>${deploymentProgress(d)}`;
+          const log=row.querySelector('pre'),follow=log.scrollHeight-log.clientHeight-log.scrollTop<24;
+          const text=d.log||'بدون گزارش';if(log.textContent!==text){log.textContent=text;if(follow)log.scrollTop=log.scrollHeight;}
+        }
+        if(initial)for(const row of target.querySelectorAll('[data-deployment-id]'))if(!data.some(d=>Number(d.id)===Number(row.dataset.deploymentId)))row.remove();
+        if(data.some(d=>['queued','running'].includes(d.status)))later(poll,1500);
+      }catch(error){
+        if(!active()||error.name==='AbortError')return;
+        target.dataset.error='دریافت گزارش قطع شد؛ تلاش مجدد…';later(poll,3000);
+      }
+    };
+    await poll();
+  }
 
   function cancelNodeRefresh(){if(nodePollTimer!==null){clearTimeout(nodePollTimer);timers.delete(nodePollTimer);nodePollTimer=null;}}
   function scheduleNodeRefresh(){
@@ -858,7 +892,7 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
             if(select.multiple)option.selected=!option.selected; else select.value=option.value;
             select.dispatchEvent(new Event('change',{bubbles:true}));
             if(!select.multiple)closeSelect(wrap);
-            else menu.children[[...select.options].indexOf(option)]?.focus();
+            else menu.children[[...select.options].indexOf(option)]?.focus({preventScroll:true});
           }; menu.appendChild(button);
         });
         if(select.hasAttribute('data-allow-custom')){
@@ -873,16 +907,16 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
       trigger.onclick=()=>{
         const open=menu.hidden;
         closeAllSelects();
-        if(open){wrap.classList.add('is-open');menu.hidden=false;trigger.setAttribute('aria-expanded','true');menu.querySelector('.is-selected,button')?.focus();}
+        if(open){wrap.classList.add('is-open');menu.hidden=false;trigger.setAttribute('aria-expanded','true');menu.querySelector('.is-selected,button')?.focus({preventScroll:true});}
       };
       trigger.onkeydown=e=>{if(e.key==='ArrowDown'){e.preventDefault();if(menu.hidden)trigger.click();else menu.querySelector('button')?.focus({preventScroll:true});}};
       menu.onkeydown=e=>{
         const items=[...menu.querySelectorAll('button:not(:disabled)')].filter(button=>!button.hidden); const index=items.indexOf(document.activeElement);
-        if(e.key==='ArrowDown'||e.key==='ArrowUp'){e.preventDefault();items[(index+(e.key==='ArrowDown'?1:-1)+items.length)%items.length]?.focus();}
+        if(e.key==='ArrowDown'||e.key==='ArrowUp'){e.preventDefault();items[(index+(e.key==='ArrowDown'?1:-1)+items.length)%items.length]?.focus({preventScroll:true});}
         if(e.key==='Escape'){e.preventDefault();e.stopPropagation();closeSelect(wrap);trigger.focus({preventScroll:true});}
       };
       select.addEventListener('change',update);
-      select.addEventListener('invalid',()=>{if(!mobileMedia.matches)trigger.focus();wrap.classList.add('is-invalid');});
+      select.addEventListener('invalid',()=>{if(!mobileMedia.matches)trigger.focus({preventScroll:true});wrap.classList.add('is-invalid');});
       wrap.append(trigger,menu);
       if(select.hasAttribute('data-allow-custom')){
         const custom=document.createElement('input');custom.className='form-input speedbox-mobile-custom';custom.placeholder='رمزنگاری سفارشی';custom.setAttribute('aria-label','رمزنگاری سفارشی');custom.dir='ltr';
@@ -912,7 +946,7 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
   function closeAllSelects(){scope.querySelectorAll('.invoice-custom-select.is-open').forEach(closeSelect);}
   const closeActionMenus=except=>scope.querySelectorAll('details.tunnel-actions[open],details[data-panel-menu][open]').forEach(menu=>{if(!except?.includes(menu))menu.open=false;});
   const onOutsideSelect=e=>{closeActionMenus(e.composedPath());const path=e.composedPath();if(!path.some(el=>el.classList?.contains('invoice-custom-select')))closeAllSelects();if(calendarSession&&!path.includes(calendarSession.picker))closeRankCalendar();};
-  const onEscape=e=>{if(e.key==='Escape'){const menu=scope.querySelector('details.tunnel-actions[open],details[data-panel-menu][open]');if(menu){e.preventDefault();menu.open=false;menu.querySelector('summary')?.focus({preventScroll:true});return;}const open=scope.querySelector('.invoice-custom-select.is-open');if(open){closeSelect(open);open.querySelector('button').focus();}else if(calendarSession){e.preventDefault();closeRankCalendar(true);}else if(!modalBackdrop.hidden)closeModal();}};
+  const onEscape=e=>{if(e.key==='Escape'){const menu=scope.querySelector('details.tunnel-actions[open],details[data-panel-menu][open]');if(menu){e.preventDefault();menu.open=false;menu.querySelector('summary')?.focus({preventScroll:true});return;}const open=scope.querySelector('.invoice-custom-select.is-open');if(open){closeSelect(open);open.querySelector('button').focus({preventScroll:true});}else if(calendarSession){e.preventDefault();closeRankCalendar(true);}else if(!modalBackdrop.hidden)closeModal();}};
   document.addEventListener('click',onOutsideSelect); document.addEventListener('keydown',onEscape);
   const selectObserver=new MutationObserver(()=>{enhanceControls(root);enhanceControls(overlay);});
   selectObserver.observe(root,{childList:true,subtree:true});selectObserver.observe(overlay,{childList:true,subtree:true});

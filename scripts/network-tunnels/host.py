@@ -102,6 +102,8 @@ def validate(config):
     if config.get('engine') not in ('gost', 'gre') or config.get('side') not in ('iran', 'foreign'):
         raise ValueError('invalid engine or side')
     s = config['settings']
+    if config.get('origin_mark') is not None and config['origin_mark'] != (config['subnet']<<12)+4095:
+        raise ValueError('invalid owned origin connection mark')
     if s.get('protocol') not in ('tcp', 'udp', 'both') or s.get('transport') not in ('tcp', 'grpc', 'gre', 'gretap', 'ip6gre', 'ip6gretap'):
         raise ValueError('invalid protocol')
     if not isinstance(config.get('subnet'),int) or not 32768<=config['subnet']<=65500: raise ValueError('invalid connection mark allocation')
@@ -130,7 +132,8 @@ def validate(config):
                 for dest in mapping.get('destinations', []):
                     if ip(dest['address']).version != wanted:
                         raise ValueError('destination IP family mismatch')
-    if not isinstance(s.get('mappings'), list) or not 1 <= len(s['mappings']) <= 40:
+    internal=bool(config.get('origin_mark')) or (config['engine']=='gost' and config.get('health_probe')==2)
+    if not isinstance(s.get('mappings'), list) or not 1 <= len(s['mappings']) <= (257 if internal else 40):
         raise ValueError('invalid mapping list')
     for key,low,high in [('mtu',576,9000),('ttl',0,255),('gre_key',0,4294967295),('tos',0,255),('tx_queue',0,100000),('hop_limit',0,255),('encap_limit',0,255),('flow_label',0,1048575),('failure_threshold',1,20),('recovery_threshold',1,20),('restart_hours',0,168)]:
         if type(s.get(key)) is not int or not low<=s[key]<=high: raise ValueError('invalid '+key)
@@ -158,7 +161,7 @@ def validate(config):
             if not 1 <= int(destination['weight']) <= 100:
                 raise ValueError('invalid weight')
             if destination['port']+count-1>65535: raise ValueError('destination range overflow')
-    if len(used) > 256:
+    if len(used) > (257 if internal else 256):
         raise ValueError('at most 256 input ports per tunnel')
     for cidr in s.get('allowed_sources', []):
         ipaddress.ip_network(cidr, strict=False)
@@ -228,7 +231,8 @@ def gost_arguments(config, health=None):
                 query = '?strategy='+('hash' if s['balance'] == 'source_hash' else 'round')
                 if s.get('proxy_protocol'):
                     raise ValueError('sending PROXY protocol requires a newer GOST release')
-                result.append('-L='+protocol+'://:'+str(mapping['public_port']+offset)+'/'+','.join(targets)+query)
+                bind='127.0.0.1' if mapping.get('origin_relay') else ''
+                result.append('-L='+protocol+'://'+bind+':'+str(mapping['public_port']+offset)+'/'+','.join(targets)+query)
     if s['transport'] == 'grpc' and result:
         result.append('-F=relay+grpc://sb:'+config['secret']+'@'+endpoint(s['peer_host'], s['tunnel_port']))
     if not result and config['side']=='iran': result=['-L=tcp://127.0.0.1:0/127.0.0.1:9']
@@ -299,7 +303,17 @@ def nft_rules(config, health=None):
     elif s['nat']=='snat': lines.append(owned+'snat to '+s['snat_address'])
     lines+=['}', 'chain accounting { type filter hook forward priority -1; policy accept;',owned+'ct direction original counter name traffic_rx',owned+'ct direction reply counter name traffic_tx']
     if s['clamp_mss']: lines.append(owned+'meta l4proto tcp tcp flags & (syn | rst) == syn tcp option maxseg size set rt mtu')
-    lines+=['}','}']
+    lines+=['}']
+    # Identity endpoints create local sockets through the GRE interface. Keep
+    # their bytes in this tunnel's existing quota/accounting namespace; public
+    # client sockets and unrelated local connections never receive this mark.
+    if config.get('origin_mark'):
+        mark=str(config['origin_mark'])
+        lines+=['chain origin_mark { type filter hook output priority -102; policy accept;',
+                'meta mark '+mark+' ct mark set '+mark,'}',
+                'chain origin_tx { type filter hook output priority -1; policy accept;',owned+'ct direction original counter name traffic_rx','}',
+                'chain origin_rx { type filter hook input priority -1; policy accept;',owned+'ct direction reply counter name traffic_tx','}']
+    lines+=['}']
     return '\n'.join(lines)+'\n'
 
 
@@ -323,6 +337,9 @@ def service_text(config, health=None):
 
 def active_unit(config):
     return run(['systemctl','is-active',paths(config['id'])['unit'].name],check=False).returncode==0
+
+def enabled_unit(config):
+    return run(['systemctl','is-enabled','--quiet',paths(config['id'])['unit'].name],check=False).returncode==0
 
 
 def own_interface(config):
@@ -399,7 +416,7 @@ def down(config):
             run(['nft','delete','table',family,table])
 
 
-def install(config, health=None):
+def install(config, health=None, service_state=None):
     validate(config)
     p=paths(config['id']);text=service_text(config,health)
     if config['engine']=='wattunnel':wat.prepare_files(_host(),config)
@@ -412,13 +429,21 @@ def install(config, health=None):
         p['unit'].unlink()
     atomic(p['config'],config)
     run(['systemctl','daemon-reload'])
-    if text and config.get('enabled',True):
+    if text and service_state is not None:
+        # Rollback restores observed service state without overwriting policy.
+        run(['systemctl','enable' if service_state['enabled'] else 'disable',p['unit'].name])
+        run(['systemctl','restart' if service_state['active'] else 'stop',p['unit'].name],timeout=45)
+        if active_unit(config)!=service_state['active']:
+            raise RuntimeError('restored service activity was not verified')
+    elif text and config.get('enabled',True):
         run(['systemctl','enable',p['unit'].name])
         run(['systemctl','restart',p['unit'].name],timeout=45)
         if not active_unit(config):
             raise RuntimeError('managed service is not active')
     elif text:
-        run(['systemctl','disable','--now',p['unit'].name],check=False)
+        run(['systemctl','disable','--now',p['unit'].name])
+        if active_unit(config):
+            raise RuntimeError('managed service did not stop')
     if config['engine']=='gre' and config['side']=='foreign' and config.get('enabled',True):
         own_interface(config)
 
@@ -491,11 +516,15 @@ def snapshot(config, probe=True):
     previous=read(p['runtime'],{})
     health=previous.get('destinations',{})
     running=active_unit(config) if service_text(config) else True
+    if config['engine']=='gre' and running:
+        observed=own_interface(config)
+        running=bool(observed and 'UP' in observed.get('flags',[]))
     source=s['inner_'+config['side']].split('/')[0] if config['engine']=='gre' else None
     check_results=[]
     if probe and config.get('enabled',True) and config['side']=='iran':
         jobs=[]
         for index,mapping in enumerate(s['mappings']):
+            if mapping.get('origin_relay'):continue
             for destination in destinations(config,mapping):
                 key=str(index)+':'+destination['address']+':'+str(destination['port'])
                 target_port=destination.get('health_port') or s.get('monitor_port') or destination['port']
@@ -519,9 +548,17 @@ def snapshot(config, probe=True):
                 check_results.append(result)
     # Outside GRE, only the side owning the forwards performs destination checks.
     known=[x for x in check_results if x.get('ok') is not None]
-    connected=all(x['ok'] for x in known) if known else None
-    if config['engine']=='gost' and s['transport']=='grpc' and config['side']=='iran' and connected is True:
-        connected=tcp_check(s['peer_host'],s['tunnel_port'],s['timeout'])['ok']
+    target_available=all(x['ok'] for x in known) if known else None
+    connected=target_available
+    path_verified=None
+    if config['engine']=='gost' and config['side']=='iran' and config.get('enabled',True):
+        if config.get('health_probe')==2:
+            try:
+                run(['/opt/speedbox-origin/tunnel-origin','probe','/etc/speedbox-origin/'+config['id']+'.json'],timeout=12)
+                path_verified=True
+            except (RuntimeError,subprocess.TimeoutExpired,OSError):path_verified=False
+        # A TCP accept proves neither the relay credentials nor payload delivery.
+        connected=False if connected is False or path_verified is False else (True if path_verified is True and connected is not False else None)
     if config['engine']=='gre' and running and config.get('enabled',True) and (config['side']=='foreign' or s.get('keepalive')):
         peer=s['inner_iran' if config['side']=='foreign' else 'inner_foreign'].split('/')[0]
         pong=run(['ping','-n','-c','2','-W',str(s['timeout']),'-I',p['iface'],peer],timeout=s['timeout']*2+5,check=False)
@@ -537,20 +574,36 @@ def snapshot(config, probe=True):
     exhausted=raw is not None and s['quota_gb']>0 and volume>=s['quota_gb']*1073741824
     state='stopped' if not config.get('enabled',True) else ('offline' if not running else ('connected' if connected is True else 'degraded'))
     result={'checked_at':now,'active':running,'connected':connected,'state':state,'destinations':health,
+            'path_verified':path_verified,'target_available':target_available,
             'traffic_available':raw is not None,'raw':raw or {},'totals':total,'period':period,'quota_base':base,
             'quota_used':used,'quota_exhausted':exhausted,'quota_stopped':previous.get('quota_stopped',False),
             'helper_version':VERSION,'interface':p['iface'] if config['engine']=='gre' else None,
-            'version':s['version'] if config['engine']=='gost' else 'Linux GRE','last_restart':previous.get('last_restart',now)}
+            'version':s['version'] if config['engine']=='gost' else 'Linux GRE','last_restart':previous.get('last_restart',now),
+            'last_daemon_at':previous.get('last_daemon_at',0),'recovery':previous.get('recovery',{})}
     atomic(p['runtime'],result)
     return result
 
 
 def daemon_tick(config):
     p=paths(config['id']);old=read(p['runtime'],{})
-    if int(time.time())-old.get('checked_at',0)<config['settings']['monitor_interval']:
+    if int(time.time())-old.get('last_daemon_at',0)<config['settings']['monitor_interval']:
         return
     result=snapshot(config,probe=config['settings']['monitor'])
     s=config['settings']
+    result['last_daemon_at']=int(time.time())
+    if config['engine']=='gre' and config.get('enabled',True) and not (result['quota_exhausted'] and s['quota_mode']=='enforce'):
+        if result['active']:
+            result['recovery']={}
+        elif int(time.time())>=old.get('recovery',{}).get('next_at',0):
+            attempts=min(16,old.get('recovery',{}).get('attempts',0)+1)
+            result['recovery']={'attempts':attempts,'next_at':int(time.time())+min(300,5*2**min(attempts-1,6))}
+            try:
+                install(config,result['destinations'])
+                recovered=snapshot(config,probe=False)
+                result.update(active=recovered['active'],state=recovered['state'],connected=recovered['connected'])
+                if recovered['active']:result['recovery']={}
+            except Exception:
+                result['recovery']['error']='owned GRE startup retry failed'
     if s.get('failover') and config['side']=='iran':
         before={k:v.get('healthy') for k,v in old.get('destinations',{}).items()}
         after={k:v.get('healthy') for k,v in result['destinations'].items()}
@@ -660,7 +713,7 @@ def dispatch(request):
     if action=='prepare':
         if backup.exists(): return {'prepared':True,'checks':[] if request.get('operation') in ('delete','stop') else preflight(config)}
         current=read(p['config'])
-        atomic(backup,{'old':current,'runtime':read(p['runtime']), 'active':active_unit(config)})
+        atomic(backup,{'old':current,'runtime':read(p['runtime']), 'active':active_unit(config),'enabled':enabled_unit(config)})
         return {'prepared':True,'checks':[] if request.get('operation') in ('delete','stop') else preflight(config)}
     if action=='preview':
         return {'checks':preflight(config),'commands':gre_commands(config) if config['engine']=='gre' else [config['engine']+' '+config['settings']['version']+' with validated forwarding configuration'], 'rules':nft_rules(config) if config['engine']=='gre' and config['side']=='iran' else None}
@@ -668,7 +721,7 @@ def dispatch(request):
         saved=read(backup)
         if saved is None: raise RuntimeError('rollback snapshot is missing')
         if saved['old']:
-            old=saved['old'];old['enabled']=saved['active'] if service_text(old) else old.get('enabled',True);install(old)
+            old=saved['old'];install(old,service_state={'active':saved['active'],'enabled':saved.get('enabled',old.get('enabled',True))})
             if saved['runtime']: atomic(p['runtime'],saved['runtime'])
         else: remove(config)
         return {'restored':True}
@@ -732,3 +785,4 @@ if __name__=='__main__':
     except Exception as error:
         print(json.dumps({'ok':False,'error':str(error)},ensure_ascii=False))
         sys.exit(1)
+

@@ -18,6 +18,7 @@ import (
 	"github.com/cedar2025/xboard-node/internal/machine"
 	"github.com/cedar2025/xboard-node/internal/nlog"
 	"github.com/cedar2025/xboard-node/internal/origin"
+	"github.com/cedar2025/xboard-node/internal/runtimecontrol"
 	"github.com/cedar2025/xboard-node/internal/service"
 )
 
@@ -58,6 +59,12 @@ func main() {
 	} else {
 		origin.SetDefault(broker)
 		defer broker.Close()
+	}
+	control, err := runtimecontrol.Listen()
+	if err != nil {
+		nlog.Core().Warn("local node synchronization unavailable", "error", err)
+	} else {
+		defer control.Close()
 	}
 	runWithReload(rootCfg, *configPath)
 }

@@ -156,26 +156,30 @@ class RunTunnelOperation implements ShouldQueue, ShouldBeEncrypted
         $servers = ['iran'=>$t->iran,'foreign'=>$t->foreign]; $result=[];
         if ($op->deadline->isPast()) throw new \RuntimeException('deadline');
         if ($op->action === 'apply') {
+            $beforeSettings=$t->settings;
+            $settings=\App\Services\TrustedTunnelOrigin::upgrade($t,$settings);
+            $op->update(['payload'=>[...($op->payload??[]),'settings'=>$settings,'origin_before_settings'=>$beforeSettings,'origin_snapshot_sides'=>[],'phase'=>'apply-origin']]);
             $revision = str_pad(dechex($op->id),32,'0',STR_PAD_LEFT);
-            $snapshots=[];$wasCdn=($t->settings['connection_mode']??'direct')==='cdn';
+            $snapshots=[];$policyChanged=false;$wasCdn=($t->settings['connection_mode']??'direct')==='cdn';
             try {
                 foreach ($servers as $side=>$server) {
                     $remote->ensure($server);
                     app(\App\Services\TunnelCdnRemote::class)->revision($t,$settings,$side,'snapshot',$revision);
                     $remote->call($server,['action'=>'snapshot','name'=>$t->remote_name,'revision'=>$revision]);
                     $snapshots[$side]=$server;
+                    $op->update(['payload'=>[...$op->payload,'origin_snapshot_sides'=>array_keys($snapshots)]]);
                 }
-                // Start the listening end first; both configs remain independently recoverable.
-                $listenerIran=$t->kind==='reverse'?$t->orientation==='normal':$t->orientation==='swapped';
-                $order=$listenerIran?['iran','foreign']:['foreign','iran'];
+                // The swapped carrier listens abroad, but its data listener is
+                // in Iran. Keep that listener stable before replacing the dialer.
+                $order=self::applyOrder($t);
                 foreach ($order as $side) {
                     $op->update(['progress'=>$side===$order[0]?35:70,'message'=>'در حال اعمال تنظیمات سمت '.($side==='iran'?'ایران':'خارج').'…']);
                     $this->refreshReservations($servers[$side],$remote,$manager,$settings);
                     app(\App\Services\TunnelCdnRemote::class)->prepare($t,$settings,$side);
                     $result[$side]=$remote->call($servers[$side],$this->applyRequest($t,$settings,$side));
-                    if (empty($result[$side]['active'])) throw new \RuntimeException('service_inactive');
+                    if ((bool)($result[$side]['active']??false)!==(bool)($settings['enabled']??true)) throw new \RuntimeException('service_state_mismatch');
                 }
-                if(($settings['connection_mode']??'direct')==='cdn'){
+                if(($settings['enabled']??true)&&($settings['connection_mode']??'direct')==='cdn'){
                     $dialer=\App\Services\TunnelCdnRemote::listenerIran($t,$settings)?'foreign':'iran';
                     for($attempt=0;$attempt<15;$attempt++){
                         $route=app(\App\Services\TunnelCdnRemote::class)->status($t,$settings,$dialer);
@@ -186,19 +190,30 @@ class RunTunnelOperation implements ShouldQueue, ShouldBeEncrypted
                     $result[$dialer]['cdn']=$route;
                 }
                 if(($settings['connection_mode']??'direct')==='cdn'||($t->settings['connection_mode']??'direct')==='cdn')app(\App\Services\TunnelCdnRemote::class)->commit($t,$settings);
-                $t->update(['settings'=>$settings,'name'=>$op->payload['name'] ?? $t->name,'status'=>'checking','remote_status'=>$result,'message'=>'تنظیمات دو سمت اعمال شد؛ وضعیت اتصال را بررسی کنید.']);
+                $t->update(['settings'=>$settings,'name'=>$op->payload['name'] ?? $t->name,'status'=>($settings['enabled']??true)?'checking':'stopped','remote_status'=>$result,'message'=>'تنظیمات دو سمت اعمال شد؛ وضعیت اتصال را بررسی کنید.']);
+                $policyChanged=true;
+                $op->update(['payload'=>[...$op->payload,'phase'=>'activate-origin']]);
+                app(\App\Services\TunnelOriginRemote::class)->refreshNodePolicy($t,$beforeSettings,$settings);
+                app(\App\Services\TunnelOriginRemote::class)->activate($t,$settings);
+                $op->update(['payload'=>[...$op->payload,'phase'=>'origin-committed']]);
                 foreach ($servers as $side=>$server) { $this->refreshReservations($server,$remote,$manager);try {app(\App\Services\TunnelCdnRemote::class)->revision($t,$settings,$side,'commit',$revision,$wasCdn);$remote->call($server,['action'=>'commit','name'=>$t->remote_name,'revision'=>$revision]);} catch(Throwable) {} }
             } catch (Throwable $e) {
                 $restored=[];
                 foreach ($snapshots as $side=>$server) { try { app(\App\Services\TunnelCdnRemote::class)->revision($t,$settings,$side,'rollback',$revision); $remote->call($server,['action'=>'rollback','name'=>$t->remote_name,'revision'=>$revision]);$restored[$side]=true; } catch(Throwable) {$restored[$side]=false;} }
                 $message = in_array(false,$restored,true) ? 'اعمال تنظیمات کامل نشد؛ بازگردانی یکی از دو سمت نیازمند بررسی است.' : 'اعمال تنظیمات کامل نشد؛ تنظیمات قبلی دو سمت بازگردانده شد.';
-                $t->update(['status'=>'needs_review','message'=>$message]);foreach($servers as $server)$this->refreshReservations($server,$remote,$manager);$manager->finish($op,'failed',$message,['rollback'=>$restored]);return;
+                $t->update(['settings'=>$beforeSettings,'status'=>'needs_review','message'=>$message]);
+                if($policyChanged)try {app(\App\Services\TunnelOriginRemote::class)->refreshNodePolicy($t,$settings,$beforeSettings,true);}catch(Throwable){
+                    $restored['node_policy']=false;$message='تنظیمات تونل بازگردانده شد؛ بازیابی سیاست هویت نود نیازمند بررسی است.';$t->update(['message'=>$message]);
+                }
+                foreach($servers as $server)$this->refreshReservations($server,$remote,$manager);$manager->finish($op,'failed',$message,['rollback'=>$restored,'error'=>str_replace($t->secret,'[secret]',$e->getMessage())]);return;
             }
         } else {
             foreach ($servers as $side=>$server) {
                 try {
                     $result[$side]=$remote->call($server,['action'=>$op->action,'name'=>$t->remote_name,
-                        'target_ports'=>$side==='foreign'?array_column($settings['mappings'],'target_port'):[], 'udp'=>(bool)($settings['accept_udp']??false)]);
+                        'enabled'=>$op->action==='start'?true:($op->action==='stop'?false:($settings['enabled']??true)),
+                        ...($op->action==='start'?['origin_plan'=>($plan=\App\Services\TrustedTunnelOrigin::plan($t,[...$settings,'enabled'=>true],$side))?[...$plan,'staged'=>true]:null]:[]),
+                        'target_ports'=>$side==='foreign'?array_column($settings['mappings'],'target_port'):[], 'udp'=>\App\Services\TrustedTunnelOrigin::udpOnlyBackpack($t)||(bool)($settings['accept_udp']??false)]);
                     if($op->action==='status'&&($settings['connection_mode']??'direct')==='cdn')$result[$side]['cdn']=app(\App\Services\TunnelCdnRemote::class)->status($t,$settings,$side);
                     if ($op->action === 'logs' && isset($result[$side]['text'])) {
                         $result[$side]['text'] = preg_replace('~backpack://[^\s]+~', '[setup-link]', str_replace($t->secret, '[secret]', $result[$side]['text']));
@@ -208,13 +223,17 @@ class RunTunnelOperation implements ShouldQueue, ShouldBeEncrypted
             $failed = isset($result['iran']['error']) || isset($result['foreign']['error']);
             if ($op->action === 'status') {
                 $result['_checked_at']=now()->timestamp;
-                $t->update(['remote_status'=>$result,'status'=>$failed?'needs_review':$this->connectionState($result),
-                    'message'=>$failed?'دریافت وضعیت یکی از دو سرور کامل نشد.':$this->connectionMessage($result)]);
+                $t->update(['remote_status'=>$result,'status'=>$failed?'needs_review':$this->connectionState($result,$t),
+                    'message'=>$failed?'دریافت وضعیت یکی از دو سرور کامل نشد.':$this->connectionMessage($result,$t)]);
             } elseif ($op->action !== 'logs') {
                 $t->update(['status'=>$failed?'needs_review':match($op->action){'delete'=>'deleted','stop'=>'stopped',default=>'checking'},
                     'message'=>$failed?'عملیات فقط روی یکی از دو سمت انجام شد؛ پس از رفع اتصال دوباره اجرا کنید.':'عملیات روی هر دو سرور انجام شد.']);
             }
-            if (!$failed && in_array($op->action,['start','stop'],true)) $t->update(['settings'=>[...$settings,'enabled'=>$op->action==='start']]);
+            if (!$failed && in_array($op->action,['start','stop'],true)) {
+                $next=[...$settings,'enabled'=>$op->action==='start'];$t->update(['settings'=>$next]);
+                app(\App\Services\TunnelOriginRemote::class)->refreshNodePolicy($t,$settings,$next,$op->action==='start');
+                app(\App\Services\TunnelOriginRemote::class)->activate($t,$next);
+            }
             if ($failed) { $manager->finish($op,'failed',$t->message ?? 'دریافت گزارش کامل نشد.',$result);return; }
         }
         if($op->action==='delete')foreach($servers as $server)$this->refreshReservations($server,$remote,$manager);
@@ -226,6 +245,7 @@ class RunTunnelOperation implements ShouldQueue, ShouldBeEncrypted
         try {
             $ports=$manager->reservedPorts($server);
             if($extra) {
+                if(!empty($extra['source_identity_port']))$ports[]=(int)$extra['source_identity_port'];
                 $ports[]=(int)$extra['tunnel_port'];
                 foreach($extra['mappings'] as $mapping){$ports[]=(int)$mapping['public_port'];$ports[]=(int)$mapping['target_port'];}
             }
@@ -237,6 +257,11 @@ class RunTunnelOperation implements ShouldQueue, ShouldBeEncrypted
         }
     }
 
+    public static function applyOrder(ServerTunnel $t): array
+    {
+        return $t->kind==='reverse'||$t->orientation==='swapped'?['iran','foreign']:['foreign','iran'];
+    }
+
     public function applyRequest(ServerTunnel $t, array $settings, string $side): array
     {
         $normal = $t->orientation === 'normal';
@@ -246,6 +271,7 @@ class RunTunnelOperation implements ShouldQueue, ShouldBeEncrypted
         // /30 allocation is confined to 10.203/16, bounded by the allocator.
         $maps=implode(',',array_map(fn($m)=>$m['public_port'].'='.$m['target_port'],$settings['mappings']));
         $request=['action'=>'apply','name'=>$t->remote_name,'kind'=>$t->kind,'transport'=>$t->transport,'token'=>$t->secret,
+            'enabled'=>(bool)($settings['enabled']??true),'origin_plan'=>\App\Services\TrustedTunnelOrigin::plan($t,$settings,$side),
             'bridge_port'=>40000+(int)$t->subnet,
             'role'=>$t->kind==='reverse'?($side==='iran'?'server':'client'):($side==='iran'?'iran':'kharej'),
             'swapped'=>!$normal,'host'=>$peerHost,'port'=>$settings['tunnel_port'],'ports'=>$maps,'udp'=>(bool)($settings['accept_udp']??false),
@@ -254,17 +280,16 @@ class RunTunnelOperation implements ShouldQueue, ShouldBeEncrypted
         return $request;
     }
 
-    private function connectionState(array $r): string
+    private function connectionState(array $r,?ServerTunnel $t=null): string
     {
-        foreach(['iran','foreign'] as $side)if(isset($r[$side]['cdn']['cdn_verified'])&&!$r[$side]['cdn']['cdn_verified'])return 'needs_review';
-        if (empty($r['iran']['active']) || empty($r['foreign']['active'])) return 'offline';
-        $states = [data_get($r,'iran.metrics.connected'), data_get($r,'foreign.metrics.connected')];
-        if (in_array(false, $states, true)) return 'offline';
-        return $states === [true, true] ? 'connected' : 'checking';
+        $probe=$t?clone $t:new ServerTunnel;
+        $probe->forceFill(['engine'=>'backpack','settings'=>$t?->settings??[],'remote_status'=>$r]);
+        return match(\App\Services\TunnelHealth::reason($probe)){null=>'connected','stopped'=>'stopped','access','cdn'=>'needs_review','unknown','quota'=>'checking','target'=>'degraded',default=>'offline'};
     }
-    private function connectionMessage(array $r): string
+    private function connectionMessage(array $r,?ServerTunnel $t=null): string
     {
-        if ($this->connectionState($r)!=='connected') return 'ارتباط دو سمت هنوز تأیید نشده است.';
+        if($this->connectionState($r,$t)==='degraded')return 'مسیر تونل بررسی شد؛ سرویس نود مقصد پاسخ نمی‌دهد.';
+        if ($this->connectionState($r,$t)!=='connected') return 'ارتباط دو سمت هنوز تأیید نشده است.';
         $targets=$r['foreign']['targets']??[];
         return in_array(false,$targets,true)?'تونل متصل است؛ سرویس مقصد هنوز پاسخ نمی‌دهد.':'ارتباط تونل برقرار است؛ اتصال نود را از کلاینت هم بررسی کنید.';
     }
@@ -275,7 +300,23 @@ class RunTunnelOperation implements ShouldQueue, ShouldBeEncrypted
             $op->update(['cancel_requested'=>true,'message'=>'اجرای تست قطع شد؛ در حال جمع‌آوری منابع موقت…']);
             self::dispatch($op->id)->delay(now()->addSeconds(5));return;
         }
+        if($op->action==='apply' && array_key_exists('origin_before_settings',$op->payload??[])) {
+            if(($op->payload['phase']??'')==='origin-committed') {
+                app(TunnelManager::class)->finish($op,'succeeded','تنظیمات دو سمت و هویت نود آماده شد؛ پاک‌سازی نسخهٔ بازگشت کامل تأیید نشد.');return;
+            }
+            $t=ServerTunnel::with(['iran','foreign'])->find($op->tunnel_id);$restored=[];
+            if($t) {
+                $after=$t->settings;$before=$op->payload['origin_before_settings'];$revision=str_pad(dechex($op->id),32,'0',STR_PAD_LEFT);
+                foreach($op->payload['origin_snapshot_sides']??[] as $side)try {
+                    app(BackpackRemote::class)->call($t->$side,['action'=>'rollback','name'=>$t->remote_name,'revision'=>$revision]);$restored[$side]=true;
+                }catch(Throwable){$restored[$side]=false;}
+                $t->update(['settings'=>$before,'status'=>'needs_review']);
+                try {app(\App\Services\TunnelOriginRemote::class)->refreshNodePolicy($t,$after,$before,true);}catch(Throwable){$restored['node_policy']=false;}
+            }
+            app(TunnelManager::class)->finish($op,'failed','اجرای عملیات قطع شد؛ بازگردانی دو سمت انجام شد و گزارش نیازمند بررسی است.',['rollback'=>$restored]);return;
+        }
         app(TunnelManager::class)->finish($op,'failed','اجرای عملیات قطع شد؛ وضعیت دو سرور را بررسی کنید.');
         if($op->tunnel_id)ServerTunnel::whereKey($op->tunnel_id)->update(['status'=>'needs_review']);
     }
 }
+

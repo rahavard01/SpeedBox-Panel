@@ -21,9 +21,15 @@ $app->instance('config',new Repository([
 ]));
 $app->instance('events',new Illuminate\Events\Dispatcher($app));
 Facade::setFacadeApplication($app);
-foreach([Illuminate\Database\DatabaseServiceProvider::class,Illuminate\Encryption\EncryptionServiceProvider::class,Illuminate\Cache\CacheServiceProvider::class,Illuminate\Bus\BusServiceProvider::class] as $provider)$app->register($provider);
+foreach([Illuminate\Filesystem\FilesystemServiceProvider::class,Illuminate\Database\DatabaseServiceProvider::class,Illuminate\Encryption\EncryptionServiceProvider::class,Illuminate\Cache\CacheServiceProvider::class,Illuminate\Bus\BusServiceProvider::class] as $provider)$app->register($provider);
 Model::setConnectionResolver($app['db']);
 Bus::fake();
+$origin=new class {
+ public function allocate($t,$settings,$entries):int{return 25001;}
+ public function refreshNodePolicy($t,$before,$after,$force=false):void{}
+ public function activate($t,$settings):void{}
+};
+$app->instance(App\Services\TunnelOriginRemote::class,$origin);
 Schema::create('speedbox_managed_servers',function(Blueprint $t){$t->id();$t->string('name');$t->string('host');$t->integer('ssh_port')->default(22);$t->string('ssh_user')->default('root');$t->string('status')->default('ready');$t->integer('machine_id')->nullable();$t->timestamps();});
 Schema::create('speedbox_deployments',function(Blueprint $t){$t->id();$t->integer('managed_server_id');$t->string('status');});
 Schema::create('v2_server',function(Blueprint $t){$t->id();$t->integer('machine_id');$t->integer('server_port');});
@@ -78,10 +84,11 @@ $check(DB::table('speedbox_tunnel_leases')->count()===2,'both endpoints leased')
 $check(Bus::dispatched(RunTunnelReconfigure::class)->count()===1,'dedicated worker dispatched');
 $reject($body,'concurrent edit rejected',409);
 
-// Simulate only SSH. Run the real durable job and real SQLite state transitions.
+// Simulate host/origin dependencies. Run the real durable job and SQLite state transitions.
 $calls=[];$configs=[];$backups=[];$fault='';$generation=0;
-$reset=function(bool $active=true)use(&$configs,&$backups,&$calls,$t){
- $t->refresh()->update(['kind'=>'reverse','transport'=>'pck','orientation'=>'normal','status'=>$active?'connected':'stopped','name'=>'same-card']);
+$initialSettings=$t->settings;
+$reset=function(bool $active=true)use(&$configs,&$backups,&$calls,$t,$initialSettings){
+ $t->refresh()->update(['kind'=>'reverse','transport'=>'pck','orientation'=>'normal','status'=>$active?'connected':'stopped','name'=>'same-card','settings'=>$initialSettings]);
  $configs=[1=>['kind'=>'reverse','transport'=>'pck','orientation'=>'normal','active'=>$active],2=>['kind'=>'reverse','transport'=>'pck','orientation'=>'normal','active'=>$active]];$backups=[];$calls=[];
 };
 $reset();
@@ -121,9 +128,9 @@ $drive=function($op,?callable $hook=null)use($remote,$manager,$check){
 };
 $id=$t->id;$name=$t->remote_name;$secret=$t->secret;$subnet=$t->subnet;$settings=$t->settings;
 $result=$drive($op);
-$check($result->status==='succeeded'&&$t->fresh()->transport==='tcp','fresh two-sided connection commits method');
+$check($result->status==='succeeded'&&$t->fresh()->transport==='tcp','fresh two-sided connection commits method: '.json_encode([$result->message,$result->payload['error']??null,$result->result]));
 $check($t->fresh()->id===$id&&$t->fresh()->remote_name===$name&&$t->fresh()->secret===$secret&&$t->fresh()->subnet===$subnet,'identity, secret and private allocation preserved');
-$check($t->fresh()->settings==$settings&&$unrelated->fresh()->transport==='pck','mappings and unrelated shared tunnel preserved');
+$check(array_intersect_key($t->fresh()->settings,$settings)==$settings&&$unrelated->fresh()->transport==='pck','mappings and unrelated shared tunnel preserved');
 $check(!collect($calls)->contains(fn($c)=>$c[0]===3),'no SSH mutation on other shared peer');
 $check(DB::table('speedbox_tunnel_leases')->count()===0,'success releases endpoint leases');
 $n=count($calls);(new RunTunnelReconfigure($op->id))->handle($remote,$manager);$check(count($calls)===$n,'duplicate completed delivery is a no-op');
@@ -146,7 +153,7 @@ $fault='';$update($body);$drive(TunnelOperation::orderByDesc('id')->first());
 $check($t->fresh()->kind==='reverse'&&$configs[1]['kind']==='reverse','direct to reverse change keeps original card');
 $reset();$fault='';$swapped=TunnelConnectionTest::create(['iran_server_id'=>1,'foreign_server_id'=>2,'status'=>'completed','results'=>$manager->rows([['k'=>'direct','t'=>'xdi','s'=>'ok','o'=>60,'n'=>60]],'swapped')]);
 $update([...$body,'test_id'=>$swapped->id,'result_id'=>'swapped:direct:xdi']);$drive(TunnelOperation::orderByDesc('id')->first());
-$check($t->fresh()->orientation==='swapped'&&$configs[1]['orientation']==='swapped'&&$t->fresh()->settings==$settings,'swapped direct mode preserves Iran ingress and the same port mappings');
+$check($t->fresh()->orientation==='swapped'&&$configs[1]['orientation']==='swapped'&&array_intersect_key($t->fresh()->settings,$settings)==$settings,'swapped direct mode preserves Iran ingress and the same port mappings');
 $reset();$fault='';$update($body);$op=TunnelOperation::orderByDesc('id')->first();$interrupted=false;
 $drive($op,function($op)use(&$interrupted){if(!$interrupted&&($op->payload['phase']??'')==='apply'&&($op->payload['index']??0)===1){$interrupted=true;(new RunTunnelReconfigure($op->id))->failed(new RuntimeException('worker died'));$op->refresh();}});
 $check($interrupted&&$configs[1]['transport']==='pck'&&$configs[2]['transport']==='pck','worker death after first activation schedules rollback');

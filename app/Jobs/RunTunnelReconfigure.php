@@ -41,7 +41,12 @@ class RunTunnelReconfigure implements ShouldQueue,ShouldBeEncrypted
         if(!isset($p['old_method'])) {
             $p['old_cdn']=($t->settings['connection_mode']??'direct')==='cdn';
             $p['old_method']=['kind'=>$t->kind,'transport'=>$t->transport,'orientation'=>$t->orientation];
+            $p['old_settings']=$t->settings;$p['old_name']=$t->name;
             $op->update(['payload'=>$p]);
+        }
+        if($phase==='ensure' && empty($p['origin_upgraded'])) {
+            $p['settings']=\App\Services\TrustedTunnelOrigin::upgrade($t,$p['settings']);
+            $p['origin_upgraded']=true;$op->update(['payload'=>$p]);
         }
         if(!str_starts_with($phase,'rollback') && !in_array($phase,['cleanup-failed','commit'],true) && $op->deadline->isPast())throw new \RuntimeException('deadline');
         $candidate=clone $t;$candidate->forceFill($p['method']);
@@ -65,6 +70,7 @@ class RunTunnelReconfigure implements ShouldQueue,ShouldBeEncrypted
         if($phase==='reserve') {
             if(isset($sides[$i])) {
                 $side=$sides[$i];$ports=[...$manager->reservedPorts($servers[$side]),(int)$p['settings']['tunnel_port']];
+                if(!empty($p['settings']['source_identity_port']))$ports[]=(int)$p['settings']['source_identity_port'];
                 foreach($p['settings']['mappings'] as $map)$ports[]=(int)$map[$side==='iran'?'public_port':'target_port'];
                 $answer=$remote->maintenance($servers[$side],'reserve',$ports);
                 if(isset($answer['status']))$manager->saveHostStatus($servers[$side]->id,$answer['status']);
@@ -82,13 +88,12 @@ class RunTunnelReconfigure implements ShouldQueue,ShouldBeEncrypted
             $this->next($op,[...$p,'phase'=>'apply','index'=>0],'در حال راه‌اندازی روش جدید…',40);return;
         }
         if($phase==='apply') {
-            $listenerIran=$candidate->kind==='reverse'?$candidate->orientation==='normal':$candidate->orientation==='swapped';
-            $order=$listenerIran?$sides:array_reverse($sides);
+            $order=RunTunnelOperation::applyOrder($candidate);
             if(isset($order[$i])) {
                 $side=$order[$i];
                 app(\App\Services\TunnelCdnRemote::class)->prepare($candidate,$p['settings'],$side);
                 $r=$remote->call($servers[$side],(new RunTunnelOperation($op->id))->applyRequest($candidate,$p['settings'],$side));
-                if(empty($r['active'])||empty($r['checked_at']))throw new \RuntimeException('new_service_inactive');
+                if((bool)($r['active']??false)!==(bool)($p['settings']['enabled']??true)||empty($r['checked_at']))throw new \RuntimeException('new_service_state_mismatch');
                 $p['activated_at'][$side]=(int)$r['checked_at'];
                 $this->next($op,[...$p,'index'=>$i+1],'در حال راه‌اندازی روش جدید روی '.($side==='iran'?'ایران':'خارج').'…',60);return;
             }
@@ -96,17 +101,23 @@ class RunTunnelReconfigure implements ShouldQueue,ShouldBeEncrypted
         }
         if($phase==='verify') {
             $after=[];foreach($sides as $side)$after[$side]=$this->status($remote,$servers[$side],$candidate,$p['settings'],$side);
-            if(!$this->connected($after,$p)) {
+            $stopped=!($p['settings']['enabled']??true);
+            if($stopped ? (!empty($after['iran']['active'])||!empty($after['foreign']['active'])) : !$this->connected($after,$p)) {
                 if(now()->timestamp >= $p['verify_until'])throw new \RuntimeException('connection_not_verified');
                 $this->next($op,$p,'در انتظار تأیید ارتباط جدید دو سمت…',80,5);return;
             }
             // DB state and the point after which rollback is forbidden commit together.
             DB::transaction(function()use($op,$p,$t,$candidate,$after){
                 if(($p['settings']['connection_mode']??'direct')==='cdn'||($t->settings['connection_mode']??'direct')==='cdn')app(\App\Services\TunnelCdnRemote::class)->commit($candidate,$p['settings']);
-                $t->update([...$p['method'],'settings'=>$p['settings'],'name'=>$p['name'],'remote_status'=>$after,'status'=>'connected','message'=>'روش اتصال تغییر کرد و ارتباط دو سمت تأیید شد.']);
-                $op->update(['payload'=>[...$p,'committed'=>true,'phase'=>'commit','index'=>0],'result'=>['before'=>$p['old_method'],'after'=>$p['method'],'servers'=>$after],'message'=>$t->message,'progress'=>95]);
+                $t->update([...$p['method'],'settings'=>$p['settings'],'name'=>$p['name'],'remote_status'=>$after,'status'=>($p['settings']['enabled']??true)?'connected':'stopped','message'=>($p['settings']['enabled']??true)?'روش اتصال تغییر کرد و ارتباط دو سمت تأیید شد.':'روش اتصال تغییر کرد؛ تونل متوقف باقی ماند.']);
+                $op->update(['payload'=>[...$p,'policy_changed'=>true,'phase'=>'activate-origin','index'=>0],'result'=>['before'=>$p['old_method'],'after'=>$p['method'],'servers'=>$after],'message'=>$t->message,'progress'=>95]);
             });
             self::dispatch($op->id);return;
+        }
+        if($phase==='activate-origin') {
+            app(\App\Services\TunnelOriginRemote::class)->refreshNodePolicy($t,$p['old_settings'],$p['settings']);
+            app(\App\Services\TunnelOriginRemote::class)->activate($t,$p['settings']);
+            $this->next($op,[...$p,'committed'=>true,'phase'=>'commit','index'=>0],'در حال نهایی‌کردن تغییر روش…',95);return;
         }
         if($phase==='rollback-stop') {
             if(isset($sides[$i])) {
@@ -133,6 +144,12 @@ class RunTunnelReconfigure implements ShouldQueue,ShouldBeEncrypted
             $this->next($op,[...$p,'phase'=>'rollback-state','index'=>0],'در حال بررسی وضعیت روش قبلی…',90);return;
         }
         if($phase==='rollback-state') {
+            if(!empty($p['policy_changed']) && empty($p['policy_restored'])) {
+                $t->update([...$p['old_method'],'settings'=>$p['old_settings'],'name'=>$p['old_name']]);
+                try {app(\App\Services\TunnelOriginRemote::class)->refreshNodePolicy($t,$p['settings'],$p['old_settings'],true);}
+                catch(Throwable){$p['rollback_errors']['node_policy']=true;}
+                $p['policy_restored']=true;$op->update(['payload'=>$p]);
+            }
             if(isset($sides[$i])) {
                 $side=$sides[$i];
                 try {
@@ -147,7 +164,7 @@ class RunTunnelReconfigure implements ShouldQueue,ShouldBeEncrypted
             $message=$failed?'تغییر روش کامل نشد؛ بازگردانی یکی از دو سرور نیازمند بررسی است.':'تغییر روش تأیید نشد؛ تنظیمات قبلی بازگردانده شد.';
             $state=$failed?'needs_review':((empty($r['iran']['active'])&&empty($r['foreign']['active']))?'stopped':($this->connected($r,[...$p,'settings'=>$t->settings])?'connected':'checking'));
             $t->update(['status'=>$state,'remote_status'=>$r,'message'=>$message]);
-            $op->update(['result'=>['rollback'=>array_map(fn($side)=>!isset($p['rollback_errors'][$side]),array_combine($sides,$sides)),'servers'=>$r]]);
+            $op->update(['result'=>['rollback'=>array_map(fn($side)=>!isset($p['rollback_errors'][$side]),array_combine($sides,$sides)),'node_policy'=>!isset($p['rollback_errors']['node_policy']),'servers'=>$r]]);
             $this->next($op,[...$p,'phase'=>'cleanup-failed','index'=>0],$message,95);return;
         }
         if(in_array($phase,['commit','cleanup-failed'],true)) {
@@ -158,14 +175,14 @@ class RunTunnelReconfigure implements ShouldQueue,ShouldBeEncrypted
                 if($phase==='commit'||empty($p['mutating']))try{app(\App\Services\TunnelCdnRemote::class)->revision($t,$p['settings'],$side,'commit',$revision,!empty($p['old_cdn']));$remote->call($servers[$side],['action'=>'commit','name'=>$t->remote_name,'revision'=>$revision]);}catch(Throwable){}
                 $this->next($op,[...$p,'index'=>$i+1],$op->message,95);return;
             }
-            $manager->finish($op,$phase==='commit'?'succeeded':'failed',$phase==='commit'?'روش اتصال تغییر کرد و ارتباط دو سمت تأیید شد.':($op->message?:'تغییر روش شروع نشد؛ تنظیمات قبلی حفظ شد.'),$op->result??[]);return;
+            $manager->finish($op,$phase==='commit'?'succeeded':'failed',$phase==='commit'?(($p['settings']['enabled']??true)?'روش اتصال تغییر کرد و ارتباط دو سمت تأیید شد.':'روش اتصال تغییر کرد؛ توقف دو سمت حفظ شد.'):($op->message?:'تغییر روش شروع نشد؛ تنظیمات قبلی حفظ شد.'),$op->result??[]);return;
         }
         throw new \RuntimeException('invalid_phase');
     }
 
     private function status(BackpackRemote $remote,$server,ServerTunnel $t,array $settings,string $side): array
     {
-        $r=$remote->call($server,['action'=>'status','name'=>$t->remote_name,'target_ports'=>$side==='foreign'?array_column($settings['mappings'],'target_port'):[],'udp'=>(bool)$settings['accept_udp']]);
+        $r=$remote->call($server,['action'=>'status','name'=>$t->remote_name,'target_ports'=>$side==='foreign'?array_column($settings['mappings'],'target_port'):[],'udp'=>\App\Services\TrustedTunnelOrigin::udpOnlyBackpack($t)||(bool)$settings['accept_udp']]);
         if(($settings['connection_mode']??'direct')==='cdn')$r['cdn']=app(\App\Services\TunnelCdnRemote::class)->status($t,$settings,$side);
         return $r;
     }
@@ -177,7 +194,8 @@ class RunTunnelReconfigure implements ShouldQueue,ShouldBeEncrypted
             if(isset($r['cdn']['cdn_verified'])&&!$r['cdn']['cdn_verified'])return false;
             if(empty($r['active'])||($r['metrics']['connected']??null)!==true||!$taken||$taken<($p['activated_at'][$side]??PHP_INT_MAX)||$taken<=strtotime($p['baseline'][$side]['metrics']['taken']??''))return false;
         }
-        if(empty($p['settings']['accept_udp']))foreach($p['baseline']['foreign']['targets']??[] as $port=>$working) {
+        $udpOnly=($p['method']['kind']??'')==='reverse'&&($p['method']['transport']??'')==='udp'&&($p['method']['orientation']??'')==='normal';
+        if(empty($p['settings']['accept_udp'])&&!$udpOnly)foreach($p['baseline']['foreign']['targets']??[] as $port=>$working) {
             if($working===true&&in_array((int)$port,array_column($p['settings']['mappings'],'target_port'),true)&&($after['foreign']['targets'][$port]??null)!==true)return false;
         }
         return true;
@@ -199,3 +217,4 @@ class RunTunnelReconfigure implements ShouldQueue,ShouldBeEncrypted
         $op=TunnelOperation::find($this->operationId);if($op&&in_array($op->status,['queued','running'],true))$this->recover($op);
     }
 }
+

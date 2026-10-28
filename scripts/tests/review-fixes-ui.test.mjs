@@ -1,9 +1,9 @@
 import { readFileSync } from 'node:fs';
-import vm from 'node:vm';
 import assert from 'node:assert/strict';
+import { loadSourceUi } from './helpers/source-ui.mjs';
 import { createRequire } from 'node:module';
-const { JSDOM } = await import(process.env.PARTNER_TEST_JSDOM || 'jsdom');
-const css = createRequire(process.env.PARTNER_TEST_JSDOM || import.meta.url)('css-tree');
+const { JSDOM } = await import(process.env.SPEEDBOX_TEST_JSDOM || process.env.PARTNER_TEST_JSDOM || 'jsdom');
+const css = createRequire(process.env.SPEEDBOX_TEST_JSDOM || process.env.PARTNER_TEST_JSDOM || import.meta.url)('css-tree');
 function viewportStyles(text,width){
   const ast=css.parse(text);
   const flatten=list=>[...list].map(node=>{
@@ -17,13 +17,6 @@ function viewportStyles(text,width){
 }
 const read = file => readFileSync(new URL('../../' + file, import.meta.url), 'utf8');
 const manifest = JSON.parse(read('public/build/manifest.json'));
-const rootFile = manifest['resources/js/app.js'].file;
-let source = read('public/build/' + rootFile).replace('Cs.mount("#app")', 'void 0').replace('Cs.use(us)', 'void 0');
-const names = ['Billing','Tickets','Announcements','Tutorials'].map(name => {
-  const index = source.indexOf('__name:"' + name + '"');
-  return source.slice(index - 100, index).match(/([\w$]+)=\{$/)[1];
-});
-source += '\nexport{ac as ReviewApp,M6 as ReviewNotify,et as ReviewToastState,' + names.map((name, index) => name + ' as Review' + ['Billing','Tickets','Announcements','Tutorials'][index]).join(',') + '};';
 const transactions = [{ id:1,type:'ai_receipt_check_fee',amount:-4000,signed_amount:-4000,user_code:'testrep',username:'rep@example.invalid',affected_users:[],balance_after:12345,status:'success',created_at:'2026-10-11T12:00:00Z',performed_by_role:'system' }];
 const prices = { overage_per_gb:1500,test:1000,m1:100000,m3:250000,m6:450000,m12:850000 };
 const referral = { id:7,status:'pending',referee_name:'New partner',referee_code:'newrep',referee_email:'new@example.invalid',referrer:{id:2,name:'Existing',code:'testrep',partner_plan_type:'time'},pricing_strategy:'custom',created_at:'2026-10-11T12:00:00Z' };
@@ -37,7 +30,7 @@ for (const width of [375,820,1280]) {
   win.fetch=async()=>({json:async()=>({})});win.AbortController=AbortController;win.scrollTo=()=>{};
   win.eval(read('public/speedbox/register-infrastructure.js'));
   // Model Vite's late page-style loading, after shared overrides, at each width.
-  for (const file of ['public/build/assets/app--UQp4rU8.css','public/speedbox/panel-controls.css',...['Settings','Announcements','Tutorials'].flatMap(name=>manifest['resources/js/pages/admin/'+name+'.vue'].css.map(file=>'public/build/'+file))]) {
+  for (const file of [...manifest['resources/js/app.js'].css.map(file=>'public/build/'+file),'public/speedbox/panel-controls.css',...['Settings','Announcements','Tutorials'].flatMap(name=>manifest['resources/js/pages/admin/'+name+'.vue'].css.map(file=>'public/build/'+file))]) {
     const style=win.document.createElement('style');style.textContent=viewportStyles(read(file),width);win.document.head.append(style);
   }
   let nativeRenders=0;
@@ -46,19 +39,13 @@ for (const width of [375,820,1280]) {
     if(++nativeRenders>100)throw Error('Native selector render loop: '+options.placeholder);
     return nativeRenderer(options);
   };
-  const root=new vm.SourceTextModule(source,{context:dom.getInternalVMContext(),initializeImportMeta:meta=>{meta.url='http://fixture.test/'+rootFile}});
-  await root.link(()=>{throw Error('Unexpected core import')});await root.evaluate();
+  const ui=await loadSourceUi(dom);
+  const root={namespace:{ReviewApp:ui.Vue.createApp,ReviewNotify:ui.useToast().notif,ReviewToastState:{items:ui.useToast().toasts},v:ui.http,R:ui.Vue.nextTick,
+    ReviewBilling:ui.Billing,ReviewTickets:ui.Tickets,ReviewAnnouncements:ui.Announcements,ReviewTutorials:ui.Tutorials}};
   root.namespace.ReviewNotify('Operation feedback',{replace:false});
   root.namespace.ReviewNotify('Operation feedback',{replace:false});
   assert.equal(root.namespace.ReviewToastState.items.length,2,'Repeated user-action feedback is not suppressed by notification deduplication');
   root.namespace.ReviewToastState.items.splice(0);
-  const modules=new Map([[rootFile.split('/').at(-1),root]]);
-  async function load(file){
-    file=file.split('/').at(-1);
-    if(modules.has(file))return modules.get(file);
-    const module=new vm.SourceTextModule(read('public/build/assets/'+file),{context:dom.getInternalVMContext(),initializeImportMeta:meta=>{meta.url='http://fixture.test/assets/'+file}});
-    modules.set(file,module);await module.link(specifier=>load(specifier));await module.evaluate();return module;
-  }
   root.namespace.v.get=async url=>{
     if(url==='/admin/transactions'||url==='/user/transactions')return{data:transactions};
     if(url==='/admin/referrals')return{data:{ok:true,items:[referral],meta:{current_page:1,last_page:1,total:1}}};
@@ -74,7 +61,7 @@ for (const width of [375,820,1280]) {
   };
   const flush=async()=>{for(let n=0;n<8;n++){await Promise.resolve();await root.namespace.R();}};
   const mount=async (component,props)=>{const errors=[],app=root.namespace.ReviewApp(component,props);app.config.errorHandler=error=>errors.push(error);app.mount('#fixture');await flush();return{app,errors}};
-  for(const component of [(await load(manifest['resources/js/pages/admin/Invoices.vue'].file)).namespace.default,root.namespace.ReviewBilling]){
+  for(const component of [ui.Invoices,root.namespace.ReviewBilling]){
     const {app,errors}=await mount(component);
     assert.ok(win.document.querySelector('#fixture').textContent.includes('testrep'),'AI receipt charge displays its panel code in both invoice views');
     assert.ok(!win.document.querySelector('#fixture').textContent.includes('Credit Adjustment'));
@@ -86,13 +73,13 @@ for (const width of [375,820,1280]) {
     assert.ok(win.document.querySelector('.final-result1 .modal-actions-row button'),'Submit ticket is inside the glass form');assert.deepEqual(errors,[]);app.unmount();await flush();
   }
   {
-    const {app,errors}=await mount((await load(manifest['resources/js/pages/admin/Requests.vue'].file)).namespace.default);
+    const {app,errors}=await mount(ui.Requests);
     const button=[...win.document.querySelectorAll('button')].find(node=>node.textContent.includes('بررسی'));assert.ok(button,win.document.querySelector('#fixture').textContent);button.click();await flush();
     assert.equal(win.document.querySelectorAll('.price-box>.edit-row').length,6,'Custom time pricing retains all six real fields');
     assert.equal(win.document.querySelectorAll('.price-box input').length,6);assert.deepEqual(errors,[]);app.unmount();await flush();
   }
   {
-    const {app,errors}=await mount((await load(manifest['resources/js/pages/admin/Settings.vue'].file)).namespace.default);
+    const {app,errors}=await mount(ui.Settings);
     win.document.querySelector('.chev-btn').click();await flush();
     for(const secondary of win.document.querySelectorAll('.tariff-secondary-controls')){assert.ok(secondary.querySelector('.partner-access-badge1'));assert.ok(secondary.querySelector('.tariff-connection-field'));}
     const field=win.document.querySelector('.tariff-connection-field input');assert.ok(field);assert.equal(field.value,'۲ کاربر');assert.equal(win.document.querySelector('.tariff-connection-field label'),null);
@@ -140,7 +127,7 @@ for (const width of [375,820,1280]) {
   {
     const spacing=[];
     for(const name of ['Announcements','Tutorials']){
-      const {app,errors}=await mount((await load(manifest['resources/js/pages/admin/'+name+'.vue'].file)).namespace.default);
+      const {app,errors}=await mount(ui['Admin'+name]);
       const create=[...win.document.querySelectorAll('button')].find(node=>node.textContent.includes(name==='Announcements'?'اعلان جدید':'آموزش جدید'));assert.ok(create);create.click();await flush();
       const glass=win.document.querySelector('.create-modal .final-result2'),action=glass.querySelector('.modal-actions button');
       const last=name==='Announcements'?glass.querySelector(':scope>.form-row'):glass.querySelector('.modal-body .form-row:last-child');
@@ -150,9 +137,7 @@ for (const width of [375,820,1280]) {
     assert.deepEqual(spacing[0],spacing[1],'Announcement publication/action gap equals the tutorial form after lazy CSS loads');
   }
   {
-    const userSource=read('public/build/'+manifest['resources/js/pages/admin/Users.vue'].file);
-    const helper=userSource.match(/import SpeedboxAccountActions from '\.\/([^']+)'/)[1];
-    const {app,errors}=await mount((await load(helper)).namespace.default,{user:{id:11,email:'sample@testrep.com'},mobile});
+    const {app,errors}=await mount(ui.UserAccountActions,{user:{id:11,email:'sample@testrep.com'},mobile});
     const trigger=win.document.querySelector('button[aria-haspopup]');assert.ok(trigger);trigger.click();await flush();
     const remove=[...win.document.querySelectorAll('[role="menuitem"]')].find(node=>node.textContent.trim()==='حذف');assert.ok(remove);remove.click();await flush();
     const modal=win.document.querySelector('.account-operation-modal');assert.ok(modal);assert.ok(modal.textContent.includes('حذف کاربر'));assert.ok(modal.querySelector('.operation-confirmation').textContent.includes('نام کاربری:'));

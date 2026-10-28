@@ -36,7 +36,7 @@ class RunNetworkTunnelTest implements ShouldQueue,ShouldBeEncrypted
             try {
                 if($s['phase']==='ensure') {
                     $op->update(['message'=>'آماده‌سازی تست موقت روی دو سرور…','progress'=>max((int)$op->progress,5)]);
-                    $remote->ensureProbe($servers[$s['side']],($s['engine']==='wattunnel'||$s['side']===1)?$s['engine']:'gre');
+                    $remote->ensureProbe($servers[$s['side']],$s['engine']);
                     if($s['side']===0)$s['side']=1;else{$s['side']=0;$s['phase']='start';}
                 } elseif($s['phase']==='start') {
                     $this->publishRow($test,[...$row,'status'=>'testing']);
@@ -44,7 +44,7 @@ class RunNetworkTunnelTest implements ShouldQueue,ShouldBeEncrypted
                         $n=random_int(0,16383)*4;$s['probe']=['id'=>bin2hex(random_bytes(16)),'token'=>bin2hex(random_bytes(32)),
                             'inner_iran'=>'10.253.'.intdiv($n,256).'.'.($n%256+1),'inner_foreign'=>'10.253.'.intdiv($n,256).'.'.($n%256+2),'backend_port'=>random_int(33000,60000),'gre_key'=>random_int(1,2147483647)];
                     }
-                    if($s['engine']==='wattunnel'&&empty($s['backend_reserved_checked'])) {
+                    if(($s['engine']==='wattunnel'||($s['engine']==='gost'&&$row['transport']==='grpc'))&&empty($s['backend_reserved_checked'])) {
                         $blocked=[...$manager->reservedPorts($servers[0]),...$manager->reservedPorts($servers[1])];
                         for($attempt=0;in_array($s['probe']['backend_port'],$blocked,true)&&$attempt<200;$attempt++)$s['probe']['backend_port']=random_int(33000,60000);
                         if(in_array($s['probe']['backend_port'],$blocked,true))throw new \RuntimeException('پورت آزاد برای سرویس موقت تست پیدا نشد.');

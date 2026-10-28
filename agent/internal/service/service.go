@@ -30,6 +30,10 @@ import (
 )
 
 type Service struct {
+	pollMu          sync.Mutex
+	pullSequence    atomic.Uint64
+	appliedSequence uint64
+	syncRequests    chan syncRequest
 	admissionCancel context.CancelFunc
 	cfg             *config.Config
 	source          controlplane.Source
@@ -84,6 +88,7 @@ type Service struct {
 
 // pullResult carries the outcome of an async pullViaAPI back to the main goroutine.
 type pullResult struct {
+	sequence    uint64
 	config      *model.NodeSpec
 	users       []model.UserSpec
 	configHash  string
@@ -169,6 +174,7 @@ func newService(cfg *config.Config, cp controlplane.ControlPlane) *Service {
 		wsEvents:     make(chan controlplane.Event, 16),
 		wsStatusCh:   make(chan controlplane.StatusChange, 4),
 		pullResults:  make(chan pullResult, 1),
+		syncRequests: make(chan syncRequest, 4),
 	}
 }
 
@@ -216,6 +222,10 @@ func (s *Service) Run(ctx context.Context) error {
 		case <-ctx.Done():
 			s.pushReportSync()
 			return nil
+
+		case req := <-s.syncRequests:
+			state, err := s.synchronize(req.ctx)
+			req.result <- syncResponse{state: state, err: err}
 
 		case <-trackTicker.C:
 			s.trackAndEnforce(ctx)
@@ -640,7 +650,10 @@ func (s *Service) pullViaAPIAsync(ctx context.Context) {
 
 	go func() {
 		defer s.pullActive.Store(false)
+		s.pollMu.Lock()
+		seq := s.pullSequence.Add(1)
 		snapshot, err := s.source.Poll(ctx)
+		s.pollMu.Unlock()
 		if err != nil {
 			nlog.Core().Error("poll control plane failed", "error", err)
 			s.pullBackoff.onFailure()
@@ -648,7 +661,7 @@ func (s *Service) pullViaAPIAsync(ctx context.Context) {
 		}
 		s.pullBackoff.onSuccess()
 
-		result := pullResult{certChanged: certChanged}
+		result := pullResult{certChanged: certChanged, sequence: seq}
 		if snapshot.Config != nil {
 			result.config = snapshot.Config
 			result.configHash = computeConfigHash(snapshot.Config)
@@ -670,6 +683,12 @@ func (s *Service) pullViaAPIAsync(ctx context.Context) {
 
 // applyPullResult processes the result of an async pullViaAPI on the main goroutine.
 func (s *Service) applyPullResult(ctx context.Context, result pullResult) {
+	if result.sequence > 0 && result.sequence < s.appliedSequence {
+		return
+	}
+	if result.sequence > 0 {
+		s.appliedSequence = result.sequence
+	}
 	s.wsResyncPending.Store(false)
 	configChanged := false
 
@@ -1168,7 +1187,7 @@ func computeConfigHash(cfg *model.NodeSpec) string {
 	h := sha256.New()
 	// We marshal the entire config to be safe. Node config updates are low-frequency,
 	// so the robustness of capturing all fields outweighs the micro-performance of manual hashing.
-	data, _ := json.Marshal(cfg)
+	data, _ := json.Marshal(model.CanonicalNodeSpec(cfg))
 	h.Write(data)
 	return fmt.Sprintf("%x", h.Sum(nil))
 }

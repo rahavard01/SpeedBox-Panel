@@ -48,7 +48,7 @@ class NodeControlService
         $settings = $node->protocol_settings ?: [];
         $trustedOrigin = TrustedTunnelOrigin::required($node);
         $networkSettings = (array) data_get($settings, 'network_settings', []);
-        // Wat already authenticates the origin over its private broker. A
+        // Managed tunnel endpoints authenticate origins over the private broker. A
         // legacy TCP-level PROXY switch would re-enable a public header parser.
         if ($trustedOrigin) unset($networkSettings['acceptProxyProtocol']);
         $tlsSettings = data_get($settings, 'tls_settings');
@@ -280,5 +280,6 @@ class NodeControlService
         DB::table('v2_stat_server')->where($where)->incrementEach(['u' => $up, 'd' => $down], ['updated_at' => $now]);
     }
 }
+
 
 

@@ -271,7 +271,15 @@ function mount(ctx){
  }
 
  function result(op,t){if(op.action==='delete'){show('نتیجهٔ حذف',`<p>${esc(op.message)}</p>`);return;}const hosts=op.result?.hosts||{};show((op.action==='logs'?'گزارش ':'نتیجهٔ عملیات ')+label(t),`<p>${esc(op.message)}</p>${op.result?.error?`<p class="tunnel-warning">${esc(op.result.error)}</p>`:''}<div class="tunnel-log-columns">${[['iran','سرور ایران'],['foreign','سرور خارج']].map(([k,v])=>`<section><h4>${v}</h4><pre class="log-box" dir="ltr">${esc(hosts[k]?.text||hosts[k]?.logs?.join('\n')||JSON.stringify(hosts[k]||op.result?.rollback_errors?.[k]||{},null,2))}</pre></section>`).join('')}</div>`);}
- async function poll(){if(disposed||!watch)return;const {id,t}=watch;const answer=await api(`/tunnel-operations/${id}`);if(disposed||watch?.id!==id)return;const op=answer.data;if(!['queued','running'].includes(op.status)){watch=null;await refresh();result(op,t);return;}const text=body().querySelector('[data-network-progress]');if(text)text.textContent=op.message;watchTimer=setTimeout(()=>safe(poll)(),2000);}
+ async function poll(){
+  if(disposed||!watch)return;const {id,t}=watch;
+  try{
+   const answer=await api(`/tunnel-operations/${id}`);if(disposed||watch?.id!==id)return;const op=answer.data;
+   if(!['queued','running'].includes(op.status)){await refresh();if(disposed||watch?.id!==id)return;watch=null;result(op,t);return;}
+   const text=body().querySelector('[data-network-progress]');if(text)text.textContent=op.message;
+  }catch(error){/* Keep the current result and retry temporary API failures silently. */}
+  finally{if(!disposed&&watch?.id===id){clearTimeout(watchTimer);watchTimer=setTimeout(poll,2000);}}
+ }
  async function action(t,a){
   if(['optimize','engine-update'].includes(a)){await openMaintenance(t,a,api);return;}
   if(a==='edit'){await editor(t,t.engine);return;}

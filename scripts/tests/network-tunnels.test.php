@@ -24,6 +24,14 @@ Facade::setFacadeApplication($app);
 foreach([Illuminate\Filesystem\FilesystemServiceProvider::class,Illuminate\Database\DatabaseServiceProvider::class,Illuminate\Encryption\EncryptionServiceProvider::class,Illuminate\Cache\CacheServiceProvider::class,Illuminate\Bus\BusServiceProvider::class] as $provider)$app->register($provider);
 Model::setConnectionResolver($app['db']);
 Bus::fake();
+// The worker's host orchestration remains real; origin SSH calls are a separate
+// tested dependency and must not contact the fixture's documentation addresses.
+$origin=new class {
+ public function allocate($t,$settings,$entries):int{return 25001;}
+ public function refreshNodePolicy($t,$before,$after,$force=false):void{}
+ public function activate($t,$settings):void{}
+};
+$app->instance(App\Services\TunnelOriginRemote::class,$origin);
 Schema::create('speedbox_managed_servers',function(Blueprint $t){$t->id();$t->string('name');$t->string('host');$t->integer('ssh_port')->default(22);$t->string('ssh_user')->default('root');$t->string('status')->default('ready');$t->integer('machine_id')->nullable();$t->timestamps();});
 Schema::create('speedbox_deployments',function(Blueprint $t){$t->id();$t->integer('managed_server_id');$t->string('status');});
 Schema::create('v2_server',function(Blueprint $t){$t->id();$t->integer('machine_id');$t->integer('server_port');$t->string('name')->default('');$t->string('host')->default('');$t->string('port')->default('');});
@@ -83,7 +91,7 @@ $check(!str_contains(json_encode($network->export($t)),$t->secret),'export exclu
 $reject([...$base,'mappings'=>[['public_port'=>10443,'target_port'=>80]]],'new engine input reservation enforced');
 $remote=Mockery::mock(App\Services\NetworkTunnelRemote::class);$calls=[];$failure=null;
 $remote->shouldReceive('ensure')->andReturnUsing(function($server,$engine,$version)use(&$calls){$calls[]=['ensure',$server->id];});
-$remote->shouldReceive('call')->andReturnUsing(function($server,$request)use(&$calls,&$failure){$action=$request['action'];$calls[]=[$action,$server->id];if($failure&&$failure===[$action,$server->id])throw new RuntimeException('simulated SSH interruption');return $action==='prepare'?['checks'=>[['name'=>'mock prerequisites','ok'=>true]]]:['active'=>true,'connected'=>true,'checked_at'=>time(),'totals'=>['rx'=>1,'tx'=>2]];});
+$remote->shouldReceive('call')->andReturnUsing(function($server,$request)use(&$calls,&$failure){$action=$request['action'];$calls[]=[$action,$server->id];if($failure&&$failure===[$action,$server->id])throw new RuntimeException('simulated SSH interruption');return $action==='prepare'?['checks'=>[['name'=>'mock prerequisites','ok'=>true]]]:['active'=>true,'connected'=>true,'origin_endpoint'=>true,'path_verified'=>true,'checked_at'=>time(),'totals'=>['rx'=>1,'tx'=>2]];});
 $run=function($op)use($remote,$network,$manager,$check){for($i=0;$i<35;$i++){(new App\Jobs\RunNetworkTunnelOperation($op->id))->handle($remote,$network,$manager);$op->refresh();if(!in_array($op->status,['queued','running']))return $op;}$check(false,'durable job terminates');};
 $op=$run($op);$check($op->status==='succeeded','two-sided apply succeeds');
 $check($t->fresh()->status==='connected','confirmed snapshot updates central state');

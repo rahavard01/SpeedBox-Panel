@@ -13,6 +13,7 @@ use App\Services\SshExecutor;
 use App\Services\EnsureMachineWarpSupport;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
@@ -26,6 +27,9 @@ class NodeWarpTest extends TestCase
     {
         parent::setUp();
         config(['app.key' => 'base64:'.base64_encode(str_repeat('a', 32))]);
+        // These API fixtures do not run a real node agent. Its sync job has its
+        // own acknowledgment and retry tests.
+        Bus::fake([\App\Jobs\SyncNodeRuntime::class]);
         Schema::create('panel_users', function (Blueprint $t) { $t->id(); $t->string('name'); $t->string('email'); $t->string('password'); $t->integer('role'); $t->boolean('banned')->default(false); $t->timestamps(); });
         foreach (['2025_01_01_000000_create_speedbox_core_tables.php', '2026_10_08_000001_create_speedbox_infrastructure_tables.php', '2026_10_10_000003_create_connection_admission_leases.php', '2026_10_18_000001_add_node_warp_egress.php'] as $file) {
             (require database_path('migrations/'.$file))->up();
@@ -198,6 +202,7 @@ class NodeWarpTest extends TestCase
 
     public function test_job_uses_secret_file_and_sanitizes_remote_output(): void
     {
+        \Illuminate\Support\Facades\File::ensureDirectoryExists(storage_path('app/private'),0700);
         $server = ManagedServer::firstOrFail();
         $deployment = ServerDeployment::create(['managed_server_id' => $server->id, 'action' => 'warp_prepare', 'kernel' => 'xray', 'status' => 'queued']);
         $ssh = \Mockery::mock(SshExecutor::class);

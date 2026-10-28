@@ -36,10 +36,12 @@ class NetworkTunnelTest
             }
             foreach($engine==='gost'?NetworkTunnelRules::VERSIONS:($family==='ipv6'?['ip6gre','ip6gretap']:['gre','gretap']) as $method) {
                 $version=$engine==='gost'?$method:'3.0.0';$transport=$engine==='gost'?'tcp':$method;
-                $rows[]=['id'=>$engine.':'.$method.':'.$family,'engine'=>$engine,'version'=>$version,'transport'=>$transport,'ip_family'=>$family,
+                foreach($engine==='gost'&&$version==='3.0.0'?['tcp','grpc']:[$transport] as $transport) {
+                $rows[]=['id'=>$engine.':'.$method.':'.$family.($transport==='grpc'?':grpc':''),'engine'=>$engine,'version'=>$version,'transport'=>$transport,'ip_family'=>$family,
                     'peer_host'=>$peer,'local_endpoint'=>$local,'server_fingerprints'=>[$this->fingerprint($iran),$this->fingerprint($foreign)],
-                    'label'=>$engine==='gost'?'GOST '.($version==='2.11.5'?'2':'3').' · '.($family==='ipv6'?'IPv6':'IPv4'):strtoupper($transport).' · '.($family==='ipv6'?'IPv6':'IPv4'),
+                    'label'=>$engine==='gost'?'GOST '.($version==='2.11.5'?'2':'3').' · '.strtoupper($transport).' · '.($family==='ipv6'?'IPv6':'IPv4'):strtoupper($transport).' · '.($family==='ipv6'?'IPv6':'IPv4'),
                     'status'=>'testing','selectable'=>false,'protocols'=>[],'recommended'=>false];
+                }
             }
         }
         if(!$rows)NetworkTunnelRules::fail('foreign_server_id','برای این نوع تونل، آدرس سازگار روی دو سرور در دسترس نیست.');

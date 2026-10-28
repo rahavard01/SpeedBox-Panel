@@ -548,3 +548,5 @@
 
 .speedbox-infrastructure-overlay .certificate-dns-field>.certificate-dns-hint{grid-column:2}
 @media(max-width:540px){.speedbox-infrastructure-overlay .certificate-dns-field>.certificate-dns-hint{grid-column:1/-1}}
+
+.speedbox-infrastructure-overlay [data-deployment-log][data-error]::before{content:attr(data-error);display:block;color:#f0b98d;margin-bottom:12px}

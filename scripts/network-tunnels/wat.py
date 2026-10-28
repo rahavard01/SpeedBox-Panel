@@ -117,7 +117,14 @@ def snapshot(h,c,probe=True):
     state='stopped' if not c.get('enabled',True) else 'offline' if not running else 'connected' if connected else 'degraded'
     certificate=p['config'].with_suffix('.crt')
     fingerprint=hashlib.sha256(ssl.PEM_cert_to_DER_cert(certificate.read_text())).hexdigest() if certificate.is_file() else None
-    result={'certificate_sha256':fingerprint,'checked_at':now,'active':running,'connected':connected,'state':state,'version':s['version'],'helper_version':h.VERSION,
+    origin_ready=None
+    if c['side']=='foreign' and c.get('origin_ports'):
+        origin_ready=False
+        try:
+            with socket.socket(socket.AF_UNIX,socket.SOCK_STREAM) as broker:
+                broker.settimeout(1);broker.connect('/run/speedbox-origin/broker.sock');broker.sendall(b'{"version":1,"operation":"ping"}\n');origin_ready=broker.recv(32)==b'ORIGIN1\n'
+        except OSError:pass
+    result={'origin_endpoint':origin_ready,'certificate_sha256':fingerprint,'checked_at':now,'active':running,'connected':connected,'state':state,'version':s['version'],'helper_version':h.VERSION,
             'traffic_available':known,'raw':raw,'totals':totals,'destinations':{},'quota_exhausted':False,'quota_stopped':False,
             'last_restart':old.get('last_restart',now),'engine_stats':{k:st.get(k) for k in ('srtt_ms','loss_pct','streams','sessions','dgram_flows','retrans','fec_recovered','dgram_dropped_size','dgram_dropped_queue','pool_conns')}}
     h.atomic(p['runtime'],result);return result

@@ -134,6 +134,7 @@ final class NetworkTunnelManager
     {
         $settings=$settings??$tunnel->settings;
         return ['id'=>$tunnel->remote_name,'engine'=>$tunnel->engine,'side'=>$side,'secret'=>$tunnel->secret,
+            'origin_plan'=>TrustedTunnelOrigin::plan($tunnel,$settings,$side),
             'origin_ports'=>$tunnel->engine==='wattunnel'?TrustedTunnelOrigin::ports($settings):[],
             'enabled'=>($settings['enabled']??true),'subnet'=>(int)$tunnel->subnet,'settings'=>$settings];
     }
@@ -148,11 +149,14 @@ final class NetworkTunnelManager
     {
         $snapshots['_checked_at']=now()->timestamp;
         $iran=$snapshots['iran']??[];$foreign=$snapshots['foreign']??[];
-        $status=!($tunnel->settings['enabled']??true)?'stopped':
-            ((empty($iran['active'])||((in_array($tunnel->engine,['gre','wattunnel'],true)||$tunnel->transport==='grpc')&&empty($foreign['active'])))?'offline':
-                (($iran['connected']??null)===true?'connected':'degraded'));
+        $tunnel->remote_status=$snapshots;
+        $reason=TunnelHealth::reason($tunnel);
+        $status=match($reason){null=>'connected','stopped'=>'stopped','access'=>'needs_review','carrier','endpoint'=>'offline',default=>'degraded'};
         $message=match($status){'connected'=>'سرویس و دسترسی TCP مقصد بررسی شد؛ اتصال پروتکل نود را با کلاینت هم آزمایش کنید.',
             'stopped'=>'اتصال متوقف است.','offline'=>'سرویس یکی از سمت‌ها فعال نیست.',default=>'سرویس بررسی شد؛ ارتباط کامل هنوز تأیید نشده است.'};
+        if($reason==='target')$message='سرویس نود مقصد پاسخ نمی‌دهد؛ وضعیت حامل تونل را جدا بررسی کنید.';
+        if($reason==='endpoint')$message='سرویس انتقال هویت یا آزمون مسیر در یکی از سمت‌ها آماده نیست.';
+        if($reason==='cdn')$message='سرویس روشن است، اما مسیر CDN تأیید نشده است.';
         if (isset($iran['error'])||isset($foreign['error'])) {$status='needs_review';$message='دسترسی به یکی از سرورها تأیید نشد.';}
         if($tunnel->engine==='wattunnel'&&$status==='connected')$message='ارتباط رمز‌شدهٔ دو سرور برقرار است؛ دسترسی سرویس مقصد را با کلاینت هم آزمایش کنید.';
         if(($tunnel->settings['connection_mode']??'direct')==='cdn'&&$status==='connected')foreach([$iran,$foreign] as $snapshot)if(isset($snapshot['cdn']['cdn_verified'])&&!$snapshot['cdn']['cdn_verified']){$status='degraded';$message='سرویس روشن است، اما مسیر CDN تأیید نشده است.';}
@@ -167,4 +171,5 @@ final class NetworkTunnelManager
         DB::table('speedbox_network_samples')->where('tunnel_id',$tunnel->id)->where('taken_at','<',time()-31*86400)->delete();
     }
 }
+
 

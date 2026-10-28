@@ -164,7 +164,7 @@ class TunnelController extends Controller
             abort_if(in_array(40000+(int)$existing->subnet,$ports,true),422,'یکی از پورت‌ها با پورت داخلی این تونل تداخل دارد؛ پورت دیگری انتخاب کنید.');
         }
         $data['telegram_alerts']=app(\App\Services\TunnelAlertSettings::class)->resolve($request,$existing);
-        $data['enabled']=true;
+        $data['enabled']=$existing?(bool)($existing->settings['enabled']??true):true;
         unset($data['name']); $data['peer_host'] = $data['peer_host'] ?? '';
         $data=[...$data,...\App\Services\TunnelCdn::normalize($request,'backpack',$kind,$transport,$existing)];
         return $data;

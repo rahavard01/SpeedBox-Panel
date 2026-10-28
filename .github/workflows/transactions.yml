@@ -1,0 +1,40 @@
+name: Renewal and transaction regressions
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - app/Services/TransactionOperator.php
+      - app/Services/TransactionLogger.php
+      - app/Services/SubscriptionOrderPolicy.php
+      - app/Services/PanelAccountActionService.php
+      - app/Http/Controllers/Api/BillingController.php
+      - app/Http/Controllers/Api/PanelController.php
+      - app/Http/Controllers/Api/V2UserController.php
+      - app/Http/Controllers/Api/Admin/UserAdminController.php
+      - tests/Feature/TransactionOperatorTest.php
+      - tests/Feature/RenewalExpiryTest.php
+      - .github/workflows/transactions.yml
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  regressions:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mbstring, bcmath, pdo_sqlite, gd, zip, dom
+          coverage: none
+      - run: composer install --prefer-dist --no-interaction --no-progress --no-scripts
+      - name: Transaction operator persistence and billing/history parity
+        run: php vendor/bin/phpunit tests/Feature/TransactionOperatorTest.php
+      - name: Integrated renewal origin and usage-setting regressions
+        run: |
+          if [ -f tests/Feature/RenewalExpiryTest.php ]; then
+            php vendor/bin/phpunit tests/Feature/RenewalExpiryTest.php
+          fi

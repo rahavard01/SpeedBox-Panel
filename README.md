@@ -531,6 +531,7 @@ Existing remote nodes receive the new binary through the separate managed-node u
 step; updating the panel alone does not restart or replace remote nodes.
 
 
+
 ### Public frontend distribution
 
 This repository ships the compiled frontend in `public/build/`. Frontend sources in `resources/js/` and `resources/css/` are maintained only in the private repository and are excluded before publication. Server-side templates in `resources/views/` remain available because the application needs them at runtime.

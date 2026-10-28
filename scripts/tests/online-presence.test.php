@@ -79,7 +79,7 @@ try {
     }
     Illuminate\Support\Facades\Http::preventStrayRequests();
     $check(!Schema::hasTable('speedbox_sessions') && !Schema::hasTable('speedbox_client_app_releases'), 'Public schema excludes app tables');
-    $appRoutes=array_filter(app('router')->getRoutes()->getRoutes(),fn($route)=>preg_match('~client-app|app/heartbeat|speedbox-sessions~',$route->uri()));
+    $appRoutes=array_filter(app('router')->getRoutes()->getRoutes(),fn($route)=>preg_match('~client-app|app/(?:heartbeat|account-online)|speedbox-sessions~',$route->uri()));
     $check($appRoutes===[], 'Public routes exclude private app APIs');
     $status = app(App\Services\AccountOnlineStatus::class);
     $read = app(App\Http\Controllers\Api\PartnerAccountReadController::class);

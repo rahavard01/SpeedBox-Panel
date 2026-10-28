@@ -194,6 +194,14 @@ class Shadowrocket extends AbstractProtocol
             ))
             : '';
 
+        // Encrypted TCP nodes need the portable VLESS URI fields. Putting
+        // encryption in the legacy Base64 method makes import client-specific.
+        if ($vlessEncryption !== '' && data_get($protocol_settings, 'network', 'tcp') === 'tcp') {
+            $server['protocol_settings']['encryption']['enabled'] = true;
+            $server['protocol_settings']['encryption']['encryption'] = $vlessEncryption;
+            return preg_replace('/\?/', '?tfo=1&', General::buildVless($uuid, $server), 1);
+        }
+
         $shadowrocketMethod = $vlessEncryption !== ''
             ? $vlessEncryption
             : 'auto';
@@ -491,4 +499,5 @@ class Shadowrocket extends AbstractProtocol
         return $uri;
     }
 }
+
 

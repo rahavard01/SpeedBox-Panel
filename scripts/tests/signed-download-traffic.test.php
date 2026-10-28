@@ -87,6 +87,10 @@ try {
     DB::table('panel_users')->insert([['id' => 1, 'email' => $admin->email], ['id' => 2, 'email' => $partner->email]]);
     DB::statement('CREATE TABLE panel_tariff_groups (id INT PRIMARY KEY, name VARCHAR(64), group_type VARCHAR(16), enable INT, is_default INT, sort_order INT)');
     DB::table('panel_tariff_groups')->insert(['id' => 1, 'name' => 'Time', 'group_type' => 'time', 'enable' => 1, 'is_default' => 1, 'sort_order' => 1]);
+    // Modern purchases require the account's saved tariff, including legacy
+    // utf8 accounts; a global default is deliberately not a fallback.
+    DB::statement('ALTER TABLE v2_user ADD account_tariff_group_id INT NULL');
+    DB::table('v2_user')->update(['account_tariff_group_id' => 1]);
     // Price and logging are fixtures; the real production topup and DB transaction run.
     $app->instance(App\Services\TransactionLogger::class, new class extends App\Services\TransactionLogger {
         public function start(array $data): int { return 0; }

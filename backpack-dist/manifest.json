@@ -7,18 +7,22 @@
   "source_sha256": "e11b3f81f8cfb485a01491db523a1947c1d0c02f740ecc8d98d8a4ab4116b491",
   "integration_sources": {
     "speedbox.go": "2ec225e9fcf8889f9e927bbddb9f041f9b1548c3f76bf9e0c6744455fcd438e6",
-    "bridge.go": "8049c076cb0c122a48506b321d3b45aa13afc58b605a5e71e8002c0b9c336b27",
-    "bridge_test.go": "edd97c692bc7e1af248b8dd3990a04742965e5789b80fc2fc3b59a69b916fb4d",
-    "build.py": "f0e756cb6743771e6ca02f992009cff39e827efcc87f7326e7a19c63004df41e"
+    "bridge.go": "4bc5a37ecc1718186ee667679980b9519cdc801877337748bd1455c3475babfe",
+    "bridge_test.go": "8af3055bd5c02a63a4586dc305bc929e95b30fb96df7f03734247f6d88c4b50d",
+    "build.py": "3bf6f94cef96a4e313b2b84673a723e9ee9fcc1bdd5aae235525ff83c02e2a9e",
+    "l3_confirm.py": "80a0c3dceb1edfe4b5829a0518bbc099163657e978292481e243337df8a58a23",
+    "l3_confirm_test.go": "74c2d577ff1086339443d1ae2895f8d86ab70427c2ef4eba69fe7eb5fc405b05",
+    "l3_keepalive.go": "b8110b53ed880563f6e85410868d9d1502a5aca096bb676c37af202bbf197825",
+    "l3_keepalive_test.go": "2e52ee492b162ada0438cc5701a81efd8800792bd05e67089cc60f83eaa6734c"
   },
   "archives": {
     "amd64": {
-      "sha256": "ec1dc6cce62b0e69f9a0cc80b0c561004213f62f2d2362ab79d2062175de052b",
-      "binary_sha256": "35a93319eb1b6bac89e1747b6dbf64c34f4fc1ee651f10c1b4e2a10d14ec4af5"
+      "sha256": "799c79fafdd2bd403c8c80f5950332697674e72731cd14d9230305ddc32f956c",
+      "binary_sha256": "bf8358388c533edae9e4dd4c365fd889c733b9c834cf474838b03186c5b19ee0"
     },
     "arm64": {
-      "sha256": "9304fff28a11a2143646dbc58bf09441f6d5f685146f7c47ca221892a10ac2fc",
-      "binary_sha256": "59b59ab3cbb8314438f985bba928aa0f48c8372248dde1ef088f0babdf2cb29a"
+      "sha256": "9d2d874b34adf3862ac24a190dddf1b7bf541406692e749b2a454c83ae10b8bf",
+      "binary_sha256": "274c760f9ce63558ee846ecb16b829fa250718e54f020ac9bbb59e71897a499c"
     }
   }
 }

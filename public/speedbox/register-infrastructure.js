@@ -75,17 +75,18 @@ window.__SPEEDBOX_PANEL_SWITCH__ = {
       { serverMode: false, label: 'پنل مدیریت اصلی', icon: 'th-large' },
       { serverMode: true, label: 'پنل مدیریت سرورها', icon: 'server' }
     ];
-    const close = (focus = false) => { open.value = false; if (focus) trigger.value?.focus(); };
+    const close = (focus = false) => { open.value = false; if (focus === true) trigger.value?.focus({preventScroll:true}); };
     const focusOption = index => nextTick(() => {
       wrapper.value?.querySelectorAll('[role=menuitemradio]')[index]?.focus();
     });
     const show = () => { props.beforeOpen?.(); open.value = true; focusOption(props.serverMode ? 1 : 0); };
+    const closeOnResize = () => close();
     const outside = event => { if (!wrapper.value?.contains(event.target)) close(); };
     const scroll = event => { if (!wrapper.value?.contains(event.target)) close(); };
     onMounted(() => {
       document.addEventListener('click', outside);
       window.addEventListener('scroll', scroll, true);
-      window.addEventListener('resize', close);
+      window.addEventListener('resize', closeOnResize);
       window.addEventListener('resize', placeAboveBar);
       placementObserver = new ResizeObserver(placeAboveBar);
       panelBar = wrapper.value?.closest('.top-bar');
@@ -99,7 +100,7 @@ window.__SPEEDBOX_PANEL_SWITCH__ = {
     onUnmounted(() => {
       document.removeEventListener('click', outside);
       window.removeEventListener('scroll', scroll, true);
-      window.removeEventListener('resize', close);
+      window.removeEventListener('resize', closeOnResize);
       window.removeEventListener('resize', placeAboveBar);
       placementObserver?.disconnect();
       floatingRoot?.remove();
@@ -161,7 +162,7 @@ window.__SPEEDBOX_TARIFF_PLAN_SELECT__ = {
     const { element, ref, nextTick, onMounted, onUnmounted } = speedboxPanelVue;
     const open = ref(false), wrapper = ref(null), trigger = ref(null);
     const mobile = window.__SPEEDBOX_USE_MOBILE__();
-    const close = (focus = false) => { open.value = false; if (focus) trigger.value?.focus(); };
+    const close = (focus = false) => { open.value = false; if (focus === true) trigger.value?.focus({preventScroll:true}); };
     const focusOption = index => nextTick(() => {
       const options = wrapper.value?.querySelectorAll('[role=option]') || [];
       options[Math.max(0, Math.min(index, options.length - 1))]?.focus();
@@ -170,10 +171,11 @@ window.__SPEEDBOX_TARIFF_PLAN_SELECT__ = {
       open.value = true;
       focusOption((props.options || []).findIndex(option => String(option.id) === String(props.modelValue)));
     };
+    const closeOnResize = () => close();
     const outside = event => { if (!wrapper.value?.contains(event.target)) close(); };
     const scroll = event => { if (!wrapper.value?.contains(event.target)) close(); };
-    onMounted(() => { document.addEventListener('click', outside); window.addEventListener('scroll', scroll, true); window.addEventListener('resize', close); });
-    onUnmounted(() => { document.removeEventListener('click', outside); window.removeEventListener('scroll', scroll, true); window.removeEventListener('resize', close); });
+    onMounted(() => { document.addEventListener('click', outside); window.addEventListener('scroll', scroll, true); window.addEventListener('resize', closeOnResize); });
+    onUnmounted(() => { document.removeEventListener('click', outside); window.removeEventListener('scroll', scroll, true); window.removeEventListener('resize', closeOnResize); });
     const keys = event => {
       if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); close(true); return; }
       if (event.key === 'Tab') close();

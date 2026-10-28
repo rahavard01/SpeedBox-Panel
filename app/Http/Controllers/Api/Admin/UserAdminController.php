@@ -203,7 +203,7 @@ class UserAdminController extends Controller
                 "type"              => $r->type ?? "-",
                 "amount"            => $signed,
                 "status"            => $r->status ?? "unknown",
-                "performed_by_role" => $r->performed_by_role ?? "system",
+                "performed_by_role" => \App\Services\TransactionOperator::displayRole($r->performed_by_role ?? null, $meta),
 
                 // دقیقاً برای ساخت متن مثل صفحه صورتحساب
                 "plan_key"          => $planKey,
@@ -483,7 +483,7 @@ class UserAdminController extends Controller
             //$shouldResetUsage = (!$hasTimeLeft) || ($hasTimeLeft && $quotaExhausted && $currentPlanIs1m);
             $shouldResetUsage = !$hasTimeLeft;
 
-            $baseTs   = $shouldResetUsage ? $nowTs : $oldExpTs;
+            $baseTs   = app(\App\Services\SubscriptionOrderPolicy::class)->renewalBaseTimestamp($user, $nowTs);
             $newExpTs = Carbon::createFromTimestamp($baseTs)->addDays($addDays)->timestamp;
 
             $update = [

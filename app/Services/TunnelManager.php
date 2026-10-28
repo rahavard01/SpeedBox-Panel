@@ -88,6 +88,7 @@ class TunnelManager
     {
         $ports=[(int)$server->ssh_port];
         foreach(ServerTunnel::where('status','!=','deleted')->where(fn($q)=>$q->where('iran_server_id',$server->id)->orWhere('foreign_server_id',$server->id))->get() as $t) {
+            if(!empty($t->settings['source_identity_port']))$ports[]=(int)$t->settings['source_identity_port'];
             $iran=(int)$t->iran_server_id===(int)$server->id;
             if($t->engine!=='backpack') {
                 if($t->engine==='wattunnel')$ports[]=(int)$t->subnet;
@@ -152,3 +153,4 @@ class TunnelManager
         catch (\Throwable) { \Illuminate\Support\Facades\Log::warning('Tunnel health observation could not be saved.', ['operation_id'=>$op->id]); }
     }
 }
+

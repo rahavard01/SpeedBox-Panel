@@ -7,7 +7,7 @@ use Illuminate\Support\Facades\{Bus,DB};
 $tester=new NetworkTunnelTest();$checks=0;
 $assert=function($ok,$label)use(&$checks){if(!$ok)throw new RuntimeException($label);$checks++;};
 $cases=$tester->candidates('gost',ManagedServer::findOrFail(1),ManagedServer::findOrFail(2),$network);
-$assert(count($cases)===2&&array_column($cases,'version')===['2.11.5','3.0.0'],'GOST tests both versions on available family');
+$assert(count($cases)===3&&array_column($cases,'version')===['2.11.5','3.0.0','3.0.0']&&array_column($cases,'transport')===['tcp','tcp','grpc'],'GOST tests both versions and authenticated gRPC on available family');
 $assert(count($tester->candidates('gre',ManagedServer::findOrFail(7),ManagedServer::findOrFail(8),$network))===4,'registered dual-stack domains produce four GRE modes');
 $runTest=function($op,$remote,$cancelAfter=null)use($manager,$assert){for($i=0;$i<80;$i++){if($cancelAfter===$i)$op->update(['cancel_requested'=>true]);(new App\Jobs\RunNetworkTunnelTest($op->id))->handle($remote,$manager);$op->refresh();if(!in_array($op->status,['queued','running']))return $op;}$assert(false,'test state machine terminates');};
 $mock=function(&$calls,$fail=null){$remote=Mockery::mock(NetworkTunnelRemote::class);$remote->shouldReceive('ensureProbe')->andReturnUsing(function($server,$engine)use(&$calls){$calls[]=['ensure',$server->id,$engine];});$remote->shouldReceive('probe')->andReturnUsing(function($server,$q)use(&$calls,$fail){$calls[]=[$q['action'],$server->id,$q['id']];if($fail&&$fail===[$q['action'],$server->id])throw new RuntimeException('simulated probe SSH failure');return match($q['action']){'start'=>['port'=>32443],'stop'=>['stopped'=>true],'measure-start'=>['state'=>'running'],'measure-state'=>['state'=>'completed','protocols'=>['tcp'=>['status'=>'ok','ok'=>20,'total'=>20,'rtt'=>45,'download'=>12,'upload'=>8],'udp'=>['status'=>'down','ok'=>0,'total'=>20,'rtt'=>0,'download'=>0,'upload'=>0]]]};});return $remote;};
@@ -17,8 +17,8 @@ $assert(Bus::dispatched(App\Jobs\RunNetworkTunnelTest::class)->count()>0,'networ
 $assert(DB::table('speedbox_tunnel_leases')->count()===2,'tests lease both hosts across engine types');
 try{$controller->test(Request::create('/','POST',['engine'=>'gre','iran_server_id'=>1,'foreign_server_id'=>2]),$network,$manager,$tester);$assert(false,'shared leases prevent a parallel GRE probe');}catch(Symfony\Component\HttpKernel\Exception\HttpException $e){$assert($e->getStatusCode()===409,'shared leases prevent a parallel GRE probe');}
 $remote=$mock($calls);$op=$runTest($op,$remote);$test->refresh();
-$assert($op->status==='succeeded'&&$test->status==='completed'&&count($test->results)===2,'both GOST versions measured before completion');
-$assert(count(array_filter($calls,fn($c)=>$c[0]==='stop'))===4,'each case cleans up both hosts');
+$assert($op->status==='succeeded'&&$test->status==='completed'&&count($test->results)===3,'both GOST versions and gRPC measured before completion');
+$assert(count(array_filter($calls,fn($c)=>$c[0]==='stop'))===6,'each case cleans up both hosts');
 $assert(DB::table('speedbox_tunnel_leases')->count()===0,'test leases released after confirmed cleanup');
 $assert($test->results[0]['protocols']['udp']['status']==='down','TCP success does not imply UDP support');
 $public=$tester->publicTest($test);$assert(!isset($public['results'][0]['server_fingerprints'])&&!isset($public['results'][0]['peer_host']),'public results exclude endpoint bindings');
@@ -54,7 +54,7 @@ $op=$runTest($op,$remote);$assert($op->status==='failed'&&count(array_filter($ca
 // completed protocol never authorizes construction before pair cleanup.
 $answer=$controller->test(Request::create('/','POST',['engine'=>'gost','iran_server_id'=>1,'foreign_server_id'=>2]),$network,$manager,$tester);
 $op=TunnelOperation::findOrFail($answer->getData()->operation->id);$live=TunnelConnectionTest::findOrFail($op->test_id);
-$assert(count($tester->publicTest($live)['results'])===2,'candidate cards exist before workers start');
+$assert(count($tester->publicTest($live)['results'])===3,'candidate cards exist before workers start');
 $remote=Mockery::mock(NetworkTunnelRemote::class);$remote->shouldReceive('ensureProbe')->andReturnNull();
 $remote->shouldReceive('probe')->andReturnUsing(fn($s,$q)=>match($q['action']){
  'start'=>['port'=>32443],'stop'=>['stopped'=>true],'measure-start'=>['state'=>'running'],

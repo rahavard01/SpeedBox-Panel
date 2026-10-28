@@ -95,6 +95,14 @@ func (p *MachinePanelControlPlane) Initial(
 	return bootstrap, nil
 }
 
+// PollFresh bypasses ETags because a periodic result may still be waiting in the
+// service mailbox. A 304 must not acknowledge state that has not been applied.
+// The service serializes this with Poll under its polling mutex.
+func (p *MachinePanelControlPlane) PollFresh(ctx context.Context) (Snapshot, error) {
+	p.client.ResetETags()
+	return p.Poll(ctx)
+}
+
 func (p *MachinePanelControlPlane) Poll(ctx context.Context) (Snapshot, error) {
 	configSnapshot, err := p.client.GetConfig()
 	if err != nil {

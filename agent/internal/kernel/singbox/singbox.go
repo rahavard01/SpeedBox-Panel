@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"sync"
 	"time"
 
@@ -202,6 +203,10 @@ func recycleOldBox(oldBox *box.Box, oldCancel context.CancelFunc, oldCtx context
 // continue to be tracked correctly.
 func (s *SingBox) Reload(nodeConfig *model.NodeSpec, users []model.UserSpec, tls kernel.TLSCert) error {
 	s.mu.Lock()
+	if s.nodeConfig != nil && !reflect.DeepEqual(s.nodeConfig.CustomOutbounds, nodeConfig.CustomOutbounds) {
+		s.mu.Unlock()
+		return s.Start(nodeConfig, users, tls)
+	}
 	defer s.mu.Unlock()
 
 	if s.box == nil {
@@ -271,7 +276,7 @@ func (s *SingBox) Reload(nodeConfig *model.NodeSpec, users []model.UserSpec, tls
 
 	// Configuration hash check for inbound reconstruction
 	tlsChanged := !bytes.Equal(s.tls.CertPEM, tls.CertPEM) || !bytes.Equal(s.tls.KeyPEM, tls.KeyPEM)
-	configChanged := tlsChanged || s.nodeConfig == nil || kernel.ComputeHash(nodeConfig, users) != kernel.ComputeHash(s.nodeConfig, s.users)
+	configChanged := tlsChanged || s.nodeConfig == nil || kernel.InboundHash(nodeConfig, users) != kernel.InboundHash(s.nodeConfig, s.users)
 
 	for _, inb := range opts.Inbounds {
 		tag := inb.Tag

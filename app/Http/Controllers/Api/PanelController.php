@@ -290,7 +290,7 @@ class PanelController extends Controller
                 "type"              => $r->type ?? "-",
                 "amount"            => $signed,
                 "status"            => $r->status ?? "unknown",
-                "performed_by_role" => $r->performed_by_role ?? "system",
+                "performed_by_role" => \App\Services\TransactionOperator::displayRole($r->performed_by_role ?? null, $meta),
 
                 "plan_key"          => $planKey,
                 "plan_label"        => $planLabel,

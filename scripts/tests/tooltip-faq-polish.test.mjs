@@ -1,11 +1,9 @@
 import { readFileSync } from 'node:fs';
-import vm from 'node:vm';
 import assert from 'node:assert/strict';
-const { JSDOM } = await import(process.env.PARTNER_TEST_JSDOM || 'jsdom');
+import { loadSourceUi } from './helpers/source-ui.mjs';
+const { JSDOM } = await import(process.env.SPEEDBOX_TEST_JSDOM || process.env.PARTNER_TEST_JSDOM || 'jsdom');
 const read = file => readFileSync(new URL('../../' + file, import.meta.url), 'utf8');
 const manifest = JSON.parse(read('public/build/manifest.json'));
-const coreFile = manifest['resources/js/app.js'].file;
-const source = read('public/build/' + coreFile).replace('Cs.mount("#app")', 'void 0').replace('Cs.use(us)', 'void 0') + '\nexport {ac as TestApp,Sp as TestTooltip,b as TestElement,G as TestRef,be as TestMounted,e2 as TestUnmounted,Ue as TestTick};';
 let checks = 0;
 const ok = (condition, message) => { assert.ok(condition, message); checks++; };
 for (const width of [375, 820, 1280]) {
@@ -16,18 +14,12 @@ for (const width of [375, 820, 1280]) {
   win.localStorage.setItem('token', 'fixture-token');
   win.matchMedia = query => ({ matches: query.includes('hover') ? mobile : mobile, addEventListener() {}, removeEventListener() {} });
   win.fetch = async () => ({ json: async () => ({}) }); win.AbortController = AbortController; win.scrollTo = () => {};
-  for (const file of ['public/build/assets/app--UQp4rU8.css', 'public/speedbox/bot-faqs.css', ...['Settings','Dashboard','Users'].flatMap(name => manifest['resources/js/pages/admin/' + name + '.vue'].css.map(file => 'public/build/' + file))]) {
+  for (const file of [...manifest['resources/js/app.js'].css.map(file => 'public/build/'+file), 'public/speedbox/bot-faqs.css', ...['Settings','Dashboard','Users'].flatMap(name => manifest['resources/js/pages/admin/' + name + '.vue'].css.map(file => 'public/build/' + file))]) {
     const style = win.document.createElement('style'); style.textContent = read(file); win.document.head.append(style);
   }
   const context = dom.getInternalVMContext();
-  const core = new vm.SourceTextModule(source, { context, initializeImportMeta: meta => { meta.url = 'http://fixture.test/' + coreFile; } });
-  await core.link(() => { throw Error('Unexpected core import'); }); await core.evaluate();
-  const modules = new Map([[coreFile.split('/').at(-1), core]]);
-  async function load(file) {
-    file = file.split('/').at(-1); if (modules.has(file)) return modules.get(file);
-    const module = new vm.SourceTextModule(read('public/build/assets/' + file), { context, initializeImportMeta: meta => { meta.url = 'http://fixture.test/assets/' + file; } });
-    modules.set(file, module); await module.link(specifier => load(specifier)); await module.evaluate(); return module;
-  }
+  const ui = await loadSourceUi(dom);
+  const core = {namespace:{TestApp:ui.Vue.createApp,TestTick:ui.Vue.nextTick,TestElement:ui.Vue.h,TestRef:ui.Vue.ref,TestMounted:ui.Vue.onMounted,TestUnmounted:ui.Vue.onBeforeUnmount,v:ui.http}};
   const flush = async () => { for (let i = 0; i < 10; i++) { await Promise.resolve(); await core.namespace.TestTick(); } };
   const wait = async ms => { await new Promise(resolve => setTimeout(resolve, ms)); await flush(); };
   function pointer(node, type, pointerType) { const event = new win.Event(type, { bubbles: true }); Object.defineProperty(event, 'pointerType', { value: pointerType }); node.dispatchEvent(event); }
@@ -45,7 +37,7 @@ for (const width of [375, 820, 1280]) {
   };
   core.namespace.v.post = async () => ({ data: { data: [account] } });
   {
-    const { app, errors } = await mount((await load(manifest['resources/js/pages/admin/Dashboard.vue'].file)).namespace.default);
+    const { app, errors } = await mount(ui.AdminDashboard);
     const tip = win.document.querySelector('.speedbox-dashboard-online-tip'); ok(tip, 'Online uses the shared UiTooltip');
     const trigger = tip.querySelector('.custom-tooltip-trigger');
     ok(trigger.textContent === '۳', 'Only the online number is the trigger');
@@ -66,15 +58,14 @@ for (const width of [375, 820, 1280]) {
     ok(errors.length === 0, 'Dashboard renders without Vue errors'); app.unmount(); await flush();
   }
   {
-    const { app, errors } = await mount((await load(manifest['resources/js/pages/admin/Users.vue'].file)).namespace.default);
+    const { app, errors } = await mount(ui.Users);
     const badges = [...win.document.querySelectorAll('.account-plan-badge')]; ok(badges.length > 0, 'Users plan badges render');
     ok(badges.every(node => !node.hasAttribute('title') && !node.hasAttribute('data-sb-tooltip') && !node.closest('.custom-tooltip-wrapper')), 'Plan names have no tooltip in desktop or mobile');
     ok(errors.length === 0, 'Users renders without Vue errors'); app.unmount(); await flush();
   }
   {
-    const factorySource = read('scripts/ui/global-bot-faqs.mjs');
-    ok(read('public/build/' + manifest['resources/js/pages/admin/Settings.vue'].file).includes(factorySource.replace('export function ', 'function ')), 'The shipped FAQ factory matches its maintained source');
-    const factory = new vm.SourceTextModule(factorySource, { context }); await factory.link(() => {}); await factory.evaluate();
+    ok(read('resources/js/components/GlobalBotFaqs.vue').includes('createGlobalBotFaqEditor'), 'The FAQ component uses the maintained factory');
+    const factory = {namespace:{createGlobalBotFaqEditor:ui.createGlobalBotFaqEditor}};
     let payload, rows = [], failRead = false;
     const http = { get: async () => { if (failRead) throw Error('Read failed'); return { data: { data: rows } }; }, put: async (_, data) => { payload = data; rows = data.items.map((item,index) => ({ ...item, id: item.id || index + 1 })); return { data: { data: rows } }; } };
     const editor = factory.namespace.createGlobalBotFaqEditor({ element: core.namespace.TestElement, ref: core.namespace.TestRef, mounted: core.namespace.TestMounted, unmounted: core.namespace.TestUnmounted, http });

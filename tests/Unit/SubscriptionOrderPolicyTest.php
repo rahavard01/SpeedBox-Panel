@@ -9,7 +9,7 @@ use Tests\TestCase;
 
 class SubscriptionOrderPolicyTest extends TestCase
 {
-    /** @dataProvider renewalCases */
+    #[\PHPUnit\Framework\Attributes\DataProvider('renewalCases')]
     public function test_renewal_uses_one_rule_for_every_selected_plan(bool $expired, bool $enabled, int $selectedPlan, bool $reset): void
     {
         // Any attempt to read obsolete new/change-order settings fails this expectation.

@@ -45,10 +45,10 @@ async function setPorts(page,values){
  const ports=String(values).replace(/[۰-۹]/g,c=>String('۰۱۲۳۴۵۶۷۸۹'.indexOf(c))).split(/[,،\s]+/).filter(Boolean);
  while(await page.locator('[data-map-row]').count()<ports.length)await page.locator('[data-add-map]').click();
  while(await page.locator('[data-map-row]').count()>ports.length)await page.locator('[data-remove-map]').last().click();
- for(let i=0;i<ports.length;i++)for(const key of ['public_port','target_port'])await page.locator(`[data-map-row="${i}"] [data-map-key=${key}]`).fill(ports[i]);
+ for(let i=0;i<ports.length;i++)for(const key of ['public_port','target_port'])await page.locator(`[data-map-row="${i}"] [data-map-key=${key}]`).evaluate((el,value)=>{el.value=value;el.dispatchEvent(new Event('input',{bubbles:true}));el.dispatchEvent(new Event('change',{bubbles:true}));},ports[i]);
 }
 const save=page=>page.locator('[data-network-editor] button[type=submit]').click();
-async function action(page,card,name){await card.locator('.tunnel-actions summary').click();await card.locator(`[data-tunnel-action="${name}"]`).click();}
+async function action(page,card,name){const native=card.locator('[data-tunnel-native-action]');if(await native.isVisible())await native.selectOption(name);else{await card.locator('.tunnel-actions summary').click();await card.locator(`[data-tunnel-action="${name}"]`).click();}}
 try{
  for(const width of [1280,768,390,360]){
   console.log('Checking tested creation flow '+width);const page=await context.newPage();await page.setViewportSize({width,height:950});page.on('pageerror',e=>errors.push(e.message));await start(page);
@@ -61,10 +61,14 @@ try{
   check(await page.locator('.tunnel-card').first().evaluate(e=>getComputedStyle(e).backgroundImage.includes('linear-gradient')),'cards use the approved subtle dark gradient');
   if(width>700)check(await page.locator('.tunnel-toolbar').evaluate(e=>{const t=e.getBoundingClientRect(),f=e.querySelector('.network-filters').getBoundingClientRect(),c=e.querySelector('[data-new-tunnel]').getBoundingClientRect(),r=e.querySelector('[data-reload-tunnels]').getBoundingClientRect();return Math.abs((t.left+t.right)-(f.left+f.right))<2&&c.left>f.right&&r.right<f.left;}),'desktop filter is exactly centered between right create and left refresh');
   const gostCard=page.locator('[data-tunnel-card="605"]'),greCard=page.locator('[data-tunnel-card="606"]');
+  if(!await greCard.locator('[data-tunnel-native-action]').isVisible()){
   await gostCard.locator('.tunnel-actions>summary').click();await page.locator('.tunnel-preview-banner p').click();await greCard.locator('.tunnel-actions>summary').click();
   check(await page.locator('.tunnel-actions[open]').count()===1,'opening a menu leaves exactly one action menu open');
+  await page.evaluate(()=>window.dispatchEvent(new Event('scroll')));
+  check(await page.locator('.tunnel-actions[open]').count()===1,'a queued scroll without anchor movement does not close the newly opened menu');
   await page.locator('.tunnel-preview-banner p').click();check(await page.locator('.tunnel-actions[open]').count()===0,'outside click closes action menus');
   await gostCard.locator('.tunnel-actions>summary').click();await page.keyboard.press('Escape');check(await page.locator('.tunnel-actions[open]').count()===0,'Escape closes action menus');
+  }else check(await greCard.locator('[data-tunnel-native-action]').isVisible(),'mobile uses the accessible native action selector');
   const gostActions=await gostCard.locator('[data-tunnel-action]').evaluateAll(es=>es.map(e=>e.dataset.tunnelAction));
   const greActions=await greCard.locator('[data-tunnel-action]').evaluateAll(es=>es.map(e=>e.dataset.tunnelAction));
   check(!gostActions.includes('history')&&greActions.includes('history'),'engine action lists differ by supported tools');

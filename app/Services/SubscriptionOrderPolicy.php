@@ -6,6 +6,24 @@ use Illuminate\Support\Facades\DB;
 
 class SubscriptionOrderPolicy
 {
+    /** Choose the renewal origin from the current package, before changing its plan or usage. */
+    public function renewalBaseTimestamp(object $user, ?int $now = null): int
+    {
+        $now ??= time();
+        $expiry = (int) ($user->expired_at ?? 0);
+        if ($expiry <= $now) return $now;
+
+        $quota = (int) ($user->transfer_enable ?? 0);
+        $used = (int) ($user->u ?? 0) + (int) ($user->d ?? 0);
+        if ($quota <= 0 || $used < $quota || ($user->account_group_type ?? '') === 'volume') return $expiry;
+
+        $plan = DB::table('v2_plan')->where('id', (int) ($user->plan_id ?? 0))->first(['reset_traffic_method']);
+        if (!$plan) return $expiry;
+        $method = $plan->reset_traffic_method ?? RuntimeSetting::get('reset_traffic_method', 2);
+
+        return (int) $method === 2 ? $now : $expiry;
+    }
+
     public function prepare(object $user, array $update): array
     {
         // Every time-account extension follows the same rule, including a different selected plan.

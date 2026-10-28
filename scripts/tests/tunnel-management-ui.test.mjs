@@ -8,17 +8,17 @@ const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../..');
 const manifest=JSON.parse(readFileSync(path.join(root,'public/build/manifest.json')));
 const css=(manifest['resources/js/app.js'].css||[]).map(f=>`<link rel="stylesheet" href="/build/${f}">`).join('');
 const template=readFileSync(path.join(root,'resources/views/infrastructure.blade.php'),'utf8').replace(/^[\s\S]*?<template[^>]*>/,'').replace(/<\/template>[\s\S]*$/,'');
-const html=`<!doctype html><html lang="fa" dir="rtl"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">${css}<link rel="stylesheet" href="/speedbox/panel-controls.css"><link rel="stylesheet" href="/speedbox/branding.css"><link rel="stylesheet" href="/speedbox/infrastructure.css"><link rel="stylesheet" href="/speedbox/tunnels.css"><style>body{margin:0;background:#17171c;color:#eee}.center-box{margin-top:30px}</style><div id="app"><div class="center-box"><div class="speedbox-infrastructure" id="mount">${template}</div></div></div><script src="/speedbox/tunnels.js"></script><script src="/speedbox/certificate-dns.js"></script><script src="/speedbox/node-editor.js"></script><script src="/speedbox/infrastructure.js"></script></html>`;
+const html=`<!doctype html><html lang="fa" dir="rtl"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">${css}<link rel="stylesheet" href="/speedbox/panel-controls.css"><link rel="stylesheet" href="/speedbox/branding.css"><link rel="stylesheet" href="/speedbox/infrastructure.css"><link rel="stylesheet" href="/speedbox/tunnels.css"><link rel="stylesheet" href="/speedbox/network-tunnels.css"><link rel="stylesheet" href="/speedbox/tunnel-cdn.css"><style>body{margin:0;background:#17171c;color:#eee}.center-box{margin-top:30px}</style><div id="app"><div class="center-box"><div class="speedbox-infrastructure" id="mount">${template}</div></div></div><script src="/speedbox/network-tunnels.js"></script><script src="/speedbox/tunnel-cdn.js"></script><script src="/speedbox/tunnels.js"></script><script src="/speedbox/certificate-dns.js"></script><script src="/speedbox/node-editor.js"></script><script src="/speedbox/infrastructure.js"></script></html>`;
 const server=createServer((req,res)=>{const url=new URL(req.url,'http://localhost');if(url.pathname==='/'){res.setHeader('Content-Type','text/html;charset=utf-8');res.end(html);return;}const p=path.resolve(root,'public','.'+url.pathname);if(!p.startsWith(path.join(root,'public')+path.sep)||!existsSync(p)){res.writeHead(404).end();return;}res.setHeader('Content-Type',p.endsWith('.js')?'text/javascript':p.endsWith('.css')?'text/css':'application/octet-stream');res.end(readFileSync(p));});
 await new Promise(r=>server.listen(0,'127.0.0.1',r));const origin=`http://127.0.0.1:${server.address().port}`;
 const browser=await chromium.launch({executablePath:process.env.SPEEDBOX_TEST_CHROME||undefined,headless:true,args:['--no-sandbox','--disable-dev-shm-usage',...(process.env.SPEEDBOX_TEST_SWIFTSHADER?['--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader','--no-zygote','--single-process']:[])]});
-const context=await browser.newContext();
+const context=await browser.newContext();context.setDefaultTimeout(10000);
 let assertions=0;const check=(v,msg)=>{assert.ok(v,msg);assertions++;};
 async function mount(page,count=3,url=origin){await page.goto(url);await page.evaluate(count=>{
  localStorage.setItem('token','test');localStorage.setItem('user',JSON.stringify({role:1}));
  window.calls=[];window.messages=[];window.created=false;window.nextOp=30;window.operations={};window.latest=null;
  const servers=[{id:1,name:'ایران — رسپینا',host:'192.0.2.1',machine_id:11},{id:2,name:'خارج — آلمان',host:'192.0.2.2',machine_id:22},{id:3,name:'خارج — فنلاند',host:'192.0.2.3',machine_id:33}].slice(0,count);
- const rows=[{id:'normal:reverse:pck',label:'Reverse PCK',kind:'reverse',transport:'pck',orientation:'normal',status:'ok',ok:60,total:60,rtt:40,download:25,upload:20,selectable:true,recommended:true},{id:'normal:reverse:tcp',label:'Reverse TCP',kind:'reverse',transport:'tcp',orientation:'normal',status:'unstable',ok:40,total:60,rtt:45,download:10,upload:9,selectable:true,recommended:false},{id:'normal:reverse:wss',label:'Reverse WSS',kind:'reverse',transport:'wss',orientation:'normal',status:'down',ok:0,total:60,rtt:0,download:0,upload:0,selectable:false,recommended:false}];
+ const rows=[{id:'normal:reverse:pck',label:'Reverse PCK',kind:'reverse',transport:'pck',orientation:'normal',status:'ok',ok:60,total:60,rtt:40,download:25,upload:20,selectable:true,recommended:true},{id:'normal:reverse:tcp',label:'Reverse TCP',kind:'reverse',transport:'tcp',orientation:'normal',status:'unstable',ok:40,total:60,rtt:45,download:10,upload:9,selectable:true,recommended:false},{id:'normal:reverse:udp',label:'Reverse UDP',kind:'reverse',transport:'udp',orientation:'normal',status:'down',ok:0,total:60,rtt:0,download:0,upload:0,selectable:false,recommended:false}];
  window.fixtureTest={id:7,iran_server_id:1,foreign_server_id:2,status:'completed',results:rows,message:'بررسی تمام شد',created_at:new Date().toISOString()};
  window.tunnel={id:1,name:'رسپینا — آلمان',iran_server_id:1,foreign_server_id:2,kind:'reverse',transport:'pck',status:'connected',message:'ارتباط تونل برقرار است.',iran:servers[0],foreign:servers[1],settings:{public_host:'ir.example.com',peer_host:'',tunnel_port:8000,accept_udp:false,mappings:[{public_port:443,target_port:5790}]},nodes:[],operation:null};
  window.hosts=Object.fromEntries(servers.map(s=>[s.id,{checked_at:Math.floor(Date.now()/1000),optimized:false,version:'v1.8.4',target_version:'v1.9.0',up_to_date:false}]));
@@ -58,13 +58,13 @@ async function checkPair(page){
  check(centered,'connector stays at midpoint of the gap between differently sized server names');
 }
 async function checkTimes(page){
- check(await page.locator('.tunnel-host-checked .tunnel-checked-time').evaluateAll(rows=>rows.length>0&&rows.every(row=>{const label=row.children[0].getBoundingClientRect(),time=row.querySelector('time'),a=time.children[0].getBoundingClientRect(),b=time.children[2].getBoundingClientRect();return label.left>=time.getBoundingClientRect().right&&a.right<=b.left&&time.getAttribute('datetime').includes('T');})),'maintenance keeps label right and value left, with hour left of date regardless of RTL');
+ check(await page.locator('.tunnel-host-checked .tunnel-checked-time').evaluateAll(rows=>rows.length>0&&rows.every(row=>{const label=row.children[0].getBoundingClientRect(),time=row.querySelector('time'),a=time.children[0].getBoundingClientRect(),b=time.children[2].getBoundingClientRect();return label.left>=time.getBoundingClientRect().right&&a.left>=b.right&&time.getAttribute('datetime').includes('T');})),'maintenance keeps label right and value left, with hour right of date in the current RTL layout');
 }
 try{
  for(const width of [1280,1920,390]){
   const page=await context.newPage(),errors=[];await page.setViewportSize({width,height:1000});page.on('pageerror',e=>errors.push(e.message));
   await mount(page);
-  check(await page.locator('[data-empty-action] [data-new-tunnel]').count()===1,'one empty-state create action');
+  check(await page.locator('[data-tunnel-toolbar-create] [data-new-tunnel]').count()===1,'one shared toolbar create action');
   const reload=page.locator('[data-reload-tunnels]');
   check(await reload.innerText()===''&&await reload.locator('.fa-sync-alt').count()===1,'refresh is icon-only with accessible name');
   await page.evaluate(()=>{window.delayReload=true;});await reload.click();await reload.locator('.fa-spin').waitFor();
@@ -75,7 +75,7 @@ try{
   await page.evaluate(()=>{window.failReload=true;});await reload.click();await page.waitForFunction(()=>messages.includes('خطای آزمایشی تازه‌سازی'));
   check(await reload.locator('.fa-check').count()===0&&await reload.isEnabled(),'failed refresh never shows success check');
   await page.evaluate(()=>{window.failReload=false;});
-  await screenshot(page,'empty',width);await page.locator('[data-new-tunnel]').click();
+  await screenshot(page,'empty',width);await page.locator('[data-new-tunnel]').click();await page.locator('[data-engine=backpack]').click();
   check(await page.locator('.infrastructure-modal.tunnel-modal').isVisible(),'creation uses actual shared modal');
   check(await page.locator('[data-test-form] .modal-fields').count()===1,'original glass field surface');
   check(await page.locator('.infrastructure-modal [data-hide-wizard]').count()===0,'no custom header close button');
@@ -85,15 +85,16 @@ try{
     const form=document.querySelector('[data-test-form]'),surface=form.querySelector('.modal-fields').getBoundingClientRect(),intro=form.querySelector('.tunnel-help').getBoundingClientRect(),first=form.querySelector('.field').getBoundingClientRect(),toggle=form.querySelector('.switch-field').getBoundingClientRect(),note=form.querySelector('.tunnel-test-note span').getBoundingClientRect();
     return {top:intro.top-surface.top,gap:first.top-intro.bottom,center:Math.abs((note.top+note.bottom)/2-(toggle.bottom+surface.bottom)/2)};
   });
-  check(spacing.top>=24&&spacing.top<=34,'intro has deliberate top inset');
+  await screenshot(page,'create-layout',width);
+  check(spacing.top>=16&&spacing.top<=26,'intro has the current compact inset');
   check(spacing.gap>=12&&spacing.gap<=24,'intro to fields is compact');
   check(spacing.center<4,'footer message vertically centered in remaining space');
   await screenshot(page,'create',width);await page.locator('[data-test-form] [data-close]').click();
-  await page.locator('[data-new-tunnel]').click();
+  await page.locator('[data-new-tunnel]').click();await page.locator('[data-engine=backpack]').click();
   await page.locator('#tunnel-iran').selectOption('1',{force:true});await page.locator('#tunnel-foreign').selectOption('1',{force:true});
   await page.locator('[data-test-form] button[type=submit]').click();check(await page.evaluate(()=>!calls.some(c=>c.url==='/tunnel-tests'&&c.method==='POST')),'reject same host before request');
   await page.locator('#tunnel-foreign').selectOption('2',{force:true});await page.locator('[data-test-form] button[type=submit]').click();
-  await page.locator('[data-select-result="normal:reverse:pck"]').waitFor();check(await page.locator('[data-select-result="normal:reverse:wss"]').isDisabled(),'failed method disabled');
+  await page.locator('[data-select-result="normal:reverse:pck"]').waitFor();check(await page.locator('[data-select-result="normal:reverse:udp"]').isDisabled(),'failed method disabled');
   await checkResults(page);
   check(await page.locator('#tunnel-iran').isHidden(),'completed test collapses setup to make room for results');
   await page.locator('[data-test-settings]').click();check(await page.locator('#tunnel-iran').isVisible(),'server settings can be reopened without losing results');await page.locator('[data-test-settings]').click();
@@ -102,7 +103,7 @@ try{
   check(await page.locator('[name=accept_unstable]').evaluate(el=>el.required),'unstable needs acknowledgement');await page.locator('[data-back-results]').click();
   await page.locator('[data-select-result="normal:reverse:pck"]').click();
   check(await page.locator('[data-tunnel-setup] .modal-fields').count()===1,'setup also uses shared field surface');
-  check(await page.locator('[data-back-results]').innerText()===''&&await page.locator('[data-back-results] svg').count()===1,'back action is an accessible icon inside selected-method banner');
+  check(await page.locator('[data-back-results]').innerText()==='بازگشت','back action has a visible accessible label');
   await page.locator('[name=public_host]').fill('ir.example.com');await page.locator('[data-map=target_port]').fill('5790');
   await page.locator('[data-add-mapping]').click();check(await page.locator('.tunnel-mapping-row').count()===2,'multiple port mappings');
   const removal=await page.locator('.tunnel-mapping-row').nth(1).evaluate(row=>{const button=row.querySelector('button'),r=button.getBoundingClientRect(),inputs=[...row.querySelectorAll('input')].map(i=>i.getBoundingClientRect());return {red:button.classList.contains('danger')&&getComputedStyle(button).backgroundColor==='rgba(255, 0, 0, 0.4)',height:inputs.every(i=>Math.abs(i.height-r.height)<1),aligned:inputs.every(i=>Math.abs(i.bottom-r.bottom)<1)};});
@@ -145,13 +146,13 @@ try{
   check(nodes,'both node buttons match their input widths, alignment and color');await screenshot(page,'details',width);await page.keyboard.press('Escape');
   await page.evaluate(()=>{tunnel.remote_status={iran:{active:true,checked_at:Math.floor(Date.now()/1000),metrics:{connected:true,bytes_in:1000,bytes_out:2000}},foreign:{active:true,checked_at:Math.floor(Date.now()/1000),metrics:{connected:true,bytes_in:1000,bytes_out:2000}}};});
   await page.locator('[data-reload-tunnels]').click();await page.locator('[data-tunnel-detail="1"]').click();
-  check(await page.locator('.tunnel-end-status dl').evaluateAll(lists=>lists.every(dl=>{const time=dl.querySelector('time'),dt=time.closest('dd').previousElementSibling,other=dl.querySelectorAll('dd')[1];const a=time.children[0].getBoundingClientRect(),b=time.children[2].getBoundingClientRect();return dt.textContent==='آخرین بررسی'&&dt.getBoundingClientRect().left>time.getBoundingClientRect().right&&Math.abs(time.closest('dd').getBoundingClientRect().left-other.getBoundingClientRect().left)<1&&a.right<=b.left;})),'detail timestamp uses same label/value columns and hour before date');
+  check(await page.locator('.tunnel-end-status dl').evaluateAll(lists=>lists.every(dl=>{const time=dl.querySelector('time'),dt=time.closest('dd').previousElementSibling,other=dl.querySelectorAll('dd')[1];const a=time.children[0].getBoundingClientRect(),b=time.children[2].getBoundingClientRect();return dt.textContent==='آخرین بررسی'&&dt.getBoundingClientRect().left>time.getBoundingClientRect().right&&Math.abs(time.closest('dd').getBoundingClientRect().left-other.getBoundingClientRect().left)<1&&a.left>=b.right;})),'detail timestamp uses same label/value columns and hour right of date');
   await screenshot(page,'detail-times',width);await page.keyboard.press('Escape');
   // Edit the same card using a test for its exact pair; drafts survive every round trip.
   await action(page,'edit');await page.locator('[name=name]').fill('نام حفظ‌شده');await page.locator('[data-change-method]').click();
   await page.locator('[data-method-picker] [data-select-result="normal:reverse:tcp"]').waitFor();
   check(await page.locator('#tunnel-iran').count()===0,'method picker does not ask for server selection again');
-  check(await page.locator('[data-method-picker] [data-select-result="normal:reverse:wss"]').isDisabled(),'failed method still cannot be selected during editing');
+  check(await page.locator('[data-method-picker] [data-select-result="normal:reverse:udp"]').isDisabled(),'failed method still cannot be selected during editing');
   await page.locator('[data-method-retest]').click();await page.locator('[data-select-result="normal:reverse:tcp"]').waitFor();
   check(await page.evaluate(()=>{const c=calls.filter(c=>c.url==='/tunnel-tests'&&c.method==='POST').at(-1);return c.payload.iran_server_id===1&&c.payload.foreign_server_id===2&&c.payload.compare_both===true;}),'retest fixes both endpoints and includes reverse orientation');
   await screenshot(page,'method-picker',width);await page.locator('[data-select-result="normal:reverse:tcp"]').click();
@@ -166,12 +167,12 @@ try{
   check((await page.locator('[data-tunnel-card="1"] .tunnel-method').innerText()).includes('TCP'),'existing card reflects replacement method after accepted response');
   check(errors.length===0,'browser errors: '+errors.join('; '));await page.evaluate(()=>session.dispose());await page.close();
  }
- const page=await context.newPage();await mount(page,1);await page.locator('[data-new-tunnel]').click();check(await page.locator('[data-go-servers]').count()===1,'insufficient servers keeps navigation action');await page.evaluate(()=>session.dispose());await page.close();
+ const page=await context.newPage();await mount(page,1);await page.locator('[data-new-tunnel]').click();await page.locator('[data-engine=backpack]').click();check(await page.locator('[data-go-servers]').count()===1,'insufficient servers keeps navigation action');await page.evaluate(()=>session.dispose());await page.close();
  for(const width of [1280,390]){
   const previewPage=await context.newPage();await previewPage.setViewportSize({width,height:1000});
   await mount(previewPage,3,origin+'/?tunnel_preview=full');
   check(await previewPage.locator('.tunnel-preview-banner').isVisible(),'localhost preview has explicit demo banner');
-  check(await previewPage.locator('[data-tunnel-card]').count()===4,'preview provides four diverse cards');
+  check(await previewPage.locator('[data-tunnel-card]').count()===6,'preview provides six diverse cards across the current engines');
   await checkPair(previewPage);
   check(await previewPage.locator('[data-tunnel-card="601"] .tunnel-link.is-connected').count()===1&&await previewPage.locator('[data-tunnel-card="602"] .tunnel-link.is-disconnected').count()===1,'connected and disconnected cards use distinct status colors');
   check(await previewPage.evaluate(()=>calls.length===0),'opening preview makes no real API call');

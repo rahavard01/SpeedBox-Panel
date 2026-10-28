@@ -1,13 +1,8 @@
 // Run with node --experimental-vm-modules. Install jsdom or set
 // PARTNER_TEST_JSDOM to its entry file. Uses the actual shipped Vue runtime.
-import { readFileSync } from 'node:fs';
-import vm from 'node:vm';
 import assert from 'node:assert/strict';
-const { JSDOM } = await import(process.env.PARTNER_TEST_JSDOM || 'jsdom');
-const manifest = JSON.parse(readFileSync(new URL('../../public/build/manifest.json', import.meta.url)));
-const source = readFileSync(new URL('../../public/build/' + manifest['resources/js/app.js'].file, import.meta.url), 'utf8')
-  .replace('Cs.mount("#app")', 'void 0').replace('Cs.use(us)', 'void 0')
-  + '\nexport{ac as testCreateApp,speedboxCreatePartnerAccounts};';
+const { JSDOM } = await import(process.env.SPEEDBOX_TEST_JSDOM || process.env.PARTNER_TEST_JSDOM || 'jsdom');
+import { loadSourceUi } from './helpers/source-ui.mjs';
 for (const mobile of [false, true]) {
   const dom = new JSDOM('<!doctype html><html><body><div id="fixture"></div><button id="outside">Outside</button></body></html>',
     { url: 'http://fixture.test/', runScripts: 'outside-only', pretendToBeVisual: true });
@@ -15,10 +10,9 @@ for (const mobile of [false, true]) {
   win.matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {} });
   win.fetch = async () => ({ json: async () => ({}) }); win.AbortController = AbortController;
   Object.defineProperty(win, 'innerWidth', { value: mobile ? 375 : 1280 });
-  const module = new vm.SourceTextModule(source, { context: dom.getInternalVMContext(),
-    initializeImportMeta: meta => { meta.url = 'http://fixture.test/public/build/assets/test-main.js'; } });
-  await module.link(() => { throw Error('Unexpected static import'); }); await module.evaluate();
-  const { testCreateApp, speedboxCreatePartnerAccounts, a1: ref, f: b, Z: k, i: x, R: nextTick, v: http, n: amount } = module.namespace;
+  const ui = await loadSourceUi(dom);
+  const { createApp: testCreateApp, ref, createElementVNode: b, openBlock: k, createElementBlock: x, nextTick } = ui.Vue;
+  const { speedboxCreatePartnerAccounts, http, formatBytes: amount } = ui;
   let transactions, requests = 0, reject = false, delayed, refreshRows;
   http.post = async (_url, { ids }) => ({ data: { data: ids.map(id => ({ id, online_count: 1, device_limit: 2 })) } });
   http.get = async url => {
@@ -76,4 +70,4 @@ for (const mobile of [false, true]) {
   assert.equal(win.document.querySelector('[role="dialog"]'), null, 'Late response cannot reopen closed history');
   app.unmount(); assert.equal(win.document.querySelector('.speedbox-partner-history'), null); dom.window.close();
 }
-console.log('Actual Vue desktop/mobile history menus, transaction dispatch, reset summaries, errors, stale responses and cleanup passed.');
+console.log('Vue desktop/mobile history menus, transaction dispatch, reset summaries, errors, stale responses and cleanup passed.');

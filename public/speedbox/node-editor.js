@@ -296,8 +296,11 @@ window.SpeedboxNodeEditor = (() => {
       sub.querySelector('[data-sub-close]').onclick=()=>closeSub(true);
       sub.onclick=e=>{if(e.target===sub)closeSub(true);};
       sub.addEventListener('keydown',e=>{if(e.key==='Escape'&&!sub.querySelector('.invoice-custom-select.is-open')){e.preventDefault();e.stopPropagation();closeSub(true);}});
-      sub.querySelector('form').onsubmit=async e=>{e.preventDefault();try{await save(sub);closeSub(true);form.querySelector('[data-advanced]')?.focus();}catch(error){toast(error.message,'error');}};
-      enhanceControls(sub);sub.querySelector('input,textarea,button')?.focus();return sub;
+      sub.querySelector('form').onsubmit=async e=>{e.preventDefault();try{await save(sub);closeSub(true);form.querySelector('[data-advanced]')?.focus({preventScroll:true});}catch(error){toast(error.message,'error');}};
+      enhanceControls(sub);
+      const touch=window.matchMedia('(pointer: coarse), (max-width: 767px)').matches;
+      const initial=touch?sub.querySelector('[role=dialog]'):sub.querySelector('input,textarea,button');
+      if(touch)initial.tabIndex=-1;initial?.focus({preventScroll:true});return sub;
     }
     function closeSub(check=false) {if(check&&isSaving())return;sub?.remove();sub=null;host.removeAttribute('inert');}
     function networkEditor() {

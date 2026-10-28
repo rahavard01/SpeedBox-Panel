@@ -530,7 +530,7 @@ class V2UserController extends Controller
             //$shouldResetUsage = (!$hasTimeLeft) || ($hasTimeLeft && $quotaExhausted && $currentPlanIs1m);
             $shouldResetUsage = !$hasTimeLeft;
 
-            $baseTs   = $shouldResetUsage ? $nowTs : $oldExpTs;
+            $baseTs   = app(\App\Services\SubscriptionOrderPolicy::class)->renewalBaseTimestamp($user, $nowTs);
             $newExpTs = Carbon::createFromTimestamp($baseTs)->addDays($addDays)->timestamp;
 
             $update = [

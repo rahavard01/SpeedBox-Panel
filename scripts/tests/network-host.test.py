@@ -12,6 +12,56 @@ def config(engine='gre',side='iran'):
  s={**copy.deepcopy(DEFAULTS),'engine':engine,'transport':'gre' if engine=='gre' else 'tcp','name':'fixture','peer_host':'192.0.2.2','local_endpoint':'192.0.2.1','public_host':'192.0.2.1','inner_iran':'10.226.0.1/30','inner_foreign':'10.226.0.2/30','mappings':[{'public_port':12443,'public_end':12443,'target_port':443,'target_end':443}]}
  return {'id':'sb-'+'a'*32,'engine':engine,'side':side,'secret':'b'*64,'enabled':True,'subnet':33000,'settings':s}
 class Worker(unittest.TestCase):
+ def test_stop_must_be_confirmed_before_success(self):
+  c=config('gost')
+  with tempfile.TemporaryDirectory() as d,patch.object(h,'ROOT',Path(d)/'state'),patch.object(h,'ETC',Path(d)/'etc'),patch.object(h,'UNITS',Path(d)/'units'),patch.object(h,'run',return_value=subprocess.CompletedProcess([],0,'','')),patch.object(h,'active_unit',return_value=True):
+   with self.assertRaisesRegex(RuntimeError,'did not stop'):h.dispatch({'action':'stop','config':c})
+
+ def test_rollback_preserves_desired_activity_and_boot_independently(self):
+  for engine in ('gre','gost'):
+   for active in (False,True):
+    for enabled in (False,True):
+     with self.subTest(engine=engine,active=active,enabled=enabled),tempfile.TemporaryDirectory() as d,patch.object(h,'ROOT',Path(d)/'state'),patch.object(h,'ETC',Path(d)/'etc'),patch.object(h,'UNITS',Path(d)/'units'),patch.object(h,'preflight',return_value=[]):
+      c=config(engine);p=h.paths(c['id']);h.atomic(p['config'],c);h.atomic(p['unit'],h.service_text(c));calls=[]
+      def run(argv,**kw):
+       calls.append(argv)
+       code=(0 if enabled else 1) if argv[1]=='is-enabled' else (0 if active else 3) if argv[1]=='is-active' else 0
+       return subprocess.CompletedProcess(argv,code,'','')
+      with patch.object(h,'run',side_effect=run):
+       h.dispatch({'action':'prepare','revision':'c'*32,'config':c});calls.clear()
+       h.dispatch({'action':'rollback','revision':'c'*32,'config':c})
+      self.assertTrue(h.read(p['config'])['enabled'],'observed outage must not rewrite desired policy')
+      self.assertIn(['systemctl','enable' if enabled else 'disable',p['unit'].name],calls)
+      self.assertIn(['systemctl','restart' if active else 'stop',p['unit'].name],calls)
+
+ def test_gre_startup_failure_retries_with_backoff_and_honors_stop_and_quota(self):
+  c=config();c['settings']['monitor_interval']=5
+  offline={'checked_at':100,'active':False,'connected':False,'state':'offline','destinations':{},'quota_exhausted':False,'quota_stopped':False,'last_restart':0}
+  with tempfile.TemporaryDirectory() as d,patch.object(h,'ROOT',Path(d)),patch.object(h,'snapshot',return_value=offline.copy()),patch.object(h,'install',side_effect=RuntimeError('missing device')) as install,patch.object(h.time,'time',return_value=100):
+   h.daemon_tick(c);saved=h.read(h.paths(c['id'])['runtime']);self.assertEqual(saved['recovery']['next_at'],105);self.assertEqual(install.call_count,1)
+   with patch.object(h.time,'time',return_value=106):h.daemon_tick(c)
+   saved=h.read(h.paths(c['id'])['runtime']);self.assertEqual(saved['recovery']['next_at'],116);self.assertEqual(install.call_count,2)
+   with patch.object(h.time,'time',return_value=112):h.daemon_tick(c)
+   self.assertEqual(install.call_count,2)
+  for change in ('stop','quota'):
+   cfg=config();row=offline.copy()
+   if change=='stop':cfg['enabled']=False
+   else:row['quota_exhausted']=True;cfg['settings']['quota_mode']='enforce'
+   with tempfile.TemporaryDirectory() as d,patch.object(h,'ROOT',Path(d)),patch.object(h,'snapshot',return_value=row),patch.object(h,'install') as install,patch.object(h,'run'):
+    h.daemon_tick(cfg);install.assert_not_called()
+
+ def test_gost_tcp_accept_is_not_authenticated_path_health(self):
+  c=config('gost');c['settings']['transport']='grpc';c['health_probe']=2
+  with tempfile.TemporaryDirectory() as d,patch.object(h,'ROOT',Path(d)),patch.object(h,'active_unit',return_value=True),patch.object(h,'tcp_check',return_value={'ok':True}),patch.object(h,'run',side_effect=RuntimeError('wrong relay key')):
+   self.assertFalse(h.snapshot(c)['connected'])
+  del c['health_probe']
+  with tempfile.TemporaryDirectory() as d,patch.object(h,'ROOT',Path(d)),patch.object(h,'active_unit',return_value=True),patch.object(h,'tcp_check',return_value={'ok':True}):
+   self.assertIsNone(h.snapshot(c)['connected'])
+
+ def test_gost_authenticated_path_succeeds_with_independent_target_checks(self):
+  c=config('gost');c['health_probe']=2
+  with tempfile.TemporaryDirectory() as d,patch.object(h,'ROOT',Path(d)),patch.object(h,'active_unit',return_value=True),patch.object(h,'tcp_check',return_value={'ok':True}),patch.object(h,'run',return_value='AUTHENTICATED ORIGIN PATH READY'):
+   self.assertTrue(h.snapshot(c)['connected'])
  def test_four_gre_types(self):
   for kind in ['gre','gretap','ip6gre','ip6gretap']:
    c=config();s=c['settings'];s['transport']=kind

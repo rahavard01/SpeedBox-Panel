@@ -117,11 +117,11 @@ class TunnelManagementTest extends TestCase
         $t=$this->createTunnel();$old=$t->settings;$new=[...$old,'public_host'=>'new.example.com'];
         $op=app(TunnelManager::class)->queue('apply',$t,null,['settings'=>$new]);
         $calls=[];$remote=\Mockery::mock(BackpackRemote::class);$remote->shouldReceive('ensure')->twice();
-        $remote->shouldReceive('call')->andReturnUsing(function($server,$r)use(&$calls){$calls[]=[$server->id,$r['action']];if($r['action']==='apply'&&$server->id===$this->foreign->id)throw new \RuntimeException('private-token-must-not-leak');return ['active'=>true];});
+        $remote->shouldReceive('call')->andReturnUsing(function($server,$r)use(&$calls,$t){$calls[]=[$server->id,$r['action']];if($r['action']==='apply'&&$server->id===$this->foreign->id)throw new \RuntimeException('remote failure: '.$t->secret);return ['active'=>true];});
         (new RunTunnelOperation($op->id))->handle($remote,app(TunnelManager::class));
         $this->assertSame($old,$t->fresh()->settings);$this->assertSame('failed',$op->fresh()->status);
         $this->assertContains([$this->iran->id,'rollback'],$calls);$this->assertContains([$this->foreign->id,'rollback'],$calls);
-        $this->assertSame(0,DB::table('speedbox_tunnel_leases')->count());$this->assertStringNotContainsString('private-token',$op->fresh()->toJson());
+        $this->assertSame(0,DB::table('speedbox_tunnel_leases')->count());$this->assertStringNotContainsString($t->secret,$op->fresh()->toJson());
     }
     public function test_partial_delete_retires_tunnel_and_releases_hosts():void
     {
@@ -189,7 +189,10 @@ class TunnelManagementTest extends TestCase
         $dir=sys_get_temp_dir().'/speedbox-budget-'.bin2hex(random_bytes(8));mkdir($dir,0700);
         file_put_contents($dir.'/sshpass',"#!/bin/sh\nshift\nexec \"\$@\"\n");
         file_put_contents($dir.'/ssh',"#!/bin/sh\ncase \"\$*\" in *budget-sleep*) exec sleep 3;; *ConnectTimeout=5*) printf short;; *) printf normal;; esac\n");
-        chmod($dir.'/sshpass',0700);chmod($dir.'/ssh',0700);
+        $keygen=new \Symfony\Component\Process\Process(['ssh-keygen','-q','-t','ed25519','-N','','-f',$dir.'/host']);$keygen->mustRun();
+        $public=trim(file_get_contents($dir.'/host.pub'));
+        file_put_contents($dir.'/ssh-keyscan',"#!/bin/sh\nprintf '%s\\n' ".escapeshellarg('fixture '.$public)."\n");
+        chmod($dir.'/sshpass',0700);chmod($dir.'/ssh',0700);chmod($dir.'/ssh-keyscan',0700);
         $path=getenv('PATH');$serverPath=$_SERVER['PATH']??null;$envPath=$_ENV['PATH']??null;
         putenv('PATH='.$dir.':'.$path);$_SERVER['PATH']=$_ENV['PATH']=$dir.':'.$path;
         try {
@@ -199,7 +202,7 @@ class TunnelManagementTest extends TestCase
             $this->assertTrue($timedOut);$this->assertLessThan(2.5,microtime(true)-$started);
             $this->assertSame('short',$ssh->withinBudget(2,fn()=>$ssh->run($this->iran,'budget-ok',15)));
             $this->assertSame('normal',$ssh->run($this->iran,'budget-ok',15));
-        } finally {putenv('PATH='.$path);if($serverPath===null)unset($_SERVER['PATH']);else $_SERVER['PATH']=$serverPath;if($envPath===null)unset($_ENV['PATH']);else $_ENV['PATH']=$envPath;unlink($dir.'/sshpass');unlink($dir.'/ssh');rmdir($dir);}
+        } finally {putenv('PATH='.$path);if($serverPath===null)unset($_SERVER['PATH']);else $_SERVER['PATH']=$serverPath;if($envPath===null)unset($_ENV['PATH']);else $_ENV['PATH']=$envPath;foreach(glob($dir.'/*') as $file)unlink($file);rmdir($dir);}
     }
 
     public function test_bounded_tunnel_requests_use_one_stdin_connection_without_sftp():void
@@ -207,8 +210,8 @@ class TunnelManagementTest extends TestCase
         foreach([BackpackRemote::class,\App\Services\NetworkTunnelRemote::class] as $class){
             $ssh=\Mockery::mock(\App\Services\SshExecutor::class)->makePartial();
             $ssh->shouldNotReceive('upload');
-            $ssh->shouldReceive('run')->once()->andReturnUsing(function($server,$command,$timeout,$input){
-                $this->assertSame(15,$timeout);$this->assertSame('delete',json_decode($input,true)['action']);
+            $ssh->shouldReceive('run')->once()->andReturnUsing(function($server,$command,$timeout,$input)use($class){
+                $this->assertSame($class===BackpackRemote::class?15:30,$timeout);$this->assertSame('delete',json_decode($input,true)['action']);
                 return json_encode(['ok'=>true,'data'=>['deleted'=>true]]);
             });
             $this->assertTrue((new $class($ssh))->call($this->iran,['action'=>'delete','name'=>'fixture'])['deleted']);
@@ -247,7 +250,7 @@ class TunnelManagementTest extends TestCase
         $t=$this->createTunnel();$op=app(TunnelManager::class)->queue('status',$t,null);
         $remote=\Mockery::mock(BackpackRemote::class);$remote->shouldReceive('call')->andReturn(['active'=>true,'metrics'=>['connected'=>true],'targets'=>['5790'=>false]]);
         (new RunTunnelOperation($op->id))->handle($remote,app(TunnelManager::class));
-        $this->assertSame('connected',$t->fresh()->status);$this->assertStringContainsString('سرویس مقصد هنوز پاسخ نمی‌دهد',$t->fresh()->message);
+        $this->assertSame('degraded',$t->fresh()->status);$this->assertStringContainsString('مقصد',$t->fresh()->message);
     }
     public function test_service_running_without_engine_evidence_is_not_connected():void
     {

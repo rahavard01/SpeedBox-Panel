@@ -10,7 +10,7 @@ sources = sorted(p.relative_to(root).as_posix() for p in (root/'agent').rglob('*
                  if p.is_file() and '.git' not in p.relative_to(root).parts)
 sources += ['scripts/build-agent.sh', 'scripts/build-agent-from-source.sh',
             'scripts/agent-artifacts.php', 'scripts/package-agent.py']
-manifest = {'format': 1, 'version': 'panel-speedbox-http-obfs-uuid-v1-nodes-v5-session-liveness',
+manifest = {'format': 1, 'version': 'panel-speedbox-http-obfs-uuid-v1-node-sync-v1',
             'source_files': {}, 'archives': {}}
 for name in sorted(sources):
     path = root / name
@@ -48,5 +48,6 @@ with tempfile.TemporaryDirectory(prefix='.package-', dir=output) as temporary:
     for name in names:
         os.replace(stage/name, output/name)
 print('AGENT RELEASE PACKAGED: commit agent-dist, agent source and build scripts together.')
+
 
 

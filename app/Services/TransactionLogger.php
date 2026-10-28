@@ -7,12 +7,13 @@ use Illuminate\Support\Facades\DB;
 class TransactionLogger
 {
 
-    private function resolveActor(array $data): array
+    private function resolveActor(array $data, ?object $existing = null): array
     {
         // اگر از بیرون پاس داده شده باشد، همان را بگیر
-        $u    = auth()->user();
-        $id   = $data['performed_by_id']   ?? $data['actor_id']   ?? ($u->id   ?? null);
-        $role = $data['performed_by_role'] ?? $data['actor_role'] ?? ($u->role ?? null);
+        // Finalization belongs to the recorded operation, not the worker/request completing it.
+        $u    = $existing === null ? auth()->user() : null;
+        $id   = $data['performed_by_id']   ?? $data['actor_id']   ?? ($existing->performed_by_id ?? $u->id ?? null);
+        $role = $data['performed_by_role'] ?? $data['actor_role'] ?? ($existing->performed_by_role ?? $u->role ?? null);
         return [$id, $role];
     }
     
@@ -97,7 +98,7 @@ class TransactionLogger
             'updated_at'     => now(),
         ];
 
-        [$actorId, $actorRole]          = $this->resolveActor($final);
+        [$actorId, $actorRole]          = $this->resolveActor($final, $row);
         $update['performed_by_id']      = $actorId;
         $update['performed_by_role']    = $actorRole;
 
@@ -130,7 +131,7 @@ class TransactionLogger
             'updated_at' => now(),
         ];
 
-        [$actorId, $actorRole]          = $this->resolveActor([]); // از auth() پر می‌شود
+        [$actorId, $actorRole]          = $this->resolveActor([], $row);
         $update['performed_by_id']      = $actorId;
         $update['performed_by_role']    = $actorRole;
 

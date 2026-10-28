@@ -7,6 +7,19 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class ProxyServer extends Model
 {
+    protected static function booted(): void
+    {
+        $schedule=function(self $node): void {
+            if(!\Illuminate\Support\Facades\Schema::hasTable('speedbox_tunnels'))return;
+            $machines=array_values(array_unique(array_filter([(int)$node->getOriginal('machine_id'),(int)$node->machine_id])));
+            if($machines)\App\Jobs\SyncTunnelOrigins::dispatch($machines)->afterCommit();
+        };
+        static::saved(function(self $node)use($schedule){
+            if($node->wasRecentlyCreated||$node->wasChanged(['machine_id','server_port','parent_id','enabled','type']))$schedule($node);
+        });
+        static::deleted($schedule);
+    }
+
     public const TYPE_VMESS = 'vmess';
     public const TYPE_VLESS = 'vless';
     public const TYPE_TROJAN = 'trojan';

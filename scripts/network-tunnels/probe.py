@@ -26,7 +26,8 @@ def validate(c):
  family=6 if c['ip_family']=='ipv6' else 4 if c['ip_family']=='ipv4' else 0
  if not family or ipaddress.ip_address(c['peer_host']).version!=family:raise ValueError('invalid peer address family')
  if c['engine']=='gost':
-  if c['version'] not in ('2.11.5','3.0.0') or c['transport']!='tcp':raise ValueError('invalid GOST method')
+  if c['version'] not in ('2.11.5','3.0.0') or c['transport'] not in ('tcp','grpc') or (c['transport']=='grpc' and c['version']!='3.0.0'):raise ValueError('invalid GOST method')
+  if c['transport']=='grpc' and (type(c.get('backend_port')) is not int or not 33000<=c['backend_port']<=60000 or c['backend_port'] in c.get('reserved_ports',[])):raise ValueError('invalid private grpc echo port')
  elif c['engine']=='wattunnel':
   if c['version']!=wat.VERSION or c['transport'] not in wat.CARRIERS or type(c.get('reverse')) is not bool:raise ValueError('invalid WatTunnel method')
   if c['transport']=='icmp' and family!=4:raise ValueError('ICMP is IPv4 only')
@@ -389,13 +390,22 @@ def serve(c):
  try:
   if c['engine']=='gre':setup_gre(c)
   if c['side']=='foreign':
-   host=c['inner_foreign'] if c['engine']=='gre' else '::' if c['ip_family']=='ipv6' else '0.0.0.0';echo=None
+   grpc=c['engine']=='gost' and c['transport']=='grpc'
+   host=c['inner_foreign'] if c['engine']=='gre' else '127.0.0.1' if grpc else '::' if c['ip_family']=='ipv6' else '0.0.0.0';echo=None
    for _ in range(30):
-    candidate=Echo(host,c['token'])
+    candidate=Echo(host,c['token'],c['backend_port'] if grpc else 0)
     if candidate.port not in c.get('reserved_ports',[]):echo=candidate;break
     candidate.close()
    if echo is None:raise RuntimeError('no unreserved temporary test port available')
    echo.start();port=echo.port
+   if grpc:
+    with socket.socket(socket.AF_INET6 if c['ip_family']=='ipv6' else socket.AF_INET) as guard:
+     guard.bind(('::' if c['ip_family']=='ipv6' else '0.0.0.0',0));port=guard.getsockname()[1]
+    if port in c.get('reserved_ports',[]):raise RuntimeError('temporary grpc port is reserved')
+    address=('['+c['peer_host']+']') if ':' in c['peer_host'] else c['peer_host']
+    proc=subprocess.Popen([str(GOST/('gost-'+c['version'])),'-L=relay+grpc://sb:'+c['token']+'@:'+str(port)],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+    time.sleep(.15)
+    if proc.poll() is not None:raise RuntimeError('temporary grpc relay exited')
   elif c['engine']=='gost':
    for _ in range(30):
     with socket.socket() as guard,socket.socket(type=socket.SOCK_DGRAM) as datagram:
@@ -405,7 +415,9 @@ def serve(c):
      if port not in c.get('reserved_ports',[]):break
    else:raise RuntimeError('no unreserved temporary test port available')
    peer='['+c['peer_host']+']' if ':' in c['peer_host'] else c['peer_host']
-   args=[str(GOST/('gost-'+c['version']))]+['-L='+proto+'://127.0.0.1:'+str(port)+'/'+peer+':'+str(c['peer_port']) for proto in ('tcp','udp')]
+   target='127.0.0.1:'+str(c['backend_port']) if c['transport']=='grpc' else peer+':'+str(c['peer_port'])
+   args=[str(GOST/('gost-'+c['version']))]+['-L='+proto+'://127.0.0.1:'+str(port)+'/'+target for proto in ('tcp','udp')]
+   if c['transport']=='grpc':args+=['-F=relay+grpc://sb:'+c['token']+'@'+peer+':'+str(c['peer_port'])]
    proc=subprocess.Popen(args,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
    deadline=time.monotonic()+8
    while time.monotonic()<deadline:

@@ -36,6 +36,31 @@ class Echo:
         threading.Thread(target=tcp,daemon=True).start();threading.Thread(target=udp,daemon=True).start()
     def close(self):self.closed=True;self.tcp.close();self.udp.close()
 class Validation(unittest.TestCase):
+    def test_rollback_retains_wat_desired_boot_and_activity(self):
+        c=config(settings());p=None;calls=[]
+        with tempfile.TemporaryDirectory() as td,patch.object(h,'ETC',Path(td)/'etc'),patch.object(h,'ROOT',Path(td)/'state'),patch.object(h,'UNITS',Path(td)/'units'),patch.object(h,'preflight',return_value=[]):
+            p=h.paths(c['id']);h.atomic(p['config'],c);h.atomic(p['unit'],h.service_text(c))
+            def run(argv,**kw):
+                calls.append(argv);return subprocess.CompletedProcess(argv,3 if argv[1]=='is-active' else 0,'','')
+            with patch.object(h,'run',side_effect=run):
+                request={'action':'prepare','config':c,'revision':'d'*32};h.dispatch(request);calls.clear();h.dispatch({**request,'action':'rollback'})
+            self.assertTrue(h.read(p['config'])['enabled']);self.assertIn(['systemctl','enable',p['unit'].name],calls);self.assertIn(['systemctl','stop',p['unit'].name],calls)
+
+    def test_foreign_origin_broker_is_part_of_periodic_health(self):
+        c=config(settings(),'foreign');c['origin_ports']=[12345]
+        class Broker:
+            def __enter__(self):return self
+            def __exit__(self,*args):pass
+            def settimeout(self,value):pass
+            def connect(self,path):self.path=path
+            def sendall(self,value):self.request=json.loads(value)
+            def recv(self,size):return b'ORIGIN1\n'
+        with tempfile.TemporaryDirectory() as td,patch.object(h,'ETC',Path(td)/'etc'),patch.object(h,'ROOT',Path(td)/'state'),patch.object(h,'active_unit',return_value=False):
+            with patch.object(h.wat.socket,'socket',side_effect=OSError('broker down')):self.assertFalse(h.wat.snapshot(h,c)['origin_endpoint'])
+            broker=Broker()
+            with patch.object(h.wat.socket,'socket',return_value=broker):self.assertTrue(h.wat.snapshot(h,c)['origin_endpoint'])
+            self.assertEqual(broker.path,'/run/speedbox-origin/broker.sock');self.assertEqual(broker.request,{'version':1,'operation':'ping'})
+
     def test_reject_invalid_combinations(self):
         for change in [dict(transport='udp',reverse=True),dict(transport='icmp',ip_family='ipv6'),dict(transport='icmp',sessions=2),dict(transport='udp',mtu=16000),dict(path='/x;id'),dict(conns=65),dict(tls_pin='bad'),dict(mappings=[dict(public_port=50001,public_end=50001,target_port=12345,target_end=10**9)])]:
             with self.subTest(change=change):

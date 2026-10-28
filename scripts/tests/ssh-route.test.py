@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Real direct command/upload checks; legacy reverse routes must be ignored.
 
-No external server is contacted. Authentication and host-key mismatch must stop
-before fallback; commands that partially execute must never be replayed.
+No external server is contacted. Authentication failures must stop without fallback. Host-key rotation requires
+authentication; commands that partially execute must never be replayed.
 """
 import argparse,json,os,pathlib,socket,subprocess,tempfile,threading,time
 
@@ -12,12 +12,12 @@ def port():
     with socket.socket() as s:s.bind(('127.0.0.1',0));return s.getsockname()[1]
 
 def main():
-    parser=argparse.ArgumentParser();parser.add_argument('--php',default=os.environ.get('PHP_AUDIT_BIN','php'));args=parser.parse_args()
+    parser=argparse.ArgumentParser();parser.add_argument('--php',default=os.environ.get('PHP_AUDIT_BIN','php'));parser.add_argument('--runner',default='scripts/tests/ssh-route.test.php');args=parser.parse_args()
     processes=[]
     with tempfile.TemporaryDirectory(prefix='speedbox-ssh-test-') as temporary:
         tmp=pathlib.Path(temporary)
         try:
-            for name in ['host','identity','wrong']:
+            for name in ['host','host2','identity','wrong']:
                 run(['ssh-keygen','-q','-t','ed25519','-N','','-f',str(tmp/name)])
             fingerprint=run(['ssh-keygen','-lf',str(tmp/'host.pub'),'-E','sha256']).split()[1]
             direct,reverse=port(),port()
@@ -68,7 +68,7 @@ Subsystem sftp internal-sftp
             before=forwarded()
             def check(name,changes=None,**payload):
                 fixture=tmp/(name+'.json');fixture.write_text(json.dumps({'server':{**server,**(changes or {})},**payload}))
-                return subprocess.run([args.php,str(ROOT/'scripts/tests/ssh-route.test.php'),str(fixture)],capture_output=True,text=True,env={**os.environ,'SPEEDBOX_SSH_TEST_STORAGE':str(tmp/'storage')},timeout=45)
+                return subprocess.run([args.php,str(ROOT/args.runner),str(fixture)],capture_output=True,text=True,env={**os.environ,'SPEEDBOX_SSH_TEST_STORAGE':str(tmp/'storage')},timeout=45)
             r=check('direct',command='printf DIRECT_OK');assert r.returncode==0 and r.stdout=='DIRECT_OK',(r.stdout,r.stderr)
             # Upload directly. The live reverse channel is a decoy that must stay unused.
             source=tmp/'payload';source.write_text('DIRECT_UPLOAD_OK')
@@ -82,13 +82,33 @@ Subsystem sftp internal-sftp
             # Keep fallback fully working, but do not use it to hide bad credentials.
             r=check('wrong-auth',{'private_key':(tmp/'wrong').read_text()},command='printf MUST_NOT_RUN');assert r.returncode!=0 and 'Permission denied' in r.stderr,r
             assert forwarded()==before,'authentication failure used fallback'
-            r=check('wrong-host',{'host_fingerprint':'SHA256:'+'a'*43},command='printf MUST_NOT_RUN');assert r.returncode!=0 and 'اثر انگشت' in r.stderr,r
-            assert forwarded()==before,'host-key mismatch used fallback'
+            sentinel=tmp/'storage/app/private/known_hosts';sentinel.write_text('other-host ssh-ed25519 unrelated-key\n')
+            r=check('stale-host',{'host_fingerprint':'SHA256:'+'a'*43},command='printf ROTATED_OK');assert r.returncode==0 and r.stdout=='ROTATED_OK',(r.stdout,r.stderr)
+            assert sentinel.read_text()=='other-host ssh-ed25519 unrelated-key\n','unrelated known hosts were changed'
+            saved={f.name:f.read_bytes() for f in sentinel.parent.glob('known-host-*')}
+            r=check('untrusted-credentials',{'host_fingerprint':'SHA256:'+'a'*43,'private_key':(tmp/'wrong').read_text()},command='printf MUST_NOT_RUN')
+            assert r.returncode!=0 and saved=={f.name:f.read_bytes() for f in sentinel.parent.glob('known-host-*')},'failed authentication persisted a key'
+            # Reinstall the host with a different actual key at the same IP/port.
+            daemon.terminate();daemon.wait(timeout=5)
+            config.write_text(config.read_text().replace(str(tmp/'host'),str(tmp/'host2')))
+            daemon=subprocess.Popen(['/usr/sbin/sshd','-D','-e','-f',str(config)],stdout=log,stderr=log);processes.append(daemon)
+            deadline=time.monotonic()+5
+            while True:
+                try:
+                    with socket.create_connection(('127.0.0.1',direct),.2):break
+                except OSError:
+                    if time.monotonic()>deadline:raise
+                    time.sleep(.05)
+            r=check('reinstalled-host',command='printf REINSTALLED_OK');assert r.returncode==0 and r.stdout=='REINSTALLED_OK',(r.stdout,r.stderr)
+            assert any(f.read_bytes()!=saved.get(f.name) for f in sentinel.parent.glob('known-host-*')),'replacement was not persisted'
+            assert sentinel.read_text()=='other-host ssh-ed25519 unrelated-key\n'
+            r=check('other-port',{'ssh_port':reverse,'host_fingerprint':None},command='printf OTHER_PORT_OK');assert r.returncode==0 and r.stdout=='OTHER_PORT_OK',(r.stdout,r.stderr)
+            assert len(list(sentinel.parent.glob('known-host-*')))==2,'different ports shared a host record'
             marker=tmp/'once'
             r=check('partial-command',command='printf x >> '+str(marker)+'; false');assert r.returncode!=0 and marker.read_text()=='x',r
             for conn in connections:conn.close()
             blackhole.close()
-            print('PASS: direct SSH/SCP/stdin, ignored legacy reverse route, authentication refusal, host pinning and no replay')
+            print('PASS: direct SSH/SCP/stdin, ignored legacy reverse route, authentication refusal, authenticated host-key rotation, endpoint isolation and no replay')
         except BaseException:
             if (tmp/'sshd.log').exists():print((tmp/'sshd.log').read_text()[-4000:])
             raise

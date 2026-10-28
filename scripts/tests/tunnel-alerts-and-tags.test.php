@@ -105,14 +105,14 @@ foreach(['backpack','gost','gre'] as $engine){
     $sample=$t->fresh();$sample->engine=$engine;
     $sample->remote_status=['iran'=>['active'=>true,'connected'=>false,'metrics'=>['connected'=>false]],'foreign'=>['active'=>true,'connected'=>false,'metrics'=>['connected'=>false]]];
     $assert($monitor->health($sample)===false,$engine.' confirmed down state is recognized');
-    $sample->remote_status=['iran'=>['active'=>true,'connected'=>true,'metrics'=>['connected'=>true]],'foreign'=>['active'=>true,'connected'=>true,'metrics'=>['connected'=>true]]];
+    $sample->remote_status=['iran'=>['active'=>true,'connected'=>true,'origin_endpoint'=>true,'path_verified'=>true,'metrics'=>['connected'=>true]],'foreign'=>['active'=>true,'connected'=>true,'origin_endpoint'=>true,'path_verified'=>true,'metrics'=>['connected'=>true]]];
     $assert($monitor->health($sample)===true,$engine.' confirmed recovery state is recognized');
 }
-$sample=$t->fresh();$sample->remote_status=['iran'=>['active'=>true,'connected'=>null],'foreign'=>['active'=>true,'connected'=>null]];
+$sample=$t->fresh();$sample->remote_status=['iran'=>['active'=>true,'connected'=>null],'foreign'=>['active'=>true,'connected'=>null,'origin_endpoint'=>true]];
 $assert($monitor->health($sample)===null,'unprobed UDP is never called disconnected');
-$sample->remote_status=['iran'=>['active'=>true,'connected'=>true],'foreign'=>['active'=>true,'connected'=>null]];
+$sample->remote_status=['iran'=>['active'=>true,'connected'=>true,'origin_endpoint'=>true,'path_verified'=>true],'foreign'=>['active'=>true,'connected'=>null,'origin_endpoint'=>true]];
 $assert($monitor->health($sample)===true,'GOST recovers when Iran confirms its destinations; foreign has no duplicate probe');
-$sample->transport='grpc';$sample->remote_status=['iran'=>['active'=>true,'connected'=>true],'foreign'=>['active'=>false,'connected'=>null]];
+$sample->transport='grpc';$sample->remote_status=['iran'=>['active'=>true,'connected'=>true,'origin_endpoint'=>true,'path_verified'=>true],'foreign'=>['active'=>false,'connected'=>null]];
 $assert($monitor->health($sample)===false,'legacy GOST gRPC still requires its foreign service');
 $sample->engine='gre';$sample->settings=[...$sample->settings,'quota_mode'=>'enforce'];$sample->remote_status=['iran'=>['active'=>false,'connected'=>false,'quota_exhausted'=>true]];
 $assert($monitor->health($sample)===null,'a configured quota stop is not mislabeled as an accidental outage');
@@ -139,7 +139,7 @@ foreach(TunnelOperation::whereIn('status',['queued','running'])->get() as $pendi
 $bot->update(['enabled'=>true]);$t->refresh();$t->update(['settings'=>[...$t->settings,'telegram_alerts'=>true]]);
 $monitor->reset($t->id);TunnelOperation::query()->update(['updated_at'=>now()->subHour()]);
 $unreachable=function()use($t,$manager){
- $t->update(['status'=>'needs_review','remote_status'=>['_checked_at'=>now()->timestamp,'iran'=>['error'=>'unreachable'],'foreign'=>['active'=>true,'connected'=>true]]]);
+ $t->update(['status'=>'needs_review','remote_status'=>['_checked_at'=>now()->timestamp,'iran'=>['error'=>'unreachable'],'foreign'=>['active'=>true,'connected'=>true,'origin_endpoint'=>true,'path_verified'=>true]]]);
  $op=$manager->queue('status',$t->fresh(),null,['outage_probe'=>true]);$manager->finish($op,'failed','unreachable');
 };
 Carbon::setTestNow(now()->addMinute());$unreachable();$assert($state()->failures===1,'one inaccessible observation alone is insufficient');

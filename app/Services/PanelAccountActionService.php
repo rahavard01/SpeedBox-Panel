@@ -296,7 +296,7 @@ class PanelAccountActionService
 
             $nowTs = time();
             $oldExpTs = (int)($user->expired_at ?? 0);
-            $baseTs = $oldExpTs > $nowTs ? $oldExpTs : $nowTs;
+            $baseTs = app(SubscriptionOrderPolicy::class)->renewalBaseTimestamp($user, $nowTs);
             $newExpTs = Carbon::createFromTimestamp($baseTs)->addDays($addDays)->timestamp;
 
             $update = [

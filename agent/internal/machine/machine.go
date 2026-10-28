@@ -15,11 +15,13 @@ import (
 	"github.com/cedar2025/xboard-node/internal/monitor"
 	"github.com/cedar2025/xboard-node/internal/nlog"
 	"github.com/cedar2025/xboard-node/internal/panel"
+	"github.com/cedar2025/xboard-node/internal/runtimecontrol"
 	"github.com/cedar2025/xboard-node/internal/service"
 )
 
 // nodeHandle tracks a running node service.
 type nodeHandle struct {
+	service    *service.Service
 	cancel     context.CancelFunc
 	done       chan struct{}
 	mailbox    *controlplane.NodeMailbox
@@ -32,8 +34,10 @@ type nodeHandle struct {
 //   - maintains a shared WS connection that demuxes events by node_id
 //   - reports machine-level load via POST /machine/status
 type Orchestrator struct {
-	cfg    *config.Config
-	client *panel.Client // machine-level client (no node_id)
+	rediscoverMu sync.Mutex
+	syncRequests chan machineSync
+	cfg          *config.Config
+	client       *panel.Client // machine-level client (no node_id)
 
 	mu    sync.Mutex
 	nodes map[int]*nodeHandle // node_id → handle
@@ -64,17 +68,20 @@ func New(cfg *config.Config) *Orchestrator {
 		MachineID: cfg.Machine.MachineID,
 	}
 	return &Orchestrator{
-		cfg:       cfg,
-		client:    panel.NewClient(panelCfg),
-		nodes:     make(map[int]*nodeHandle),
-		mailboxes: make(map[int]*controlplane.NodeMailbox),
-		statuses:  make(map[int]chan<- controlplane.StatusChange),
+		cfg:          cfg,
+		syncRequests: make(chan machineSync, 4),
+		client:       panel.NewClient(panelCfg),
+		nodes:        make(map[int]*nodeHandle),
+		mailboxes:    make(map[int]*controlplane.NodeMailbox),
+		statuses:     make(map[int]chan<- controlplane.StatusChange),
 	}
 }
 
 // Run is the main loop. It blocks until ctx is cancelled.
 func (o *Orchestrator) Run(ctx context.Context) error {
 	o.runCtx = ctx
+	unregister := runtimecontrol.Register(o.cfg.Panel.URL, o.cfg.Machine.MachineID, o.SyncNow)
+	defer unregister()
 	nodesResp, err := o.client.GetMachineNodes()
 	if err != nil {
 		return fmt.Errorf("initial node discovery: %w", err)
@@ -88,10 +95,12 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 	// empty machine before the first node is attached.
 	o.tryStartWS(ctx)
 
-	// Start initial nodes.
+	// Serialize initial startup with immediate rediscovery events.
+	o.rediscoverMu.Lock()
 	for _, n := range nodesResp.Nodes {
 		o.startNode(ctx, n)
 	}
+	o.rediscoverMu.Unlock()
 
 	discoveryTicker := time.NewTicker(o.pullInterval)
 	statusTicker := time.NewTicker(o.pushInterval)
@@ -103,6 +112,10 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 		case <-ctx.Done():
 			o.stopAll()
 			return nil
+
+		case req := <-o.syncRequests:
+			states, err := o.synchronize(req.ctx, req.nodes)
+			req.result <- machineResult{states: states, err: err}
 
 		case <-discoveryTicker.C:
 			o.rediscover(ctx)
@@ -174,6 +187,9 @@ func (o *Orchestrator) startNode(ctx context.Context, mn panel.MachineNode) {
 
 	cp := controlplane.NewMachinePanelControlPlane(perNodeClient, nodeCfg.Kernel, push, registerFn)
 	svc := service.NewWithControlPlane(nodeCfg, cp)
+	o.mu.Lock()
+	o.nodes[mn.ID].service = svc
+	o.mu.Unlock()
 
 	nlog.Core().Info(fmt.Sprintf("machine: starting node %d (%s/%s)",
 		mn.ID, mn.Type, mn.Name))
@@ -230,11 +246,13 @@ func (o *Orchestrator) stopAll() {
 
 // ─── Node discovery ──────────────────────────────────────────────────────
 
-func (o *Orchestrator) rediscover(ctx context.Context) {
+func (o *Orchestrator) rediscover(ctx context.Context) error {
+	o.rediscoverMu.Lock()
+	defer o.rediscoverMu.Unlock()
 	nodesResp, err := o.client.GetMachineNodes()
 	if err != nil {
 		nlog.Core().Warn("machine node discovery failed", "error", err)
-		return
+		return err
 	}
 
 	wanted := make(map[int]panel.MachineNode, len(nodesResp.Nodes))
@@ -263,8 +281,9 @@ func (o *Orchestrator) rediscover(ctx context.Context) {
 	}
 
 	for _, n := range nodesResp.Nodes {
-		o.startNode(ctx, n) // no-op if already running
+		o.startNode(o.runCtx, n) // no-op if already running
 	}
+	return nil
 }
 
 // ─── Machine status reporting ────────────────────────────────────────────
@@ -426,4 +445,3 @@ func (p *machineNodePush) SendDeviceReport(devices map[int][]string) {
 	data, _ := json.Marshal(payload)
 	p.ws.SendRaw(panel.WSEventReportDevices, data)
 }
-

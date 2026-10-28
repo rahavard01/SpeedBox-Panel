@@ -40,9 +40,13 @@ class RunNetworkTunnelOperation implements ShouldQueue,ShouldBeEncrypted
             $state=$op->payload??[];
             if(!isset($state['phase']))$state=[...$state,'phase'=>$op->action==='engine-update'?'inspect-update':'ensure','side'=>0,'revision'=>bin2hex(random_bytes(16)),
                 'old_settings'=>$tunnel->settings,'old_name'=>$tunnel->name,'old_status'=>$tunnel->status,'old_message'=>$tunnel->message,'prepared'=>[],'hosts'=>[]];
-            if($tunnel->engine==='wattunnel' && !isset($state['origin_upgraded']) && in_array($op->action,['apply','start','restart','reapply','engine-update'],true)) {
-                $state['settings']=\App\Services\TrustedTunnelOrigin::upgrade($tunnel,$state['settings']??$tunnel->settings);
-                $state['origin_upgraded']=true;
+            if(!isset($state['origin_upgraded']) && in_array($op->action,['apply','start','restart','reapply','engine-update'],true)
+                && !in_array($state['phase'],['rollback','failed','done','commit'],true)) {
+                // Allocation performs SSH reads. Persist rollback inputs even if
+                // that preparation fails before the first host is mutated.
+                $op->update(['payload'=>$state]);
+                try {$state['settings']=\App\Services\TrustedTunnelOrigin::upgrade($tunnel,$state['settings']??$tunnel->settings);$state['origin_upgraded']=true;}
+                catch(Throwable $error){$state['error']=$error->getMessage();$state['phase']='failed';$state['side']=0;}
             }
             if($op->deadline->isPast()&&!in_array($state['phase'],['rollback','failed','commit','done'],true)){
                 $state['error']='مهلت عملیات تمام شد.';$state['phase']='rollback';$state['side']=0;
@@ -113,9 +117,12 @@ class RunNetworkTunnelOperation implements ShouldQueue,ShouldBeEncrypted
                     case 'commit':
                         // Persist only after both hosts were applied and structurally verified.
                         if($state['side']===0 && empty($state['database_committed'])) {
+                            $state['policy_changed']=true;$op->update(['payload'=>$state]);
                             if(($settings['connection_mode']??'direct')==='cdn'||($tunnel->settings['connection_mode']??'direct')==='cdn')app(\App\Services\TunnelCdnRemote::class)->commit($tunnel,$settings);
                             if($op->action==='delete')$tunnel->update(['status'=>'deleted','message'=>'اتصال از دو سرور حذف شد.']);
                             else {$tunnel->update(['settings'=>$settings,'name'=>$state['name']??$tunnel->name,'kind'=>!empty($settings['reverse'])?'reverse':'direct','transport'=>$settings['transport']]);$network->saveSnapshot($tunnel->fresh(),$state['snapshots']);}
+                            if($op->action!=='delete')app(\App\Services\TunnelOriginRemote::class)->refreshNodePolicy($tunnel,$state['old_settings'],$settings);
+                            if($op->action!=='delete')app(\App\Services\TunnelOriginRemote::class)->activate($tunnel,$settings);
                             $state['database_committed']=true;$op->update(['payload'=>$state]);
                         }
                         try{app(\App\Services\TunnelCdnRemote::class)->revision($tunnel,$settings,$side,'commit',$state['revision'],($state['old_settings']['connection_mode']??'direct')==='cdn');$remote->call($server,['action'=>'commit','revision'=>$state['revision'],'config'=>$config]);}catch(Throwable $cleanup){$state['cleanup_errors'][$side]=$cleanup->getMessage();}
@@ -145,6 +152,9 @@ class RunNetworkTunnelOperation implements ShouldQueue,ShouldBeEncrypted
             } elseif($state['phase']==='failed') {
                 $tunnel->update(['settings'=>$state['old_settings'],'name'=>$state['old_name'],'status'=>empty($state['rollback_errors'])?($state['old_status']==='queued'?'failed':$state['old_status']):'failed',
                     'message'=>$op->action==='engine-update'?'به‌روزرسانی ابزار کامل نشد؛ وضعیت دو سرور و گزارش بازگردانی تنظیمات تونل را بررسی کنید.':($op->action==='optimize'?'بهینه‌سازی کامل نشد؛ ممکن است بخشی از تنظیمات سرور اعمال شده باشد. گزارش را بررسی کنید.':(!$mutating?'دریافت گزارش کامل نشد؛ تنظیمات اتصال تغییر نکرد.':(empty($state['rollback_errors'])?'عملیات کامل نشد؛ تنظیمات قبلی بازگردانده شد.':'بازگردانی یکی از سمت‌ها کامل نشد؛ گزارش را بررسی کنید.')))]);
+                if(!empty($state['policy_changed']))try{app(\App\Services\TunnelOriginRemote::class)->refreshNodePolicy($tunnel,$settings,$state['old_settings'],true);}catch(Throwable){
+                    $state['rollback_errors']['node_policy']='node policy reload failed';$tunnel->update(['status'=>'needs_review','message'=>'تنظیمات تونل بازگردانده شد؛ بازیابی سیاست هویت نود نیازمند بررسی است.']);
+                }
                 $manager->finish($op,'failed',$tunnel->message,['error'=>$state['error']??'operation failed','rollback_errors'=>$state['rollback_errors']??[],'hosts'=>$state['hosts']??[]]);
             } else {
                 $op->update(['payload'=>$state]);self::dispatch($op->id)->delay(now()->addSeconds(1));
@@ -171,4 +181,5 @@ class RunNetworkTunnelOperation implements ShouldQueue,ShouldBeEncrypted
         self::dispatch($op->id)->delay(now()->addSeconds(5));
     }
 }
+
 

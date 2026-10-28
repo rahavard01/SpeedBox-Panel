@@ -5,6 +5,8 @@ namespace App\Jobs;
 use App\Models\ManagedServer;
 use App\Models\ServerDeployment;
 use App\Services\SshExecutor;
+use App\Services\DeploymentLogStream;
+use App\Services\MachineResourceSnapshot;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -92,8 +94,13 @@ class DeployManagedServer implements ShouldQueue
                 ' --xbctl-binary '.escapeshellarg("{$remoteDir}/xbctl").
                 ' --expected-version panel-speedbox-http-obfs'.
                 ' --force-reconfigure --yes';
-            $output = $ssh->run($server, $command, (int) config('speedbox.deploy_timeout', 900));
-            $deployment->update(['progress' => 90, 'log' => $deployment->log."\n".$this->redact($output, $machine->token)]);
+            $stream = new DeploymentLogStream($deployment, $this->secrets($server));
+            try {
+                $ssh->run($server, $command, (int) config('speedbox.deploy_timeout', 900), null, $stream->append(...));
+            } finally {
+                $stream->finish();
+            }
+            $deployment->update(['progress' => 90]);
 
             $status = $ssh->run($server, $sudo.'systemctl is-active xboard-node && /usr/local/bin/xboard-node -v', 45);
             if (preg_match('/^active$/m', $status) !== 1) {
@@ -106,12 +113,13 @@ class DeployManagedServer implements ShouldQueue
                 'architecture' => $assetArch,
                 'last_checked_at' => time(),
             ]);
+            $this->collectResources($ssh, $server, $deployment);
             $deployment->update(['status' => 'succeeded', 'progress' => 100, 'finished_at' => now(), 'log' => $deployment->log."\nنصب با موفقیت پایان یافت."]);
         } catch (Throwable $e) {
-            $message = $this->redact($e->getMessage(), (string) optional($server->machine)->token);
+            $message = mb_strcut(str_replace($this->secrets($server), '[REDACTED]', $e->getMessage()), -8192, null, 'UTF-8');
             $server->update(['status' => 'failed', 'last_error' => $message]);
-            $deployment->update(['status' => 'failed', 'finished_at' => now(), 'log' => $deployment->log."\nخطا: {$message}"]);
-            throw $e;
+            $deployment->update(['status' => 'failed', 'finished_at' => now(), 'log' => mb_strcut($deployment->log."\nخطا: {$message}", -262144, null, 'UTF-8')]);
+            throw new \RuntimeException($message);
         } finally {
             if ($remoteDir && preg_match('~^/tmp/panel-speedbox-deploy\.[A-Za-z0-9]+$~', $remoteDir)) {
                 try {
@@ -139,11 +147,12 @@ class DeployManagedServer implements ShouldQueue
             'architecture' => $arch,
             'last_checked_at' => time(),
         ]);
+        if ($online) $this->collectResources($ssh, $server, $deployment);
         $deployment->update([
             'status' => $online ? 'succeeded' : 'failed',
             'progress' => 100,
             'finished_at' => now(),
-            'log' => $deployment->log."\n".($online ? 'سرویس مدیریت نود فعال است.' : 'سرویس مدیریت نود فعال نیست؛ گزارش فنی را بررسی کنید.')."\n".$status,
+            'log' => $deployment->log."\n".($online ? 'سرویس مدیریت نود فعال است.' : 'سرویس مدیریت نود فعال نیست؛ گزارش فنی را بررسی کنید.')."\n".str_replace($this->secrets($server), '[REDACTED]', $status),
         ]);
     }
 
@@ -154,9 +163,19 @@ class DeployManagedServer implements ShouldQueue
         return [trim($os[1] ?? 'linux'), trim($arch[1] ?? '')];
     }
 
-    private function redact(string $text, string $token): string
+    private function secrets(ManagedServer $server): array
     {
-        return $token === '' ? $text : str_replace($token, '[REDACTED]', $text);
+        return array_values(array_filter([(string) $server->machine?->token, (string) $server->password, (string) $server->private_key, (string) $server->private_key_passphrase], fn ($secret) => $secret !== ''));
+    }
+
+    private function collectResources(SshExecutor $ssh, ManagedServer $server, ServerDeployment $deployment): void
+    {
+        try {
+            app(MachineResourceSnapshot::class)->collect($ssh, $server);
+            $deployment->update(['log' => $deployment->log."\nنمونه اولیه منابع دریافت شد."]);
+        } catch (Throwable) {
+            // A metrics failure must not mark a successful installation broken.
+            $deployment->update(['log' => $deployment->log."\nدریافت نمونه اولیه منابع ناموفق بود؛ گزارش دوره‌ای عامل جایگزین می‌شود."]);
+        }
     }
 }
-

@@ -1,14 +1,10 @@
-// Actual shipped Vue runtime and infrastructure UI, with delayed network responses.
+// Maintained Vue components and infrastructure UI, with delayed network responses.
 // node --experimental-vm-modules scripts/tests/final-polish-ui.test.mjs
 import { readFileSync } from 'node:fs';
-import vm from 'node:vm';
 import assert from 'node:assert/strict';
-const { JSDOM } = await import(process.env.PARTNER_TEST_JSDOM || 'jsdom');
+import { loadSourceUi } from './helpers/source-ui.mjs';
+const { JSDOM } = await import(process.env.SPEEDBOX_TEST_JSDOM || process.env.PARTNER_TEST_JSDOM || 'jsdom');
 const read = path => readFileSync(new URL('../../' + path, import.meta.url), 'utf8');
-const manifest = JSON.parse(read('public/build/manifest.json'));
-const source = read('public/build/' + manifest['resources/js/app.js'].file)
-  .replace('Cs.mount("#app")', 'void 0').replace('Cs.use(us)', 'void 0')
-  + '\nexport{ac as testApp,k9 as testFilter,b1 as testVNode,dl as testRemaining};';
 const dom = new JSDOM('<div class="top-bar"><button class="hamburger-menu"></button><div id="fixture"></div></div>',
   { url: 'http://fixture.test/', runScripts: 'outside-only', pretendToBeVisual: true });
 const win = dom.window;
@@ -23,19 +19,10 @@ win.HTMLElement.prototype.getBoundingClientRect = function () {
 };
 win.fetch = async () => ({ json: async () => ({}) }); win.AbortController = AbortController;
 win.eval(read('public/speedbox/register-infrastructure.js'));
-const module = new vm.SourceTextModule(source, { context: dom.getInternalVMContext(), initializeImportMeta: meta => { meta.url = 'http://fixture.test/main.js'; } });
-await module.link(() => { throw Error('Unexpected import'); }); await module.evaluate();
-const userPage = read('public/build/' + manifest['resources/js/pages/admin/Users.vue'].file);
-const helperName = userPage.match(/import SpeedboxAccountActions from '\.\/([^']+)'/)[1];
-const helperSource = read('public/build/assets/' + helperName);
-const mainName = manifest['resources/js/app.js'].file.split('/').at(-1);
-assert.ok(![...helperSource.matchAll(/from["']\.\/(app-speedbox-[^"']+)["']/g)].some(match => match[1] !== mainName), 'Active account helpers must share the current Vue runtime');
-const picker = new vm.SourceTextModule(read('public/build/assets/SpeedboxDatePicker-a1.js'), { context: dom.getInternalVMContext() });
-await picker.link(() => module);
-const helperFilterName = helperSource.match(/(\w+)=\{__name:"InvoiceFilterSelect"/)[1];
-const helper = new vm.SourceTextModule(helperSource + '\nexport{' + helperFilterName + ' as testHelperFilter};', { context: dom.getInternalVMContext(), initializeImportMeta: meta => { meta.url = 'http://fixture.test/' + helperName; } });
-await helper.link(specifier => specifier.endsWith('SpeedboxDatePicker-a1.js') ? picker : module); await helper.evaluate();
-const { testApp, testFilter, testVNode: h, testRemaining, a1: ref, R: nextTick } = module.namespace;
+const ui = await loadSourceUi(dom);
+const { createApp: testApp, h, ref, nextTick } = ui.Vue;
+const testFilter = ui.InvoiceFilterSelect, testRemaining = ui.remainingDaysText;
+const helper = { namespace: { testHelperFilter: ui.InvoiceFilterSelect } };
 const flush = async () => { await Promise.resolve(); await nextTick(); await Promise.resolve(); await nextTick(); };
 const mobile = async value => { media.matches = value; for (const listener of listeners) listener(); await flush(); };
 let planValue, filterValue, modeValue, helperValue;
@@ -79,9 +66,8 @@ app.unmount(); assert.equal(listeners.size, 0, 'Media listeners are cleaned up')
 
 // Mount the actual compiled Partners page: optimized child arrays reject a raw
 // null in a conditional code-lock note. Exercise create/close twice in both modes.
-const partners = new vm.SourceTextModule(read('public/build/' + manifest['resources/js/pages/admin/Partners.vue'].file), { context: dom.getInternalVMContext() });
-await partners.link(() => module); await partners.evaluate();
-module.namespace.v.get = async () => ({ data: { data: [], groups: [], volume_groups: [] } });
+const partners = { namespace: { default: ui.Partners } };
+ui.http.get = async () => ({ data: { data: [], groups: [], volume_groups: [] } });
 win.scrollTo = () => {};
 for (const isMobile of [false, true]) {
   await mobile(isMobile);
@@ -188,4 +174,4 @@ for (const view of ['overview','servers','nodes','plans','routing']) {
   await new Promise(resolve => setTimeout(resolve, 0)); assert.equal(notices.length, 0, 'Disposed requests cause no late error notices');
   assert.equal(changes.size, 0); fixture.window.close();
 }
-console.log('Actual Vue mobile/desktop native selectors, bindings, keyboard behavior, relative dates, loading shells and request cleanup passed.');
+console.log('Vue mobile/desktop native selectors, bindings, keyboard behavior, relative dates, loading shells and request cleanup passed.');

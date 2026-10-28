@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Reproducible integration build; source is pinned, archived and kept with the patch."""
 import gzip,hashlib,io,json,os,pathlib,shutil,subprocess,sys,tarfile,tempfile,urllib.request
+from l3_confirm import apply as confirm_l3
 ROOT=pathlib.Path(__file__).resolve().parents[2]
 PIN='ff86354bcafbd054e7888e48343145323c9b2207'
 HERE=pathlib.Path(__file__).resolve().parent
@@ -24,6 +25,10 @@ with tempfile.TemporaryDirectory(prefix='speedbox-backpack-build-') as work:
     with tarfile.open(HERE/'upstream-source.tar.gz') as ar:
         ar.extractall(work,filter='data')
     source=work/'BackPack'
+    confirm_l3(source)
+    shutil.copy2(HERE/'l3_confirm_test.go',source/'internal/tunnel/l3/speedbox_confirm_test.go')
+    for name in ['l3_keepalive.go','l3_keepalive_test.go']:
+        shutil.copy2(HERE/name,source/'internal/tunnel/l3'/('speedbox_'+name))
     p=source/'internal/app/app.go';s=p.read_text()
     for old,new in [('"/root/BackPack"','"/opt/speedbox-backpack"'),('"/etc/backpack"','"/etc/speedbox-backpack"'),('"backpack-"','"speedbox-backpack-"'),('"/usr/local/bin/backpack"','"/opt/speedbox-backpack/backpack"')]:
         assert old in s,old;s=s.replace(old,new)
@@ -52,8 +57,9 @@ with tempfile.TemporaryDirectory(prefix='speedbox-backpack-build-') as work:
     p.write_text(s)
     for src,dst in [('speedbox.go','speedbox.go'),('bridge.go','internal/manage/speedbox_bridge.go'),('bridge_test.go','internal/manage/speedbox_bridge_test.go')]:shutil.copy2(HERE/src,source/dst)
     subprocess.run(['go','test','./internal/manage','-run','^TestSpeedbox','-count=1'],cwd=source,check=True)
+    subprocess.run(['go','test','./internal/tunnel/l3','-count=1'],cwd=source,check=True)
     manifest={'protocol':1,'upstream_commit':PIN,'upstream_version':'v1.8.5','upstream_release':'v1.8.5','speed_measurement':'round_trip_1mib','source_sha256':sha(HERE/'upstream-source.tar.gz'),
-              'integration_sources':{f:sha(HERE/f) for f in ['speedbox.go','bridge.go','bridge_test.go','build.py']},'archives':{}}
+              'integration_sources':{f:sha(HERE/f) for f in ['speedbox.go','bridge.go','bridge_test.go','build.py','l3_confirm.py','l3_confirm_test.go','l3_keepalive.go','l3_keepalive_test.go']},'archives':{}}
     for arch in ['amd64','arm64']:
         binary=work/('backpack-linux-'+arch)
         subprocess.run(['go','build','-trimpath','-buildvcs=false','-ldflags=-s -w','-o',str(binary),'.'],cwd=source,env={**os.environ,'GOOS':'linux','GOARCH':arch,'CGO_ENABLED':'0'},check=True)
@@ -62,3 +68,5 @@ with tempfile.TemporaryDirectory(prefix='speedbox-backpack-build-') as work:
         manifest['archives'][arch]={'sha256':sha(output),'binary_sha256':sha(binary)}
     (ROOT/'backpack-dist/manifest.json').write_text(json.dumps(manifest,indent=2)+'\n')
     print('BackPack integration: tests and two architecture builds passed')
+
+

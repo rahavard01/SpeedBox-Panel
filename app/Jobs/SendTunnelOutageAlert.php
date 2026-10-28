@@ -38,6 +38,9 @@ class SendTunnelOutageAlert implements ShouldQueue,ShouldBeEncrypted
             $engine = ['backpack'=>'BackPack','gost'=>'GOST','gre'=>'GRE','wattunnel'=>'WatTunnel'][$tunnel->engine] ?? $tunnel->engine;
             $title=$unreachable?'🟠 عدم دسترسی به سرور تونل':'🔴 قطع ارتباط تونل';
             $note=$unreachable?'در دو بررسی پیاپی، دسترسی به سرور تأیید نشد؛ وضعیت تونل قابل بررسی نیست.':'ارتباط در دو بررسی پیاپی قطع بوده است.';
+            if(!$unreachable&&\App\Services\TunnelHealth::reason($tunnel)==='target'){
+                $title='🟠 سرویس مقصد تونل پاسخ نمی‌دهد';$note='در دو بررسی پیاپی، سرویس نود مقصد پاسخ نداده است؛ این نتیجه به معنی قطع حامل تونل نیست.';
+            }
             $text = $title."\n\n🏷 {$tunnel->name}\n🔗 نوع: {$engine}\n🇮🇷 ایران: ".($tunnel->iran?->name ?? '—')
                 ."\n🌐 خارج: ".($tunnel->foreign?->name ?? '—')."\n🕒 "."\u{2066}".\App\Support\JalaliDateFormatter::forTelegram(now(),'Y/m/d — H:i')."\u{2069}"
                 ."\n\n⚠️ ".$note." جهت بررسی به پنل مراجعه کنید.";
