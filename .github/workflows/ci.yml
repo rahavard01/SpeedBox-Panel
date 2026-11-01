@@ -143,9 +143,12 @@ jobs:
           DB_DATABASE: speedbox_ci
           DB_USERNAME: root
           DB_PASSWORD: speedbox-test
-        # The concurrency regression above leaves fixture tables in this
-        # disposable MySQL service; installation must start from an empty schema.
-        run: php artisan migrate:fresh --force
+        # The concurrency fixture has tables but no migrations repository.
+        # Explicitly wipe this disposable service schema: migrate:fresh only
+        # wipes when Laravel's migrations repository already exists.
+        run: |
+          php artisan db:wipe --force
+          php artisan migrate --force
 
   agent:
     runs-on: ubuntu-latest
