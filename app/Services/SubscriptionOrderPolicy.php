@@ -44,25 +44,26 @@ class SubscriptionOrderPolicy
     /** Track paid value in the Panel ledger's currency, without changing XBoard's account or order columns. */
     public function recordPurchase(object $transaction, array $meta): void
     {
+        if (!empty($meta['reservation_pending'])) return;
         if ($transaction->status !== 'success' || !in_array($transaction->type, ['account_purchase', 'account_extend'], true)) return;
         $ids = array_values(array_unique(array_filter(array_map('intval', $meta['user_ids'] ?? [$transaction->reference_id]))));
         $divisor = max(1, (int) ($meta['account_count'] ?? $meta['requested_qty'] ?? $transaction->quantity ?? count($ids)));
         if (count($ids) === 1 && $transaction->type === 'account_extend') $divisor = 1;
         $paid = bcdiv((string) $transaction->amount, (string) $divisor, 0);
-        DB::transaction(function () use ($ids, $transaction, $paid) {
+        DB::transaction(function () use ($ids, $transaction, $paid, $meta) {
             foreach ($ids as $id) {
                 $user = DB::table('v2_user')->where('id', $id)->lockForUpdate()->first();
                 if (!$user) continue;
                 $cycle = DB::table('speedbox_subscription_cycles')->where('user_id', $id)->lockForUpdate()->first();
-                if ($cycle && (int) $cycle->last_transaction_id >= (int) $transaction->id) continue;
+                if ($cycle && (int) $cycle->last_transaction_id >= (int) $transaction->id && empty($meta['reservation_activation'])) continue;
                 $freeRenewal = $cycle && $transaction->type === 'account_extend' && bccomp($paid, '0', 0) === 0 && (int) $cycle->plan_id === (int) $user->plan_id;
-                $sameCycle = $cycle && (int) $cycle->plan_id === (int) $user->plan_id && ($freeRenewal || ((int) $cycle->panel_user_id === (int) $transaction->panel_user_id && (!$cycle->expired_at || (int) $cycle->expired_at > time())));
+                $sameCycle = empty($meta['force_new_cycle']) && $cycle && (int) $cycle->plan_id === (int) $user->plan_id && ($freeRenewal || ((int) $cycle->panel_user_id === (int) $transaction->panel_user_id && (!$cycle->expired_at || (int) $cycle->expired_at > time())));
                 $data = [
                     'panel_user_id' => $sameCycle ? (int) $cycle->panel_user_id : (int) $transaction->panel_user_id,
                     'plan_id' => $user->plan_id,
                     'paid_amount' => $sameCycle ? bcadd((string) $cycle->paid_amount, $paid, 0) : $paid,
                     'started_at' => $sameCycle ? $cycle->started_at : time(),
-                    'expired_at' => $freeRenewal ? $cycle->expired_at : $user->expired_at,
+                    'expired_at' => $sameCycle && $freeRenewal ? $cycle->expired_at : $user->expired_at,
                     'last_transaction_id' => $transaction->id,
                     'updated_at' => now(),
                 ];

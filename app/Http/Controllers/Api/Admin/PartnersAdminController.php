@@ -102,6 +102,10 @@ class PartnersAdminController extends Controller
     public function updateProfile(Request $request, $id)
     {
         return DB::transaction(function () use ($request, $id) {
+            // Serialize role changes before locking the target, including concurrent demotions.
+            $admins = $request->has('role')
+                ? DB::table('panel_users')->where('role', 1)->orderBy('id')->lockForUpdate()->get(['id', 'banned'])
+                : collect();
             // رکورد فعلی
             $u = DB::table('panel_users')
                 ->select('id','name','email','code','referred_by_id','ref_commission_rate','partner_plan_type','role','partner_code_locked')
@@ -124,6 +128,7 @@ class PartnersAdminController extends Controller
                 'commission_percent' => ['sometimes','nullable','numeric','min:0','max:100'],
                 'password'           => ['sometimes','nullable','string','min:4','max:190'],
                 'partner_plan_type'  => ['sometimes','nullable','in:time,volume,both'],
+                'role'               => ['sometimes','required','integer','in:1,2'],
             ]);
 
             $nextReferrerId = $request->has('referrer_id')
@@ -147,6 +152,16 @@ class PartnersAdminController extends Controller
             }
 
             $updates = [];
+            if ($request->has('role')) {
+                $nextRole = (int) $request->input('role');
+                if ((int) $u->role === 1 && $nextRole !== 1
+                    && !$admins->contains(fn ($admin) => (int) $admin->id !== (int) $id && !(bool) $admin->banned)) {
+                    throw \Illuminate\Validation\ValidationException::withMessages([
+                        'role' => 'دسترسی آخرین ادمین فعال قابل تغییر نیست',
+                    ]);
+                }
+                if ($nextRole !== (int) $u->role) $updates['role'] = $nextRole;
+            }
 
             // name
             if ($request->has('name')) {
@@ -221,7 +236,7 @@ class PartnersAdminController extends Controller
             DB::table('panel_users')->where('id', $id)->update($updates);
 
             return response()->json(['ok' => true, 'changed' => array_keys($updates)]);
-        });
+        }, 3);
     }
 
     public function pricingPreview($id)

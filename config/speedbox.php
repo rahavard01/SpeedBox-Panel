@@ -2,7 +2,6 @@
 
 return [
     'trusted_proxies' => array_values(array_filter(array_map('trim', explode(',', (string) env('SPEEDBOX_TRUSTED_PROXIES', '127.0.0.1,::1'))))),
-    'api_rate_limit' => max(1, (int) env('SPEEDBOX_API_RATE_LIMIT', 60)),
     'node_rate_limit' => max(1, (int) env('SPEEDBOX_NODE_RATE_LIMIT', 1200)),
     'node_ip_rate_limit' => max(1, (int) env('SPEEDBOX_NODE_IP_RATE_LIMIT', 12000)),
     'webhook_rate_limit' => max(1, (int) env('SPEEDBOX_WEBHOOK_RATE_LIMIT', 600)),

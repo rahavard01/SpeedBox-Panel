@@ -41,8 +41,13 @@ class RouteServiceProvider extends ServiceProvider
             if ($request->is('api/telegram/webhook', 'api/user-bot/webhook/*')) {
                 return Limit::perMinute(config('speedbox.webhook_rate_limit', 600))->by('webhook:'.$request->ip());
             }
-            $key = $request->user()?->id ? 'user:'.$request->user()->id : 'ip:'.$request->ip();
-            return Limit::perMinute(config('speedbox.api_rate_limit', 60))->by('api:'.$key);
+            if ($request->is('api/login')) {
+                // Preserve the existing login ceiling independently of page requests.
+                return Limit::perMinute(60)->by('login:'.$request->ip());
+            }
+            // Routine panel/API requests have no general per-minute ceiling.
+            // Sensitive endpoints retain their explicit route-level throttles.
+            return Limit::none();
         });
     }
 }

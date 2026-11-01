@@ -102,6 +102,7 @@ class DashboardPanelController extends Controller
                 return (int) DB::table($T_TRX)
                     ->where('type', $type)
                     ->where('status', $STATUS_SUCCESS)
+                    ->tap(fn ($q) => \App\Services\SubscriptionReservationStatistics::excludeCancelled($q))
                     // اسکوپ: یا با id خود پنل، یا با code داخل متا
                     ->where(function ($q) use ($pid, $code) {
                         $q->where('panel_user_id', $pid)
@@ -113,6 +114,7 @@ class DashboardPanelController extends Controller
                 return (int) DB::table($T_TRX)
                     ->where('type', $type)
                     ->where('status', $STATUS_SUCCESS)
+                    ->tap(fn ($q) => \App\Services\SubscriptionReservationStatistics::excludeCancelled($q))
                     ->where(function ($q) use ($pid, $code) {
                         $q->where('panel_user_id', $pid)
                           ->orWhereRaw("JSON_UNQUOTE(JSON_EXTRACT(meta,'$.panel_code')) = ?", [$code]);
@@ -236,6 +238,7 @@ class DashboardPanelController extends Controller
         $rows = DB::table('panel_transactions')
             ->whereIn('type', $types)
             ->where('status', 'success')
+            ->tap(fn ($q) => \App\Services\SubscriptionReservationStatistics::excludeCancelled($q))
             ->where(function ($query) use ($panelId, $panelCode) {
                 $query->where('panel_user_id', $panelId)
                     ->orWhereRaw("JSON_UNQUOTE(JSON_EXTRACT(meta,'$.panel_code')) = ?", [$panelCode]);
@@ -375,6 +378,7 @@ class DashboardPanelController extends Controller
         $transactions = DB::table('panel_transactions')
             ->whereIn('type', $types)
             ->where('status', 'success')
+            ->tap(fn ($q) => \App\Services\SubscriptionReservationStatistics::excludeCancelled($q))
             ->where(function ($query) use ($panelId, $panelCode) {
                 $query->where('panel_user_id', $panelId)
                     ->orWhereRaw("JSON_UNQUOTE(JSON_EXTRACT(meta,'$.panel_code')) = ?", [$panelCode]);
@@ -534,3 +538,4 @@ class DashboardPanelController extends Controller
     }
 
 }
+

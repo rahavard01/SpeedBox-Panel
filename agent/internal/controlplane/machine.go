@@ -60,7 +60,7 @@ func (p *MachinePanelControlPlane) Initial(
 
 	bootstrap := Bootstrap{}
 	if hs != nil {
- bootstrap.ConnectionAdmission = hs.ConnectionLimits.Enabled
+		bootstrap.ConnectionAdmission = hs.ConnectionLimits.Enabled
 		bootstrap.PushInterval = hs.Settings.PushInterval
 		bootstrap.PullInterval = hs.Settings.PullInterval
 	}
@@ -137,7 +137,7 @@ func (p *MachinePanelControlPlane) Report(payload ReportPayload) error {
 	return p.client.Report(
 		payload.Traffic, payload.Alive, payload.Online,
 		payload.CPU, payload.Mem, payload.Swap, payload.Disk,
-		payload.Metrics,
+		payload.Metrics, payload.TrafficBatches,
 	)
 }
 
@@ -152,6 +152,6 @@ func (p *MachinePanelControlPlane) Metrics() APIMetrics {
 	return APIMetrics{Success: api.Success, Failure: api.Failure}
 }
 
-func (p *MachinePanelControlPlane) ConnectionLease(ctx context.Context, op string, uid int, ip, id string) (bool,int,error) {
- return p.client.ConnectionLease(ctx,op,uid,ip,id)
+func (p *MachinePanelControlPlane) ConnectionLease(ctx context.Context, op string, uid int, ip, id string) (bool, int, error) {
+	return p.client.ConnectionLease(ctx, op, uid, ip, id)
 }

@@ -39,10 +39,10 @@ func TestReportMachineStatusAdvertisesWarpAndPreservesMetrics(t *testing.T) {
 				if body.MachineID != 17 || body.Token != "machine-fixture-token" {
 					t.Error("machine authentication was not preserved")
 				}
-				if len(body.Capabilities) != 1 || body.Capabilities[0] != "warp-egress-v1" {
+				if len(body.Capabilities) != 2 || body.Capabilities[0] != "warp-egress-v1" || body.Capabilities[1] != "subscription-generation-v1" {
 					t.Errorf("WARP capability missing from machine report: %v", body.Capabilities)
 				}
-				if r.Header.Get("X-Speedbox-Capabilities") != "warp-egress-v1" {
+				if r.Header.Get("X-Speedbox-Capabilities") != "warp-egress-v1,subscription-generation-v1" {
 					t.Error("existing capability header was not preserved")
 				}
 				if body.CPU != 12.5 || body.Mem["total"] != 8192 || body.Mem["used"] != 2048 {

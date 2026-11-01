@@ -97,7 +97,7 @@ class UserBotTrafficPricingTest extends TestCase
         });
         $schema->create('v2_plan', function (Blueprint $t) {
             $t->integer('id')->primary();
-            $t->integer('reset_traffic_method')->default(2);
+            $t->integer('reset_traffic_method')->default(0);
         });
         $schema->create('v2_user', function (Blueprint $t) {
             $t->integer('id')->primary();
@@ -442,7 +442,7 @@ class UserBotTrafficPricingTest extends TestCase
         $service = Mockery::mock(PanelAccountActionService::class);
         $service->shouldNotReceive('topupTrafficForPanelUser');
         app()->instance(PanelAccountActionService::class, $service);
-        $order = new UserBotOrder([
+        $order = UserBotOrder::create([
             'setting_id' => 1, 'order_type' => 'buy_traffic',
             'account_email' => 'customer@rep.com', 'plan_key' => '1_traffic_gig',
             'traffic_gb' => 10, 'amount' => 20000,
@@ -461,7 +461,7 @@ class UserBotTrafficPricingTest extends TestCase
     {
         $service = Mockery::mock(PanelAccountActionService::class);
         $service->shouldReceive('topupTrafficForPanelUser')->once()
-            ->with(Mockery::type('object'), 'customer@rep.com', 10, 2, 'telegram_bot', true)
+            ->with(Mockery::type('object'), 'customer@rep.com', 10, 2, 'telegram_bot', true, Mockery::type('int'), null)
             ->andReturn(['ok' => true, 'traffic_gb' => 10]);
         app()->instance(PanelAccountActionService::class, $service);
         $order = UserBotOrder::create([

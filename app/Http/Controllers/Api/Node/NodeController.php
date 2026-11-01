@@ -50,6 +50,8 @@ class NodeController extends Controller
         /** @var ProxyServer|null $node */
         $node = $request->attributes->get('speedbox_node');
         abort_if(!$node, 422, 'node_id is required.');
+        \Illuminate\Support\Facades\Cache::put('speedbox:node:'.$node->id.':capabilities',
+            array_map('trim', explode(',', $request->header('X-Speedbox-Capabilities', ''))), 600);
         $payload = ['users' => $this->nodes->usersFor($node)->values()];
         return $this->etag($request, $payload, "node-users-{$node->id}");
     }
@@ -59,7 +61,12 @@ class NodeController extends Controller
         /** @var ProxyServer|null $node */
         $node = $request->attributes->get('speedbox_node');
         abort_if(!$node, 422, 'node_id is required.');
-        $this->nodes->report($node, $request->only(['traffic', 'alive', 'online', 'status', 'metrics']));
+        $request->validate(['traffic_v2' => ['sometimes', 'nullable', 'array', 'max:50000'],
+            'traffic_v2.*.id' => ['required', 'string', 'regex:/^[a-f0-9]{32}$/D'],
+            'traffic_v2.*.user_id' => ['required', 'integer', 'min:1'],
+            'traffic_v2.*.generation' => ['required', 'integer', 'min:0'],
+            'traffic_v2.*.u' => ['required', 'integer', 'min:0'], 'traffic_v2.*.d' => ['required', 'integer', 'min:0']]);
+        $this->nodes->report($node, $request->only(['traffic', 'traffic_v2', 'alive', 'online', 'status', 'metrics']));
         return response()->json(['data' => true]);
     }
 

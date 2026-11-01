@@ -39,7 +39,7 @@ class NodeControlService
             ->where('banned', 0)
             ->whereRaw('(u + d) < transfer_enable')
             ->tap(fn ($query) => SubscriptionValidity::whereUnexpired($query))
-            ->select(['id', 'uuid', 'speed_limit', 'device_limit'])
+            ->select(array_merge(['id', 'uuid', 'speed_limit', 'device_limit'], \Illuminate\Support\Facades\Schema::hasColumn('v2_user', 'subscription_generation') ? ['subscription_generation'] : []))
             ->get();
     }
 
@@ -174,18 +174,43 @@ class NodeControlService
             Cache::put("speedbox:node:{$node->id}:online", [], $ttl);
         }
 
-        $traffic = $payload['traffic'] ?? [];
+        $versioned = isset($payload['traffic_v2']) && is_array($payload['traffic_v2']);
+        $traffic = $versioned ? $payload['traffic_v2'] : ($payload['traffic'] ?? []);
         if (!is_array($traffic) || $traffic === []) {
             return;
         }
 
         $rate = $node->effectiveRate();
-        DB::transaction(function () use ($traffic, $node, $rate, $now) {
+        if ($versioned) usort($traffic, fn ($a, $b) => (int) ($a['user_id'] ?? 0) <=> (int) ($b['user_id'] ?? 0));
+        $hasGenerations = \Illuminate\Support\Facades\Schema::hasColumn('v2_user', 'subscription_generation');
+        $reservedIds = \Illuminate\Support\Facades\Schema::hasTable('speedbox_subscription_reservations')
+            ? DB::table('speedbox_subscription_reservations')->whereIn('reserved_user_id', $versioned ? array_column($traffic, 'user_id') : array_keys($traffic))->pluck('reserved_user_id')->flip()->all()
+            : [];
+        DB::transaction(function () use ($traffic, $node, $rate, $now, $versioned, $hasGenerations, $reservedIds) {
             $serverUp = 0;
             $serverDown = 0;
             $recordAt = strtotime(date('Y-m-d', $now));
 
+            $acceptedBatches = [];
+            $seenRows = [];
             foreach ($traffic as $userId => $values) {
+                $generation = 0;
+                if ($versioned) {
+                    if (!is_array($values) || !preg_match('/^[a-f0-9]{32}$/D', (string) ($values['id'] ?? ''))
+                        || (int) ($values['user_id'] ?? 0) < 1 || !isset($values['generation'], $values['u'], $values['d'])) continue;
+                    $batchId = $values['id'];
+                    if (!array_key_exists($batchId, $acceptedBatches)) {
+                        $acceptedBatches[$batchId] = DB::table('speedbox_traffic_batches')->insertOrIgnore([
+                            'node_id' => $node->id, 'batch_id' => $batchId, 'created_at' => now(),
+                        ]) > 0;
+                    }
+                    $rowKey = $batchId.':'.$values['user_id'].':'.$values['generation'];
+                    if (!$acceptedBatches[$batchId] || isset($seenRows[$rowKey])) continue;
+                    $seenRows[$rowKey] = true;
+                    $userId = (int) $values['user_id'];
+                    $generation = (int) $values['generation'];
+                    $values = [$values['u'], $values['d']];
+                }
                 if (!is_array($values) || count($values) !== 2 || !is_numeric($values[0]) || !is_numeric($values[1])) {
                     continue;
                 }
@@ -196,7 +221,11 @@ class NodeControlService
                 $serverUp += $rawUp;
                 $serverDown += $rawDown;
 
-                DB::table('v2_user')->where('id', (int) $userId)->incrementEach(['u' => $up, 'd' => $down], ['t' => $now]);
+                // Conditional UPDATE both locks the account and prevents a late packet from crossing its generation.
+                $charged = DB::table('v2_user')->where('id', (int) $userId)
+                    ->when($hasGenerations, fn ($q) => $q->where('subscription_generation', $generation))
+                    ->incrementEach(['u' => $up, 'd' => $down], ['t' => $now]);
+                if ($charged && isset($reservedIds[(int) $userId])) app(SubscriptionReservationService::class)->activateIfDue((int) $userId);
                 $this->upsertUserStat((int) $userId, $rate, $up, $down, $recordAt, $now);
             }
 
@@ -204,7 +233,7 @@ class NodeControlService
                 DB::table('v2_server')->where('id', $node->id)->incrementEach(['u' => $serverUp, 'd' => $serverDown]);
                 $this->upsertServerStat($node, $serverUp, $serverDown, $recordAt, $now);
             }
-        });
+        }, 3);
     }
 
     public function stateFor(ProxyServer $node, ?array $onlineCounts = null): array

@@ -321,6 +321,8 @@ class InfrastructureController extends Controller
         DB::transaction(function () use ($plan) {
             abort_unless(DB::table('v2_plan')->where('id', $plan)->lockForUpdate()->first(), 404, 'پلن یافت نشد.');
             abort_if(DB::table('v2_user')->where('plan_id', $plan)->exists() || DB::table('panel_plan')->where('v2_plan_id', $plan)->exists(), 422, 'این پلن توسط کاربران یا تعرفه‌های فروش استفاده می‌شود و قابل حذف نیست.');
+            abort_if(\Illuminate\Support\Facades\Schema::hasTable('speedbox_subscription_reservations') && DB::table('speedbox_subscription_reservations')->where('plan_id', $plan)->where('state', 'reserved')->exists(), 422, 'این پلن در یک طرح رزرو استفاده شده و قابل حذف نیست.');
+            abort_if($this->pendingSubscriptionReference('plan_id', $plan), 422, 'این پلن در یک سفارش در جریان استفاده شده است؛ ابتدا سفارش را تعیین تکلیف کنید.');
             DB::table('v2_plan')->where('id', $plan)->delete();
         });
         return response()->json(['message' => 'پلن حذف شد.']);
@@ -353,8 +355,17 @@ class InfrastructureController extends Controller
     public function deleteGroup(ServerGroup $group): JsonResponse
     {
         abort_if(DB::table('v2_user')->where('group_id', $group->id)->exists() || DB::table('v2_plan')->where('group_id', $group->id)->exists(), 422, 'این گروه دسترسی توسط کاربران یا پلن‌ها استفاده می‌شود.');
+        abort_if(\Illuminate\Support\Facades\Schema::hasTable('speedbox_subscription_reservations') && DB::table('speedbox_subscription_reservations')->where('state', 'reserved')->where('snapshot->update->group_id', (int) $group->id)->exists(), 422, 'این گروه دسترسی در یک طرح رزرو استفاده شده و قابل حذف نیست.');
+        abort_if($this->pendingSubscriptionReference('group_id', (int) $group->id), 422, 'این گروه دسترسی در یک سفارش در جریان استفاده شده است؛ ابتدا سفارش را تعیین تکلیف کنید.');
         $group->delete();
         return response()->json(['message' => 'گروه دسترسی حذف شد.']);
+    }
+
+    private function pendingSubscriptionReference(string $field, int $id): bool
+    {
+        return \Illuminate\Support\Facades\Schema::hasTable('user_bot_orders')
+            && DB::table('user_bot_orders')->whereNotIn('status', ['done', 'rejected', 'cancelled', 'canceled', 'expired', 'failed'])
+                ->where('payload->subscription_purchase_snapshot->update->'.$field, $id)->exists();
     }
 
     public function routes(): JsonResponse

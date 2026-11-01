@@ -65,6 +65,7 @@ Route::get(
     '/user-bot/sms-payments/history',
     [UserBotSmsEventController::class, 'deviceHistory']
 )->middleware('throttle:60,1');
+Route::get('/users/reservation', [\App\Http\Controllers\Api\SubscriptionReservationController::class, 'show'])->middleware(['auth:sanctum', CheckTokenExpiration::class, CheckUserBanned::class]);
 Route::get('/ping', fn () => response('pong', 200));
 Route::get('/v1/client/subscribe', [SubscriptionController::class, 'show']);
 
@@ -116,6 +117,7 @@ Route::middleware(['auth:sanctum', CheckTokenExpiration::class, CheckUserBanned:
     Route::get('/users', [PanelController::class, 'listUsers']);
     Route::get('/users/traffic-records', [PanelController::class, 'trafficRecords']);
     Route::get('/users/transaction-records', [PanelController::class, 'transactionRecords']);
+    Route::post('/users/{id}/reservation/cancel', [\App\Http\Controllers\Api\SubscriptionReservationController::class, 'cancel'])->whereNumber('id');
     Route::get('/users/by-token', [PanelController::class, 'findByToken']);
     Route::get('/panel/plans', [V2UserController::class, 'plans']);
     Route::post('/panel/users/create', [V2UserController::class, 'create']);
@@ -303,6 +305,7 @@ Route::middleware(['auth:sanctum', CheckTokenExpiration::class, CheckUserBanned:
 
         Route::get('/users',           [UserAdminController::class, 'index']);
         Route::post('/users/online', [\App\Http\Controllers\Api\Admin\AccountOperationsController::class, 'online']);
+        Route::post('/users/{id}/reservation/cancel', [\App\Http\Controllers\Api\SubscriptionReservationController::class, 'cancel'])->whereNumber('id');
         Route::get('/users/{id}/details', [\App\Http\Controllers\Api\Admin\AccountOperationsController::class, 'show'])->whereNumber('id');
         Route::patch('/users/{id}', [\App\Http\Controllers\Api\Admin\AccountOperationsController::class, 'update'])->whereNumber('id');
         Route::post('/users/{id}/reset-secret', [\App\Http\Controllers\Api\Admin\AccountOperationsController::class, 'resetSecret'])->whereNumber('id');
@@ -478,6 +481,7 @@ Route::middleware(['auth:sanctum', CheckTokenExpiration::class, CheckUserBanned:
 });
 
 Route::get('/auth/validate-link', [AuthLinkController::class, 'validateLink']);
+
 
 
 

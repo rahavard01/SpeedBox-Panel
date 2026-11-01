@@ -74,14 +74,21 @@ class UserBotTrafficWarningRunner
                 $total, $expiry, $snapshot['last_reset_at'] ?? 0, $snapshot['reset_count'] ?? 0,
             ]));
             if ($session->traffic_warning_for === $fingerprint) return false;
+            $periodic = app(AccountTrafficResetPolicy::class)->hasPeriodicReset($snapshot);
+            $reserve = $snapshot['reservation'] ?? null;
+            $action = $this->accountResolver->isVolumeAccount($snapshot) ? '➕ خرید ترافیک' : '🔄 تمدید اکانت';
+            $continuation = $reserve
+                ? "\n\n📦 طرح رزرو: " . e($reserve['title']) . "\n" . e($reserve['activation_label'])
+                : "\n\nبرای ادامه استفاده، از گزینه «{$action}» استفاده کنید.";
+            if ($periodic) $continuation = ($reserve ? $continuation : '') . "\n\nبرای افزایش ترافیک طرح فعلی، از گزینه «➕ خرید ترافیک» استفاده کنید.";
             $percent = number_format($used / $total * 100, 1);
             $text = "⚠️ <b>هشدار مصرف ترافیک</b>\n\n"
                 . "مصرف ترافیک اکانت شما به <b>{$percent}%</b> رسیده است.\n\n"
                 . $this->accountResolver->trafficText($snapshot)
-                . "\n\nبرای ادامه استفاده، از گزینه «➕ خرید ترافیک» استفاده کنید.";
+                . $continuation;
             (new UserBotTelegram((string) $setting->bot_token))->sendMessage(
                 $session->telegram_chat_id, $text,
-                UserBotKeyboard::user($this->accountResolver->isVolumeAccount($snapshot))
+                UserBotKeyboard::user($this->accountResolver->isVolumeAccount($snapshot), $periodic)
             );
             $session->forceFill([
                 'account_email' => $account['email'], 'account_snapshot' => $snapshot,

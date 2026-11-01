@@ -35,7 +35,7 @@ class UserBotKeyboard
         ]);
     }
 
-    public static function user(bool $isVolumePartner = false): array
+    public static function user(bool $isVolumePartner = false, bool $hasPeriodicReset = true): array
     {
         if ($isVolumePartner) {
             return self::reply([
@@ -50,7 +50,7 @@ class UserBotKeyboard
 
         return self::reply([
             ['🛒 خرید اکانت', '🔄 تمدید اکانت'],
-            ['➕ خرید ترافیک'],
+            ...($hasPeriodicReset ? [['➕ خرید ترافیک']] : []),
             ['👤 مشاهده اطلاعات کاربری'],
             ['📘 راهنمای اتصال'],
             ['❓ سوالات متداول'],

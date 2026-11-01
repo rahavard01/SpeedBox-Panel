@@ -7,7 +7,7 @@ $failed=false;
 foreach(ManagedServer::whereNotNull('machine_id')->orderBy('id')->get() as $server){
  try{
   $sudo=$server->ssh_user==='root'?'':'sudo -n ';
-  try{$ready=app(SshExecutor::class)->run($server,$sudo.'/usr/local/bin/xboard-node -v && '.$sudo.'systemctl is-active --quiet xboard-node && '.$sudo.'test -S /run/speedbox-origin/control.sock',30);if(str_contains($ready,'node-sync-v1')){echo "server={$server->id} runtime=current\n";continue;}}catch(Throwable){}
+  try{$ready=app(SshExecutor::class)->run($server,$sudo.'/usr/local/bin/xboard-node -v && '.$sudo.'systemctl is-active --quiet xboard-node && '.$sudo.'test -S /run/speedbox-origin/control.sock',30);if(str_contains($ready,'subscription-generation-v1')){echo "server={$server->id} runtime=current\n";continue;}}catch(Throwable){}
   $d=Illuminate\Support\Facades\DB::transaction(function()use($server){$s=ManagedServer::whereKey($server->id)->lockForUpdate()->firstOrFail();if($s->status==='removing'||$s->deployments()->whereIn('status',['queued','running'])->where('action','!=','sync_nodes')->exists())throw new RuntimeException('Another server operation is pending.');return ServerDeployment::create(['managed_server_id'=>$s->id,'action'=>'upgrade','kernel'=>'singbox','status'=>'queued']);});
   DeployManagedServer::dispatch($d->id);echo "server={$server->id} operation={$d->id} phase=queued\n";
   $deadline=time()+1300;

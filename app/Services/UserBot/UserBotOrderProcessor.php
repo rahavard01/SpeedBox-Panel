@@ -10,11 +10,17 @@ class UserBotOrderProcessor
 {
     public function approve(UserBotOrder $order): array
     {
-        return match ($order->order_type) {
-            'buy_traffic' => $this->approveBuyTraffic($order),
-            'renew_account' => $this->approveRenewAccount($order),
-            default => $this->approveBuyAccount($order),
-        };
+        return DB::transaction(function () use ($order) {
+            $order = UserBotOrder::query()->whereKey($order->id)->lockForUpdate()->firstOrFail();
+            if ($order->status === 'done') return $order->payload['subscription_result'] ?? ['ok' => true, 'type' => $order->order_type, 'email' => $order->account_email];
+            $result = match ($order->order_type) {
+                'buy_traffic' => $this->approveBuyTraffic($order),
+                'renew_account' => $this->approveRenewAccount($order),
+                default => $this->approveBuyAccount($order),
+            };
+            if (!empty($result['ok'])) $order->update(['payload' => array_merge($order->payload ?: [], ['subscription_result' => $result])]);
+            return $result;
+        }, 3);
     }
 
     private function approveBuyAccount(UserBotOrder $order): array
@@ -80,7 +86,9 @@ class UserBotOrderProcessor
             (string) $order->account_email,
             $planKey,
             $tariffGroupId,
-            'telegram_bot'
+            'telegram_bot',
+            (int) $order->id,
+            $order->payload['subscription_purchase_snapshot'] ?? null
         );
 
         if (empty($result['ok'])) {
@@ -93,6 +101,8 @@ class UserBotOrderProcessor
             'card_sms_match_key' => null,
             'payload' => array_merge($order->payload ?: [], [
                 'new_expired_at' => $result['expired_at'] ?? null,
+                'reserved' => $result['reserved'] ?? false,
+                'reservation' => $result['reservation'] ?? null,
                 'transaction_id' => $result['transaction_id'] ?? null,
             ]),
         ]);
@@ -103,6 +113,8 @@ class UserBotOrderProcessor
             'email' => $result['email'] ?? $order->account_email,
             'plan_title' => $order->payload['selected_plan']['title'] ?? $planKey,
             'new_expired_at' => $result['expired_at'] ?? null,
+                'reserved' => $result['reserved'] ?? false,
+                'reservation' => $result['reservation'] ?? null,
         ];
     }
 
@@ -117,7 +129,7 @@ class UserBotOrderProcessor
             ->whereRaw('LOWER(`email`) = ?', [strtolower(trim((string) $order->account_email))])
             ->first();
 
-        if (!$account || !app(UserBotTrafficPricing::class)->matchesAccount($account, (string) $order->plan_key)) {
+        if (!$account || (empty($order->payload['subscription_purchase_snapshot']) && !app(UserBotTrafficPricing::class)->matchesAccount($account, (string) $order->plan_key))) {
             return [
                 'ok' => false,
                 'message' => 'طرح اکانت با تعرفه سفارش مطابقت ندارد؛ سفارش باید بررسی شود',
@@ -132,7 +144,9 @@ class UserBotOrderProcessor
             (int) $order->traffic_gb,
             $tariffGroupId,
             'telegram_bot',
-            true
+            true,
+            (int) $order->id,
+            $order->payload['subscription_purchase_snapshot'] ?? null
         );
 
         if (empty($result['ok'])) {
@@ -162,6 +176,8 @@ class UserBotOrderProcessor
                 'transaction_id' => $result['transaction_id'] ?? null,
                 'd_after' => $result['d_after'] ?? null,
                 'new_expired_at' => $result['expired_at'] ?? null,
+                'reserved' => $result['reserved'] ?? false,
+                'reservation' => $result['reservation'] ?? null,
             ]),
         ]);
 
@@ -171,6 +187,8 @@ class UserBotOrderProcessor
             'email' => $result['email'] ?? $order->account_email,
             'traffic_gb' => $result['traffic_gb'] ?? $order->traffic_gb,
             'new_expired_at' => $result['expired_at'] ?? null,
+                'reserved' => $result['reserved'] ?? false,
+                'reservation' => $result['reservation'] ?? null,
             'traffic_remaining_bytes' => $trafficRemainingBytes,
         ];
     }
@@ -196,7 +214,7 @@ class UserBotOrderProcessor
         return [$setting, $owner];
     }
 
-    private function parsePlanKey(string $raw): array
+    public function parsePlanKey(string $raw): array
     {
         if (preg_match('/^(\d+)_(.+)$/', $raw, $m)) {
             return [(int) $m[1], (string) $m[2]];

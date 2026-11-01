@@ -52,6 +52,7 @@ final class PartnerAccountReadController extends Controller
             'remind_expire', 'remind_traffic', 'created_at', 'updated_at',
         ]);
         abort_unless($account, 404);
+        if (\Illuminate\Support\Facades\Schema::hasColumn('v2_user', 'account_reset_traffic_method')) $account->account_reset_traffic_method = DB::table('v2_user')->where('id', $id)->value('account_reset_traffic_method');
         // Imported accounts may predate the stored tariff snapshot. Use the same
         // fallback as the list until a purchase/renewal saves that snapshot.
         if ($account->plan_id && ($account->account_plan_name === null || $account->account_group_type === null || $account->account_tariff_group_id === null)) {
@@ -65,6 +66,7 @@ final class PartnerAccountReadController extends Controller
         }
         $account->account_is_volume = $account->account_group_type === 'volume' || $account->account_plan_key === 'volume_gig' ? 1 : 0;
         $token = (string) ($account->token ?? '');
+        app(\App\Services\SubscriptionReservationPresenter::class)->attach([$account]);
         $account->subscribe_url = $token === '' ? '' : \App\Utils\Helper::getSubscribeUrl($token);
         return response()->json(['data' => $account])->header('Cache-Control', 'no-store');
     }

@@ -21,6 +21,13 @@ class Kernel extends ConsoleKernel
      */
     protected function schedule(Schedule $schedule): void
     {
+        $schedule->call(fn () => app(\App\Services\PanelWalletLowBalanceRunner::class)->tick())
+            ->everyMinute()->name('panel-wallet:low-balance-warning')->withoutOverlapping();
+        $schedule->call(fn () => app(\App\Services\SubscriptionReservationService::class)->tick())
+            ->everyMinute()->name('subscription-reservation-activation')->withoutOverlapping();
+        $schedule->call(fn () => app(\App\Services\ReservationNotificationRunner::class)->tick())
+            ->everyMinute()->name('subscription-reservation-notifications')->withoutOverlapping();
+
         $schedule->call(fn () => app(\App\Services\TunnelOutageMonitor::class)->tick())
             ->everyMinute()->name('tunnels:outage-monitor')->withoutOverlapping();
         $schedule->call(fn () => \Illuminate\Support\Facades\DB::table('speedbox_connection_leases')->where('expires_at', '<=', time())->delete())

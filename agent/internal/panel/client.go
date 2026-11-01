@@ -2,9 +2,10 @@ package panel
 
 import (
 	"bytes"
- "context"
+	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/cedar2025/xboard-node/internal/tracker"
 	"io"
 	"net/http"
 	"net/url"
@@ -110,8 +111,12 @@ func (c *Client) Handshake() (*HandshakeResponse, error) {
 func (c *Client) Report(traffic map[int][2]int64, alive map[int][]string, online map[int]int,
 	cpu float64, mem, swap, disk [2]uint64,
 	metrics map[string]interface{},
+	batches ...[]tracker.TrafficBatch,
 ) error {
 	payload := make(map[string]interface{})
+	if len(batches) > 0 {
+		payload["traffic_v2"] = batches[0]
+	}
 
 	if len(traffic) > 0 {
 		t := trafficMapPool.Get().(map[string][2]int64)
@@ -308,11 +313,11 @@ func (c *Client) PushAlive(data map[int][]string) error {
 // PushStatus submits system status to the panel
 func (c *Client) PushStatus(cpu float64, mem, swap, disk [2]uint64) error {
 	payload := map[string]interface{}{
-		"capabilities": []string{"warp-egress-v1"},
-		"cpu":  cpu,
-		"mem":  map[string]interface{}{"total": mem[0], "used": mem[1]},
-		"swap": map[string]interface{}{"total": swap[0], "used": swap[1]},
-		"disk": map[string]interface{}{"total": disk[0], "used": disk[1]},
+		"capabilities": []string{"warp-egress-v1", "subscription-generation-v1"},
+		"cpu":          cpu,
+		"mem":          map[string]interface{}{"total": mem[0], "used": mem[1]},
+		"swap":         map[string]interface{}{"total": swap[0], "used": swap[1]},
+		"disk":         map[string]interface{}{"total": disk[0], "used": disk[1]},
 	}
 	return c.postJSON("/api/v1/server/UniProxy/status", payload)
 }
@@ -347,11 +352,11 @@ func (c *Client) GetMachineNodes() (*MachineNodesResponse, error) {
 // netIn/netOut are bytes/sec; negative values mean "unavailable" (first sample).
 func (c *Client) ReportMachineStatus(cpu float64, mem, swap, disk [2]uint64, netIn, netOut float64) error {
 	payload := map[string]interface{}{
-		"capabilities": []string{"warp-egress-v1"},
-		"cpu":  cpu,
-		"mem":  map[string]interface{}{"total": mem[0], "used": mem[1]},
-		"swap": map[string]interface{}{"total": swap[0], "used": swap[1]},
-		"disk": map[string]interface{}{"total": disk[0], "used": disk[1]},
+		"capabilities": []string{"warp-egress-v1", "subscription-generation-v1"},
+		"cpu":          cpu,
+		"mem":          map[string]interface{}{"total": mem[0], "used": mem[1]},
+		"swap":         map[string]interface{}{"total": swap[0], "used": swap[1]},
+		"disk":         map[string]interface{}{"total": disk[0], "used": disk[1]},
 	}
 	if netIn >= 0 && netOut >= 0 {
 		payload["net"] = map[string]interface{}{"in_speed": netIn, "out_speed": netOut}
@@ -438,7 +443,7 @@ func (c *Client) doRequest(method, path string, body []byte, ifNoneMatch string)
 
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
-	req.Header.Set("X-Speedbox-Capabilities", "warp-egress-v1")
+	req.Header.Set("X-Speedbox-Capabilities", "warp-egress-v1,subscription-generation-v1")
 	if ifNoneMatch != "" {
 		req.Header.Set("If-None-Match", ifNoneMatch)
 	}
@@ -483,15 +488,32 @@ func (c *Client) SnapshotMetrics() APIMetrics {
 }
 
 // ConnectionLease uses a bounded context so panel failure cannot stall inbound routing.
-func (c *Client) ConnectionLease(ctx context.Context, op string, uid int, ip, leaseID string) (bool,int,error) {
- payload:=map[string]interface{}{"operation":op,"user_id":uid,"source_ip":ip,"lease_id":leaseID}
- c.injectAuth(payload)
- body,err:=json.Marshal(payload);if err!=nil{return false,0,err}
- req,err:=http.NewRequestWithContext(ctx,http.MethodPost,c.baseURL+"/api/v2/server/connections/lease",bytes.NewReader(body))
- if err!=nil{return false,0,err};req.Header.Set("Content-Type","application/json")
- resp,err:=c.httpClient.Do(req);if err!=nil{return false,0,err};defer drainAndClose(resp.Body)
- if resp.StatusCode!=http.StatusOK {return false,0,fmt.Errorf("connection admission status %d",resp.StatusCode)}
- var grant struct{Allowed bool `json:"allowed"`;TTL int `json:"ttl"`}
- if err:=json.NewDecoder(io.LimitReader(resp.Body,4096)).Decode(&grant);err!=nil{return false,0,err}
- return grant.Allowed,grant.TTL,nil
+func (c *Client) ConnectionLease(ctx context.Context, op string, uid int, ip, leaseID string) (bool, int, error) {
+	payload := map[string]interface{}{"operation": op, "user_id": uid, "source_ip": ip, "lease_id": leaseID}
+	c.injectAuth(payload)
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return false, 0, err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/api/v2/server/connections/lease", bytes.NewReader(body))
+	if err != nil {
+		return false, 0, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return false, 0, err
+	}
+	defer drainAndClose(resp.Body)
+	if resp.StatusCode != http.StatusOK {
+		return false, 0, fmt.Errorf("connection admission status %d", resp.StatusCode)
+	}
+	var grant struct {
+		Allowed bool `json:"allowed"`
+		TTL     int  `json:"ttl"`
+	}
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 4096)).Decode(&grant); err != nil {
+		return false, 0, err
+	}
+	return grant.Allowed, grant.TTL, nil
 }

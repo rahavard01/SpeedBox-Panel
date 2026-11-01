@@ -100,6 +100,7 @@ class DashboardAdminController extends Controller
                 return (int) DB::table($T_TRX)
                     ->where('type', $type)
                     ->where('status', $STATUS_SUCCESS)
+                    ->tap(fn ($q) => \App\Services\SubscriptionReservationStatistics::excludeCancelled($q))
                     ->tap(fn($q) => $betweenTs($q, $fromUtc, $toUtc))
                     ->sum(DB::raw("
                         COALESCE(
@@ -113,6 +114,7 @@ class DashboardAdminController extends Controller
                 return (int) DB::table($T_TRX)
                     ->where('type', $type)
                     ->where('status', $STATUS_SUCCESS)
+                    ->tap(fn ($q) => \App\Services\SubscriptionReservationStatistics::excludeCancelled($q))
                     ->tap(fn($q) => $betweenTs($q, $fromUtc, $toUtc))
                     ->count();
             }
@@ -229,6 +231,7 @@ class DashboardAdminController extends Controller
             ->leftJoin('panel_users as p', 'p.id', '=', 't.panel_user_id')
             ->whereIn('t.type', $types)
             ->where('t.status', 'success')
+            ->tap(fn ($q) => \App\Services\SubscriptionReservationStatistics::excludeCancelled($q, 't.id'))
             ->whereBetween('t.created_at', [
                 $from->format('Y-m-d H:i:s'),
                 $to->format('Y-m-d H:i:s'),
@@ -367,6 +370,7 @@ class DashboardAdminController extends Controller
         $transactions = DB::table('panel_transactions')
             ->whereIn('type', $types)
             ->where('status', 'success')
+            ->tap(fn ($q) => \App\Services\SubscriptionReservationStatistics::excludeCancelled($q))
             ->whereBetween('created_at', [
                 $earliest->format('Y-m-d H:i:s'),
                 $now->format('Y-m-d H:i:s'),
@@ -522,3 +526,4 @@ class DashboardAdminController extends Controller
     }
 
 }
+

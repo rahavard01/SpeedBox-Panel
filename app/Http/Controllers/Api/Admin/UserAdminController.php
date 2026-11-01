@@ -52,6 +52,7 @@ class UserAdminController extends Controller
         $users = $q->get();
         $counts = app(\App\Services\AccountOnlineStatus::class)->counts($users->pluck('id')->all());
         foreach ($users as $user) $user->online_count = $counts[$user->id] ?? 0;
+        app(\App\Services\SubscriptionReservationPresenter::class)->attach($users);
         return response()->json(['data' => $users]);
     }
 
@@ -149,6 +150,7 @@ class UserAdminController extends Controller
             "12m"      => "یک‌ساله",
         ];
 
+        app(\App\Services\SubscriptionReservationHistory::class)->attach($rows->items());
         $items = collect($rows->items())->map(function ($r) use ($planMap) {
             $meta = [];
 
@@ -203,6 +205,8 @@ class UserAdminController extends Controller
                 "type"              => $r->type ?? "-",
                 "amount"            => $signed,
                 "status"            => $r->status ?? "unknown",
+                "reservation_state" => $r->reservation_history ? end($r->reservation_history)["state"] : null,
+                "reservation_history" => $r->reservation_history,
                 "performed_by_role" => \App\Services\TransactionOperator::displayRole($r->performed_by_role ?? null, $meta),
 
                 // دقیقاً برای ساخت متن مثل صفحه صورتحساب
@@ -433,301 +437,28 @@ class UserAdminController extends Controller
 
     public function extend(Request $request)
     {
-        $validated = $request->validate([
-            'email'  => 'required|email',
-            'period' => 'required|in:1m,3m,6m,12m',
-            'tariff_group_id' => ['nullable','integer','exists:panel_tariff_groups,id'],
-        ]);
-
-        $email  = strtolower($validated['email']);
-        $period = $validated['period'];
-        $tariffGroupId = $this->resolveTariffGroupId((int) ($validated['tariff_group_id'] ?? 0));
-
-        $user = DB::table('v2_user')->where('email', $email)->first();
-        if (!$user) {
-            return response()->json(['status' => 'error', 'message' => 'کاربر یافت نشد'], 404);
-        }
-
-        try {
-            DB::beginTransaction();
-            $user = DB::table('v2_user')->where('id', $user->id)->lockForUpdate()->first();
-            if (!$user) throw new \RuntimeException('کاربر یافت نشد.');
-            $panelPlan = DB::table('panel_plan')
-                ->where('tariff_group_id', $tariffGroupId)
-                ->where('plan_key', $period)
-                ->where('enable', 1)
-                ->first();
-            if (!$panelPlan || empty($panelPlan->v2_plan_id)) {
-                throw new \RuntimeException('Plan not found');
-            }
-            $v2PlanId = $panelPlan->v2_plan_id;
-            $v2Plan   = DB::table('v2_plan')->where('id', $v2PlanId)->first();
-
-            $daysMap = ['1m' => 30, '3m' => 90, '6m' => 180, '12m' => 365];
-            $addDays = $daysMap[$period];
-
-            $oldExpTs    = (int)($user->expired_at ?? 0);
-            $nowTs       = time();
-            $hasTimeLeft = $oldExpTs > $nowTs;
-
-            $usedBytes  = (int)($user->u ?? 0) + (int)($user->d ?? 0);
-            $quotaBytes = (int)($user->transfer_enable ?? 0);
-            $quotaExhausted = ($quotaBytes > 0) && ($usedBytes >= $quotaBytes);
-
-            $beforePlanKey = null;
-            if (!empty($user->plan_id)) {
-                $beforePlanKey = DB::table('panel_plan')->where('v2_plan_id', $user->plan_id)->value('plan_key');
-            }
-            $currentPlanIs1m = ($beforePlanKey === '1m');
-
-            //$shouldResetUsage = (!$hasTimeLeft) || ($hasTimeLeft && $quotaExhausted && $currentPlanIs1m);
-            $shouldResetUsage = !$hasTimeLeft;
-
-            $baseTs   = app(\App\Services\SubscriptionOrderPolicy::class)->renewalBaseTimestamp($user, $nowTs);
-            $newExpTs = Carbon::createFromTimestamp($baseTs)->addDays($addDays)->timestamp;
-
-            $update = [
-                'expired_at' => $newExpTs,
-                'updated_at' => $nowTs,
-                'plan_id'    => $v2PlanId,
-                'u'          => 0,
-                'd'          => 0,
-                'account_plan_name'       => (string) DB::table('panel_tariff_groups')->where('id', $tariffGroupId)->value('name'),
-                'account_group_type'      => 'time',
-                'account_tariff_group_id' => (int) $tariffGroupId,
-                'account_plan_key'        => $period,                
-                            ];
-            if ($v2Plan && isset($v2Plan->transfer_enable)) {
-                $gb = (int)preg_replace('/\D+/', '', (string)$v2Plan->transfer_enable);
-                $update['transfer_enable'] = $gb * 1024 * 1024 * 1024;
-            }
-            $update['device_limit'] = app(\App\Services\TariffConnectionPolicy::class)->resolve((int) $update['plan_id'], (int) $update['account_tariff_group_id'], $update['account_plan_key']);
-            if ($v2Plan && isset($v2Plan->speed_limit))  $update['speed_limit']  = $v2Plan->speed_limit;
-            if ($v2Plan && isset($v2Plan->group_id))     $update['group_id']     = $v2Plan->group_id;
-
-            $update = app(\App\Services\SubscriptionOrderPolicy::class)->prepare($user, $update);
-            $newExpTs = $update['expired_at'];
-            DB::table('v2_user')->where('email', $email)->update($update);
-            app(\App\Services\TrafficResetHistory::class)->renewal($user, $update);
-
-            // لاگ ادمین (اختیاری)
-            try {
-                $me = $request->user();
-                $panelUserId = (int) DB::table('panel_users')->where('email', strtolower((string)($me->email ?? '')))->value('id');
-                $creditNow   = (float) DB::table('panel_users')->where('id', $panelUserId)->value('credit');
-
-                /** @var \App\Services\TransactionLogger $logger */
-                $logger = app(TransactionLogger::class);
-                $trxId  = $logger->start([
-                    'panel_user_id'   => $panelUserId ?: 0,
-                    'type'            => 'account_extend',
-                    'direction'       => 'debit',
-                    'amount'          => 0,
-                    'balance_before'  => $creditNow,
-                    'balance_after'   => $creditNow,
-                    'quantity'        => 1,
-                    'meta'            => ['panel_code' => $me->code ?? null],
-                ]);
-                if ($trxId) {
-                    $logger->finalize($trxId, [
-                        'reference_type'  => 'v2_user',
-                        'reference_id'    => (int)$user->id,
-                        'user_ids'        => [(int)$user->id],
-                        'extra_meta'      => [
-                            'plan_key_before' => $beforePlanKey ?? null,
-                            'plan_key_after'  => $period,
-                            'tariff_group_id' => $tariffGroupId,
-                            'tariff_group_name' => DB::table('panel_tariff_groups')->where('id', $tariffGroupId)->value('name'),
-                        ],
-                    ]);
-                }
-            } catch (\Throwable $e) {}
-
-            DB::commit();
-            return response()->json([
-                'status'     => 'ok',
-                'expired_at' => $newExpTs,
-            ]);
-        } catch (\Throwable $e) {
-            DB::rollBack();
-            return response()->json(['status' => 'error', 'message' => $e instanceof \DomainException ? $e->getMessage() : 'تمدید انجام نشد'], $e instanceof \DomainException ? 422 : 500);
-        }
+        $data = $request->validate(['email' => ['required', 'email'], 'period' => ['required', 'in:1m,3m,6m,12m'],
+            'request_id' => ['nullable', 'uuid'], 'tariff_group_id' => ['nullable', 'integer', 'exists:panel_tariff_groups,id']]);
+        $owner = $request->user();
+        if (!$owner) return response()->json(['message' => 'Unauthorized'], 401);
+        $owner = DB::table('panel_users')->where('id', $owner->id)->first();
+        if (!$owner) return response()->json(['message' => 'Panel user not found'], 404);
+        $result = app(\App\Services\PanelAccountActionService::class)->renewAccountForPanelUser(
+            $owner, $data['email'], $data['period'], isset($data['tariff_group_id']) ? (int) $data['tariff_group_id'] : null, requestId: $data['request_id'] ?? null);
+        return response()->json(['status' => !empty($result['ok']) ? 'ok' : 'error'] + $result, !empty($result['ok']) ? 200 : 422);
     }
 
     public function topup(Request $request)
     {
-        $me = $request->user();
-
-        $email = strtolower(trim((string)$request->input('email', '')));
-        $gb    = (int) $request->input('gb', 0);
-        $tariffGroupId = (int) $request->input('tariff_group_id', 0);
-
-        if (!$email || $gb < 1) {
-            return response()->json(['status'=>'error','message'=>'ورودی نامعتبر است'], 422);
-        }
-
-        $user = DB::table('v2_user')->where('email', $email)->first();
-
-        if (!$user) {
-            return response()->json(['status'=>'error','message'=>'کاربر یافت نشد'], 404);
-        }
-
-        $bytes = $gb * 1024 * 1024 * 1024;
-
-        return DB::transaction(function () use ($request, $me, $user, $email, $gb, $bytes, $tariffGroupId) {
-            $dBefore = (int)($user->d ?? 0);
-            $dAfter  = $dBefore - $bytes;
-
-            $nowTs = time();
-
-            $isVolumeAccount = ((string)($user->account_group_type ?? '') === 'volume');
-
-            if (!$isVolumeAccount && !empty($user->plan_id)) {
-                $isVolumeAccount = DB::table('panel_plan')
-                    ->where('plan_key', 'volume_gig')
-                    ->where('v2_plan_id', (int) $user->plan_id)
-                    ->exists();
-            }
-
-            $accountTariffGroupId = (int)($user->account_tariff_group_id ?? 0);
-
-            $resolvedTariffGroupId = $this->resolveTariffGroupId(
-                $tariffGroupId > 0 ? $tariffGroupId : $accountTariffGroupId,
-                $isVolumeAccount ? 'volume' : 'time'
-            );
-
-            $updateData = [
-                'd'          => $dAfter,
-                'updated_at' => $nowTs,
-            ];
-
-            if ($isVolumeAccount) {
-                $minimum = \App\Services\VolumeTrafficPolicy::minimum($resolvedTariffGroupId);
-                if ($gb < $minimum) {
-                    return response()->json(['status' => 'error', 'message' => \App\Services\VolumeTrafficPolicy::message($minimum)], 422);
-                }
-
-                $isExpiredVolumeAccount = !\App\Services\SubscriptionValidity::unexpired($user->expired_at ?? null, $nowTs);
-
-                if ($isExpiredVolumeAccount) {
-                    // دوره قبلی تمام شده؛ مانده ترافیک قبلی نباید منتقل شود.
-                    $dAfter = 0;
-
-                    $updateData['u'] = 0;
-                    $updateData['d'] = 0;
-                    $updateData['transfer_enable'] = $bytes;
-                }
-
-                $updateData['expired_at'] = $nowTs + (30 * 86400);
-
-                $panelPlan = DB::table('panel_plan')
-                    ->where('tariff_group_id', $resolvedTariffGroupId)
-                    ->where('plan_key', 'volume_gig')
-                    ->where('enable', 1)
-                    ->first();
-
-                if (!$panelPlan || empty($panelPlan->v2_plan_id)) {
-                    return response()->json([
-                        'status' => 'error',
-                        'message' => 'پلن حجمی انتخاب‌شده معتبر نیست',
-                    ], 422);
-                }
-
-                $v2Plan = DB::table('v2_plan')
-                    ->where('id', $panelPlan->v2_plan_id)
-                    ->first();
-
-                $updateData['plan_id'] = (int) $panelPlan->v2_plan_id;
-
-                $tariffGroup = DB::table('panel_tariff_groups')->where('id', $resolvedTariffGroupId)->first();
-
-                $updateData['account_plan_name'] = (string) ($tariffGroup->name ?? '');
-                $updateData['account_group_type'] = 'volume';
-                $updateData['account_tariff_group_id'] = (int) $resolvedTariffGroupId;
-                $updateData['account_plan_key'] = 'volume_gig';
-
-                $updateData['device_limit'] = app(\App\Services\TariffConnectionPolicy::class)->resolve((int) $updateData['plan_id'], (int) $updateData['account_tariff_group_id'], $updateData['account_plan_key']);
-
-                if ($v2Plan && isset($v2Plan->speed_limit)) {
-                    $updateData['speed_limit'] = $v2Plan->speed_limit;
-                }
-
-                if ($v2Plan && isset($v2Plan->group_id)) {
-                    $updateData['group_id'] = $v2Plan->group_id;
-                }
-            }
-
-            DB::table('v2_user')->where('id', $user->id)->update($updateData);
-
-            try {
-                $panelUserId = 0;
-
-                if (!empty($me->id)) {
-                    $panelUserId = (int) DB::table('panel_users')->where('id', (int)$me->id)->value('id');
-                }
-
-                if (!$panelUserId && !empty($me->email)) {
-                    $panelUserId = (int) DB::table('panel_users')
-                        ->where('email', strtolower((string)$me->email))
-                        ->value('id');
-                }
-
-                $creditNow = (float) DB::table('panel_users')->where('id', $panelUserId)->value('credit');
-
-                $logger = app(TransactionLogger::class);
-
-                $trxId = $logger->start([
-                    'panel_user_id'   => $panelUserId ?: 0,
-                    'type'            => 'traffic_purchase',
-                    'direction'       => 'debit',
-                    'amount'          => 0,
-                    'balance_before'  => $creditNow,
-                    'balance_after'   => $creditNow,
-                    'quantity'        => $gb,
-                    'plan_key_after'  => $isVolumeAccount ? 'volume_gig' : 'gig',
-                    'performed_by_id' => (int)($me->id ?? 0),
-                    'performed_by_role' => (int)($me->role ?? 1),
-                    'meta'            => [
-                        'source' => 'admin_panel',
-                        'quantity' => "{$gb}GB",
-                        'gb' => $gb,
-                        'plan_key_after' => $isVolumeAccount ? 'volume_gig' : 'gig',
-                        'tariff_group_id' => $resolvedTariffGroupId,
-                        'tariff_group_name' => DB::table('panel_tariff_groups')
-                            ->where('id', $resolvedTariffGroupId)
-                            ->value('name'),
-                        'is_volume_mode' => $isVolumeAccount,
-                    ],
-                ]);
-
-                if ($trxId) {
-                    $logger->finalize($trxId, [
-                        'reference_type' => 'v2_user',
-                        'reference_id'   => (int)$user->id,
-                        'user_ids'       => [(int)$user->id],
-                        'performed_by_id' => (int)($me->id ?? 0),
-                        'performed_by_role' => (int)($me->role ?? 1),
-                        'extra_meta'     => [
-                            'source' => 'admin_panel',
-                            'quantity' => "{$gb}GB",
-                            'gb' => $gb,
-                            'plan_key_after' => $isVolumeAccount ? 'volume_gig' : 'gig',
-                            'tariff_group_id' => $resolvedTariffGroupId,
-                            'tariff_group_name' => DB::table('panel_tariff_groups')
-                                ->where('id', $resolvedTariffGroupId)
-                                ->value('name'),
-                            'is_volume_mode' => $isVolumeAccount,
-                        ],
-                    ]);
-                }
-            } catch (\Throwable $e) {}
-
-            return response()->json([
-                'status'     => 'ok',
-                'd_after'    => $dAfter,
-                'expired_at' => $updateData['expired_at'] ?? ($user->expired_at ?? null),
-            ], 200);
-        });
+        $data = $request->validate(['email' => ['required', 'email'], 'gb' => ['required', 'integer', 'min:1'],
+            'request_id' => ['nullable', 'uuid'], 'tariff_group_id' => ['nullable', 'integer', 'exists:panel_tariff_groups,id']]);
+        $owner = $request->user();
+        if (!$owner) return response()->json(['message' => 'Unauthorized'], 401);
+        $owner = DB::table('panel_users')->where('id', $owner->id)->first();
+        if (!$owner) return response()->json(['message' => 'Panel user not found'], 404);
+        $result = app(\App\Services\PanelAccountActionService::class)->topupTrafficForPanelUser(
+            $owner, $data['email'], (int) $data['gb'], isset($data['tariff_group_id']) ? (int) $data['tariff_group_id'] : null, requestId: $data['request_id'] ?? null);
+        return response()->json(['status' => !empty($result['ok']) ? 'ok' : 'error'] + $result, !empty($result['ok']) ? 200 : 422);
     }
 
     private function resolveTariffGroupId(int $tariffGroupId = 0, string $groupType = 'time'): int
@@ -762,5 +493,6 @@ class UserAdminController extends Controller
             ->value('id');
     }
 }
+
 
 

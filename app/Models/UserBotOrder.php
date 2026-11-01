@@ -6,6 +6,19 @@ use Illuminate\Database\Eloquent\Model;
 
 class UserBotOrder extends Model
 {
+    public function save(array $options = [])
+    {
+        // Include the guard and INSERT in one transaction even for crypto orders.
+        return \Illuminate\Support\Facades\DB::transaction(fn () => parent::save($options));
+    }
+
+    protected static function booted(): void
+    {
+        static::creating(function (self $order) {
+            app(\App\Services\UserBot\UserBotReservationGuard::class)->prepare($order);
+        });
+    }
+
     protected $fillable = [
         'setting_id',
         'session_id',

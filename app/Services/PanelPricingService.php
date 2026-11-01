@@ -7,6 +7,31 @@ use App\Services\TransactionLogger;
 
 class PanelPricingService
 {
+    /** Internal immutable quote captured before the customer starts payment. */
+    public function chargeSnapshot(int $ownerId, array $snapshot): array
+    {
+        return DB::transaction(function () use ($ownerId, $snapshot) {
+            $owner = DB::table('panel_users')->where('id', $ownerId)->lockForUpdate()->first();
+            if (!$owner) return ['ok' => false];
+            $price = (string) $snapshot['unit_price'];
+            if (!preg_match('/^\d+$/D', $price)) throw new \DomainException('قیمت ذخیره‌شده طرح نامعتبر است.');
+            $total = bcmul($price, (string) $snapshot['quantity'], 0);
+            $before = (string) $owner->credit;
+            if (bccomp($before, $total, 0) < 0) return ['ok' => false, 'reason' => 'INSUFFICIENT_CREDIT'];
+            $after = bcsub($before, $total, 0);
+            DB::table('panel_users')->where('id', $ownerId)->update(['credit' => $after]);
+            $id = app(TransactionLogger::class)->start([
+                'panel_user_id' => $ownerId, 'type' => 'account_extend', 'direction' => 'debit',
+                'amount' => $total, 'balance_before' => $before, 'balance_after' => $after,
+                'quantity' => $snapshot['quantity'], 'plan_key_after' => $snapshot['update']['account_plan_key'],
+                'performed_by_id' => $ownerId, 'performed_by_role' => $owner->role,
+                'meta' => ['unit_price' => $price, 'tariff_group_id' => $snapshot['update']['account_tariff_group_id'],
+                    'tariff_group_name' => $snapshot['update']['account_plan_name']],
+            ]);
+            return ['ok' => true, 'transaction_id' => $id];
+        });
+    }
+
     public function ensureBalanceAndCharge(
         int $panelUserId,
         string $planKey,

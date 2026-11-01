@@ -80,10 +80,11 @@ type BrutalConfig struct {
 }
 
 type UserSpec struct {
-	ID          int
-	UUID        string
-	SpeedLimit  int
-	DeviceLimit int
+	ID                     int
+	UUID                   string
+	SpeedLimit             int
+	DeviceLimit            int
+	SubscriptionGeneration uint64 `json:"subscription_generation"`
 }
 
 func (n *NodeSpec) GetProxyProtocol() bool {

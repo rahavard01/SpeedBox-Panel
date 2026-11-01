@@ -24,7 +24,7 @@ class SystemConfiguration
                 $text('subscribe_path', 'مسیر سابسکرایب', 's', ['required', 'max:100', 'regex:~^[A-Za-z0-9_-]+(?:/[A-Za-z0-9_-]+)*$~']),
                 $number('subscribe_update_interval', 'فاصله به‌روزرسانی کلاینت (ساعت)', 6, 1, 168),
                 ['name' => 'reset_traffic_method', 'label' => 'روش بازنشانی دوره‌ای ترافیک', 'default' => 2, 'type' => 'select', 'rules' => ['required', 'integer', 'in:0,1,2,3,4'], 'options' => [0 => 'ابتدای هر ماه', 1 => 'ماهانه در روز پایان دوره', 2 => 'بدون بازنشانی', 3 => 'ابتدای هر سال', 4 => 'سالانه در روز پایان دوره']],
-                $event('renew_order_event_id', 'عملیات پس از تمدید', 1),
+                ['name' => 'renew_order_event_id', 'label' => 'نوع تمدید', 'default' => 2, 'type' => 'select', 'rules' => ['required', 'integer', 'in:0,1,2,3'], 'options' => [2 => 'رزرو طرح، بدون بازنشانی ترافیک مصرفی فعلی', 3 => 'رزرو طرح، با بازنشانی ترافیک مصرفی فعلی', 1 => 'تمدید فوری، با بازنشانی ترافیک مصرفی فعلی', 0 => 'تمدید فوری، بدون بازنشانی ترافیک مصرفی فعلی'], 'description' => 'این تنظیم برای طرح‌های بدون ریست دوره‌ای اعمال نخواهد شد.'],
                 $toggle('show_info_to_server_enable', 'نمایش اطلاعات سابسکرایب در فهرست نودها', false),
                 $toggle('show_online_to_server_enable', 'نمایش تعداد اتصالات آنلاین در فهرست نودها', false) + ['description' => 'براساس IPهای فعال؛ عدد با به‌روزرسانی اشتراک تازه می‌شود.'],
                 $toggle('show_protocol_to_server_enable', 'نمایش نوع پروتکل کنار نام نودها', false),

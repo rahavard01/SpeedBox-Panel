@@ -13,7 +13,11 @@ final class AccountTrafficResetPolicy
         $userId = (int) data_get($account, 'id', 0);
         // A bot session can outlive a plan change. Prefer the current account
         // rather than an old snapshot's plan name or plan ID.
-        if ($userId) $id = (int) DB::table('v2_user')->where('id', $userId)->value('plan_id');
+        if ($userId) {
+            $current = DB::table('v2_user')->find($userId);
+            if ($current) return app(\App\Services\SubscriptionReservationService::class)->periodic($current);
+            return false;
+        }
         if (!$id) return false;
         $plan = DB::table('v2_plan')->where('id', $id)->first(['reset_traffic_method']);
         if (!$plan) return false;

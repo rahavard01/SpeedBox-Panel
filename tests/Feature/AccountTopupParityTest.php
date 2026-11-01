@@ -16,8 +16,13 @@ class AccountTopupParityTest extends TestCase
         Schema::create('panel_tariff_group_partner_access',function(Blueprint $t){$t->integer('tariff_group_id');$t->integer('partner_id');});
         Schema::create('panel_plan',function(Blueprint $t){$t->id();$t->integer('tariff_group_id');$t->integer('v2_plan_id')->nullable();$t->string('plan_key');$t->boolean('enable');$t->string('default_price');});
         Schema::create('v2_user',function(Blueprint $t){$t->id();$t->string('email');$t->integer('plan_id');$t->integer('account_tariff_group_id')->nullable();$t->string('account_group_type')->nullable();$t->string('account_plan_key')->nullable();$t->bigInteger('u')->default(0);$t->bigInteger('d')->default(0);$t->bigInteger('transfer_enable')->default(100000000000);$t->bigInteger('expired_at')->nullable();$t->string('account_plan_name')->nullable();$t->integer('device_limit')->nullable();$t->integer('group_id')->nullable();$t->integer('speed_limit')->nullable();$t->integer('traffic_warning_version')->default(0);$t->integer('updated_at')->nullable();});
-        Schema::create('v2_plan',function(Blueprint $t){$t->id();$t->integer('device_limit')->nullable();$t->integer('group_id')->nullable();$t->integer('speed_limit')->nullable();});
+        Schema::create('v2_plan',function(Blueprint $t){$t->id();$t->integer('reset_traffic_method')->default(0);$t->integer('transfer_enable')->default(250);$t->integer('device_limit')->nullable();$t->integer('group_id')->nullable();$t->integer('speed_limit')->nullable();});
         Schema::create('panel_transactions',function(Blueprint $t){$t->id();foreach(['panel_user_id','quantity','reference_id','performed_by_id','performed_by_role'] as $c)$t->integer($c)->nullable();foreach(['type','direction','amount','balance_before','balance_after','currency','status','plan_key_after','plan_key_before','reference_type','idempotency_key'] as $c)$t->string($c)->nullable();$t->text('meta')->nullable();$t->timestamps();});
+        Schema::table('v2_user', function(Blueprint $t){$t->integer('reset_count')->default(0);$t->integer('last_reset_at')->nullable();$t->integer('next_reset_at')->nullable();$t->string('uuid')->nullable();$t->string('token')->nullable();});
+        Schema::create('v2_settings',function(Blueprint $t){$t->string('name')->primary();$t->text('value')->nullable();});
+        (require database_path('migrations/2026_10_09_000002_add_system_configuration_support.php'))->up();
+        (require database_path('migrations/2026_10_11_000001_create_account_operation_history.php'))->up();
+        (require database_path('migrations/2026_10_29_000001_create_subscription_reservations.php'))->up();
         DB::table('panel_users')->insert(['id'=>1,'role'=>2,'code'=>'rep','credit'=>'10000','partner_plan_type'=>'time']);
         DB::table('panel_tariff_groups')->insert([
             ['id'=>1,'name'=>'Default, inaccessible','group_type'=>'time','enable'=>1,'is_default'=>1,'partner_access_mode'=>'selected_partners'],
@@ -30,6 +35,7 @@ class AccountTopupParityTest extends TestCase
             ['tariff_group_id'=>2,'v2_plan_id'=>20,'plan_key'=>'1m','enable'=>1,'default_price'=>'1000'],
             ['tariff_group_id'=>2,'v2_plan_id'=>null,'plan_key'=>'gig','enable'=>1,'default_price'=>'100'],
         ]);
+        DB::table('v2_plan')->insert([['id'=>10],['id'=>20]]);
         DB::table('v2_user')->insert(['id'=>1,'email'=>'alice@rep.com','plan_id'=>20,'account_tariff_group_id'=>2,'account_group_type'=>'time','account_plan_key'=>'1m','expired_at'=>time()+86400]);
     }
 

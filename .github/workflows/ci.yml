@@ -26,6 +26,12 @@ jobs:
           php-version: '8.3'
           extensions: mbstring, bcmath, pdo_sqlite, pdo_mysql, gd, zip, dom, swoole
           coverage: none
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install private frontend guard dependencies
+        if: hashFiles('.speedbox-public-edition.json') == ''
+        run: npm ci --ignore-scripts
       - run: composer install --prefer-dist --no-interaction --no-progress
       - run: cp .env.example .env
       - name: PHP syntax
@@ -71,9 +77,16 @@ jobs:
         run: |
           php scripts/tests/online-presence.test.php --mysql
           php scripts/tests/preventive-runtime.test.php --mysql --timed
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
+      - name: Reservation purchases on MySQL 8
+        env:
+          APP_ENV: testing
+          DB_CONNECTION: mysql
+          DB_HOST: 127.0.0.1
+          DB_PORT: '3306'
+          DB_DATABASE: speedbox_ci
+          DB_USERNAME: root
+          DB_PASSWORD: speedbox-test
+        run: php vendor/bin/phpunit tests/Feature/ReservationConcurrencyTest.php
       - name: Network tunnel engines and form regressions
         run: |
           python3 scripts/verify-wattunnel.py
@@ -96,7 +109,6 @@ jobs:
         if: hashFiles('.speedbox-public-edition.json') == ''
         timeout-minutes: 4
         run: |
-          npm ci
           npm run build
       - name: Vue source component regressions
         if: hashFiles('.speedbox-public-edition.json') == ''
@@ -104,6 +116,8 @@ jobs:
         run: |
           export SPEEDBOX_TEST_JSDOM="$RUNNER_TEMP/ui-deps/node_modules/jsdom/lib/api.js"
           node --experimental-vm-modules scripts/tests/source-ui-regressions.test.mjs
+          node --experimental-vm-modules scripts/tests/account-purchase-refresh.test.mjs
+          node --experimental-vm-modules scripts/tests/subscription-reservation-ui.test.mjs
       - name: Prepare tunnel browser
         timeout-minutes: 15
         run: |

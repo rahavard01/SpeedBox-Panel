@@ -357,7 +357,7 @@ class UserBotWebhookController extends Controller
                 $bot->sendMessage(
                     $chatId,
                     "⚠️ پشتیبانی تنظیم نشده است",
-                    $session->is_logged_in ? UserBotKeyboard::user($isVolumeAccount) : UserBotKeyboard::guest((bool) $setting->active_users_only, $isVolumePartner && !$isBothPartner)
+                    $session->is_logged_in ? UserBotKeyboard::user($isVolumeAccount, app(\App\Services\UserBot\AccountTrafficResetPolicy::class)->hasPeriodicReset($session->account_snapshot ?: [])) : UserBotKeyboard::guest((bool) $setting->active_users_only, $isVolumePartner && !$isBothPartner)
                 );
 
                 return response()->json(['ok' => true]);
@@ -437,7 +437,7 @@ class UserBotWebhookController extends Controller
                 $chatId,
                 "✅ پرداخت شما ثبت شد و سفارش در حال بررسی می‌باشد.\n\nپس از تأیید تراکنش، سفارش شما به‌صورت خودکار انجام خواهد شد.",
                 $session->is_logged_in
-                    ? UserBotKeyboard::user($isVolumeAccount)
+                    ? UserBotKeyboard::user($isVolumeAccount, app(\App\Services\UserBot\AccountTrafficResetPolicy::class)->hasPeriodicReset($session->account_snapshot ?: []))
                     : UserBotKeyboard::guest((bool) $setting->active_users_only, $isVolumePartner && !$isBothPartner)
             );
 
@@ -486,7 +486,7 @@ class UserBotWebhookController extends Controller
                 $chatId,
                 "✅ سفارش رمزارزی شما لغو شد.",
                 $session->is_logged_in
-                    ? UserBotKeyboard::user($isVolumeAccount)
+                    ? UserBotKeyboard::user($isVolumeAccount, app(\App\Services\UserBot\AccountTrafficResetPolicy::class)->hasPeriodicReset($session->account_snapshot ?: []))
                     : UserBotKeyboard::guest((bool) $setting->active_users_only, $isVolumePartner && !$isBothPartner)
             );
 
@@ -840,7 +840,7 @@ class UserBotWebhookController extends Controller
                 $bot->sendMessage(
                     $buyerSession->telegram_chat_id,
                     "❌ رسید شما رد شد\n\n🧾 شماره سفارش: <b>{$orderNo}</b>",
-                    $buyerSession->is_logged_in ? UserBotKeyboard::user($this->isLoggedInVolumeAccount($buyerSession)) : UserBotKeyboard::guest((bool) $setting->active_users_only, $isVolumePartner && !$isBothPartner)
+                    $buyerSession->is_logged_in ? UserBotKeyboard::user($this->isLoggedInVolumeAccount($buyerSession), app(\App\Services\UserBot\AccountTrafficResetPolicy::class)->hasPeriodicReset($buyerSession->account_snapshot ?: [])) : UserBotKeyboard::guest((bool) $setting->active_users_only, $isVolumePartner && !$isBothPartner)
                 );
             }
 
@@ -880,7 +880,7 @@ class UserBotWebhookController extends Controller
             $bot->sendMessage(
                 $chatId,
                 "✅ ورود با موفقیت انجام شد\n\n👤 اکانت: <code>{$username}</code>",
-                UserBotKeyboard::user($this->isSnapshotVolumeAccount($resolved['snapshot'] ?? []))
+                UserBotKeyboard::user($this->isSnapshotVolumeAccount($resolved['snapshot'] ?? []), app(\App\Services\UserBot\AccountTrafficResetPolicy::class)->hasPeriodicReset($session->account_snapshot ?: []))
             );
 
             return response()->json(['ok' => true]);
@@ -958,7 +958,7 @@ class UserBotWebhookController extends Controller
                 $chatId,
                 (string) $resolved['sub_link'],
                 $resolver->accountInfoText($resolved['snapshot'], $resolved['sub_link']),
-                UserBotKeyboard::user($this->isSnapshotVolumeAccount($resolved['snapshot'] ?? []))
+                UserBotKeyboard::user($this->isSnapshotVolumeAccount($resolved['snapshot'] ?? []), app(\App\Services\UserBot\AccountTrafficResetPolicy::class)->hasPeriodicReset($session->account_snapshot ?: []))
             );
 
             return response()->json(['ok' => true]);
@@ -975,6 +975,22 @@ class UserBotWebhookController extends Controller
                 );
 
                 return response()->json(['ok' => true]);
+            }
+
+            $live = DB::table('v2_user')->where('email', $session->account_email)->first();
+            if (!$live) { $bot->sendMessage($chatId, '⚠️ اکانت یافت نشد؛ دوباره وارد شوید.'); return response()->json(['ok' => true]); }
+            $reserveService = app(\App\Services\SubscriptionReservationService::class);
+            $freshSnapshot = array_intersect_key((array) $live, array_flip(['id', 'email', 'plan_id', 'account_plan_name', 'account_group_type', 'account_tariff_group_id', 'account_plan_key', 'transfer_enable', 'u', 'd', 'expired_at', 'banned', 'last_reset_at', 'reset_count', 'traffic_warning_version']));
+            $freshSnapshot['reservation'] = $reserveService->current((int) $live->id);
+            $session->update(['account_snapshot' => $freshSnapshot]);
+            $isVolumeAccount = app(\App\Services\AccountTariffResolver::class)->isVolume($live);
+            if ($text === '➕ خرید ترافیک' && !$isVolumeAccount && !$reserveService->periodic($live)) {
+                $bot->sendMessage($chatId, '⚠️ خرید ترافیک اضافه برای این طرح فعال نیست؛ از گزینه «🔄 تمدید اکانت» استفاده کنید.');
+                return response()->json(['ok' => true]);
+            }
+            if ($text === '🔄 تمدید اکانت' || $isVolumeAccount) {
+                try { $reserveService->assertAvailable($live); }
+                catch (\DomainException $e) { $bot->sendMessage($chatId, '⚠️ '.e($e->getMessage())); return response()->json(['ok' => true]); }
             }
 
             if ($text === '➕ خرید ترافیک') {
@@ -999,7 +1015,7 @@ class UserBotWebhookController extends Controller
                 );
 
                 if ($trafficPlans->isEmpty()) {
-                    $bot->sendMessage($chatId, "⚠️ تعرفه فروش ترافیک برای طرح اکانت شما فعال نیست؛ با پشتیبانی تماس بگیرید", UserBotKeyboard::user($isVolumeAccount));
+                    $bot->sendMessage($chatId, "⚠️ تعرفه فروش ترافیک برای طرح اکانت شما فعال نیست؛ با پشتیبانی تماس بگیرید", UserBotKeyboard::user($isVolumeAccount, app(\App\Services\UserBot\AccountTrafficResetPolicy::class)->hasPeriodicReset($session->account_snapshot ?: [])));
                     return response()->json(['ok' => true]);
                 }
 
@@ -1050,7 +1066,7 @@ class UserBotWebhookController extends Controller
                 $timeAccountWarning = $isVolumeAccount
                     ? ''
                     : "⚠️ <b>نکات مهم:</b>\n"
-                        . ($hasNoTrafficReset ? '' : "• ترافیک ماهانه اکانت ها، در ابتدای هر ماه شمسی ریست می‌شود.\n")
+                        . ($hasNoTrafficReset ? '' : "• ترافیک اضافه تابع زمان بازنشانی ترافیک طرح فعلی است.\n")
                         . "• خرید ترافیک اضافه باعث تمدید اکانت نمی‌شود. برای تمدید، از گزینه «🔄 تمدید اکانت» استفاده کنید.\n\n";
 
                 $bot->sendMessage(
@@ -1070,7 +1086,7 @@ class UserBotWebhookController extends Controller
             if ($text === '🔄 تمدید اکانت') {
 
                 if ($isVolumeAccount) {
-                    $bot->sendMessage($chatId, "⚠️ برای پلن حجمی، گزینه تمدید فعال نیست", UserBotKeyboard::user($isVolumeAccount));
+                    $bot->sendMessage($chatId, "⚠️ برای پلن حجمی، گزینه تمدید فعال نیست", UserBotKeyboard::user($isVolumeAccount, app(\App\Services\UserBot\AccountTrafficResetPolicy::class)->hasPeriodicReset($session->account_snapshot ?: [])));
                     return response()->json(['ok' => true]);
                 }
 
@@ -1080,10 +1096,20 @@ class UserBotWebhookController extends Controller
                         $this->isVolumePlanKey((string) $p->plan_key)
                         || $this->isTrafficPlanKey((string) $p->plan_key)
                         || $this->isTestPlan($p)
+                        || (string) $p->plan_key === '1m_noexp' || str_ends_with((string) $p->plan_key, '_1m_noexp')
                     );
 
+                $plans = $plans->filter(function ($p) use ($live, $reserveService) {
+                    if ($reserveService->ended($live)) return true;
+                    $key = (string) $p->plan_key;
+                    $groupId = (int) ($live->account_tariff_group_id ?? 0);
+                    if (preg_match('/^(\d+)_(.+)$/', $key, $m)) { $groupId = (int) $m[1]; $key = $m[2]; }
+                    $planId = DB::table('panel_plan')->where('tariff_group_id', $groupId)->where('plan_key', $key)->where('enable', 1)->value('v2_plan_id');
+                    return $planId && $reserveService->periodic((object) ['plan_id' => $planId]) === $reserveService->periodic($live);
+                })->values();
+
                 if ($plans->isEmpty()) {
-                    $bot->sendMessage($chatId, "⚠️ هیچ طرح تمدید فعالی وجود ندارد", UserBotKeyboard::user($isVolumeAccount));
+                    $bot->sendMessage($chatId, "⚠️ طرح تمدید فعالی برای اکانت شما وجود ندارد؛ از گزینه «🛒 خرید اکانت» استفاده کنید.", UserBotKeyboard::user($isVolumeAccount, app(\App\Services\UserBot\AccountTrafficResetPolicy::class)->hasPeriodicReset($session->account_snapshot ?: [])));
                     return response()->json(['ok' => true]);
                 }
 
@@ -1343,7 +1369,7 @@ class UserBotWebhookController extends Controller
 
             if (!$trafficPlan) {
                 $session->update(['state' => null, 'state_data' => null]);
-                $bot->sendMessage($chatId, "⚠️ تعرفه ترافیک پیدا نشد. دوباره تلاش کنید", UserBotKeyboard::user($isVolumeAccount));
+                $bot->sendMessage($chatId, "⚠️ تعرفه ترافیک پیدا نشد. دوباره تلاش کنید", UserBotKeyboard::user($isVolumeAccount, app(\App\Services\UserBot\AccountTrafficResetPolicy::class)->hasPeriodicReset($session->account_snapshot ?: [])));
                 return response()->json(['ok' => true]);
             }
 
@@ -1708,7 +1734,7 @@ class UserBotWebhookController extends Controller
                     $session->is_logged_in
                         ? UserBotKeyboard::user(
                             $isVolumeAccount
-                        )
+                        , app(\App\Services\UserBot\AccountTrafficResetPolicy::class)->hasPeriodicReset($session->account_snapshot ?: []))
                         : UserBotKeyboard::guest(
                             (bool) $setting->active_users_only,
                             $isVolumePartner
@@ -1733,7 +1759,7 @@ class UserBotWebhookController extends Controller
             $bot->sendMessage(
                 $chatId,
                 "✅ رسید شما ثبت شد.\n\n🧾 شماره سفارش: <b>{$orderNo}</b>\n⏱ تایید رسید شما ممکن است تا ۳۰ دقیقه زمان ببرد.",
-                $session->is_logged_in ? UserBotKeyboard::user($isVolumeAccount) : UserBotKeyboard::guest((bool) $setting->active_users_only, $isVolumePartner && !$isBothPartner)
+                $session->is_logged_in ? UserBotKeyboard::user($isVolumeAccount, app(\App\Services\UserBot\AccountTrafficResetPolicy::class)->hasPeriodicReset($session->account_snapshot ?: [])) : UserBotKeyboard::guest((bool) $setting->active_users_only, $isVolumePartner && !$isBothPartner)
             );
 
             $orderTypeText = match ($orderType) {
@@ -1756,7 +1782,7 @@ class UserBotWebhookController extends Controller
                         )
                         : $this->planFullTitle($selected)
                 ) . "</b>\n"
-                . ($trafficGb ? "📊 حجم: <b>{$trafficGb} گیگ</b>\n" : "")
+                . ($trafficGb ? "📊 ترافیک: <b>{$trafficGb} گیگ</b>\n" : "")
                 . "💰 مبلغ: <b>" . number_format($amount) . " تومان</b>\n"
                 . "🕒 زمان: <b>" . JalaliDateFormatter::forTelegram(now(), 'H:i d-m-Y') . "</b>";
 
@@ -1812,7 +1838,7 @@ class UserBotWebhookController extends Controller
                 $bot->sendMessage(
                     $chatId,
                     "⚠️ در حال حاضر هیچ طرح فعالی برای خرید وجود ندارد",
-                    $session->is_logged_in ? UserBotKeyboard::user($isVolumeAccount) : UserBotKeyboard::guest((bool) $setting->active_users_only, $isVolumePartner && !$isBothPartner)
+                    $session->is_logged_in ? UserBotKeyboard::user($isVolumeAccount, app(\App\Services\UserBot\AccountTrafficResetPolicy::class)->hasPeriodicReset($session->account_snapshot ?: [])) : UserBotKeyboard::guest((bool) $setting->active_users_only, $isVolumePartner && !$isBothPartner)
                 );
                 return response()->json(['ok' => true]);
             }
@@ -1897,7 +1923,7 @@ class UserBotWebhookController extends Controller
                 $chatId,
                 (string) $helpText,
                 $session->is_logged_in
-                    ? UserBotKeyboard::user($isVolumeAccount)
+                    ? UserBotKeyboard::user($isVolumeAccount, app(\App\Services\UserBot\AccountTrafficResetPolicy::class)->hasPeriodicReset($session->account_snapshot ?: []))
                     : UserBotKeyboard::guest((bool) $setting->active_users_only, $isVolumePartner && !$isBothPartner)
             );
 
@@ -2129,7 +2155,7 @@ class UserBotWebhookController extends Controller
             $bot->sendMessage(
                 $chatId,
                 '⚠️ طرح اکانت با تعرفه انتخاب‌شده مطابقت ندارد؛ خرید ترافیک را دوباره شروع کنید',
-                UserBotKeyboard::user($this->isSnapshotVolumeAccount($snapshot))
+                UserBotKeyboard::user($this->isSnapshotVolumeAccount($snapshot), app(\App\Services\UserBot\AccountTrafficResetPolicy::class)->hasPeriodicReset($session->account_snapshot ?: []))
             );
             return true;
         }
@@ -2152,7 +2178,7 @@ class UserBotWebhookController extends Controller
             "⛔️ اکانت شما منقضی شده است.\n\n"
             . "امکان خرید ترافیک اضافه برای اکانت منقضی‌شده وجود ندارد.\n"
             . "برای فعال‌سازی مجدد اکانت، از گزینه «🔄 تمدید اکانت» استفاده کنید.",
-            UserBotKeyboard::user(false)
+            UserBotKeyboard::user(false, app(\App\Services\UserBot\AccountTrafficResetPolicy::class)->hasPeriodicReset($session->account_snapshot ?: []))
         );
 
         return true;
@@ -2246,7 +2272,7 @@ class UserBotWebhookController extends Controller
                         )
                         : $this->planFullTitle(is_array($selected) ? $selected : [])
                 ) . "</b>\n"
-                . ($order->traffic_gb ? "📊 حجم: <b>{$order->traffic_gb} گیگ</b>\n" : "")
+                . ($order->traffic_gb ? "📊 ترافیک: <b>{$order->traffic_gb} گیگ</b>\n" : "")
                 . "💰 مبلغ: <b>" . number_format((int)$order->amount) . " تومان</b>\n"
                 . "🕒 زمان ثبت: <b>" . JalaliDateFormatter::forTelegram($order->created_at, 'H:i d-m-Y', '-') . "</b>";
 
@@ -2468,7 +2494,7 @@ class UserBotWebhookController extends Controller
         }
 
         $keyboard = $session->is_logged_in
-            ? UserBotKeyboard::user($isVolumeAccount)
+            ? UserBotKeyboard::user($isVolumeAccount, app(\App\Services\UserBot\AccountTrafficResetPolicy::class)->hasPeriodicReset($session->account_snapshot ?: []))
             : UserBotKeyboard::guest((bool) $setting->active_users_only, $isVolumePartner && !$isBothPartner);
 
         $text = $session->is_logged_in
@@ -2548,22 +2574,32 @@ class UserBotWebhookController extends Controller
         $text .= "🧩 طرح: <b>" . e($this->planFullTitle($selected)) . "</b>\n";
 
         if ($trafficGb) {
-            $text .= "📊 حجم: <b>{$trafficGb} گیگ</b>\n";
+            $text .= "📊 ترافیک: <b>{$trafficGb} گیگ</b>\n";
         }
 
         if (!empty($selected['description'])) {
             $text .= "📝 {$selected['description']}\n";
         }
 
-        if ($orderType === 'buy_traffic' && (
-            $isVolumeTraffic
-            || app(\App\Services\UserBot\AccountTrafficResetPolicy::class)->hasPeriodicReset($session->account_snapshot ?: [])
-        )) {
-            $text .= "\n" . (
-                $isVolumeTraffic
-                    ? "⚠️ با هر بار خرید ترافیک، تاریخ انقضای اکانت از زمان انجام عملیات یک ماه تنظیم می‌شود"
-                    : "⚠️ ترافیک اضافی خریداری‌شده قابل انتقال به ماه بعد نیست"
-            ) . "\n";
+        if ($orderType === 'renew_account' || $isVolumeTraffic) {
+            $account = DB::table('v2_user')->where('email', $session->account_email)->first();
+            if ($account) {
+                $policy = app(\App\Services\SubscriptionReservationService::class);
+                $mode = (int) \App\Services\RuntimeSetting::get('renew_order_event_id', 2);
+                $notice = $policy->ended($account)
+                    ? 'طرح جدید همان لحظه با ترافیک مصرفی صفر و اعتبار جدید فعال می‌شود.'
+                    : (!$policy->periodic($account)
+                        ? 'طرح جدید رزرو می‌شود و پس از پایان ترافیک یا اعتبار طرح فعلی فعال خواهد شد. اعتبار از زمان فعال‌سازی محاسبه می‌شود.'
+                        : match ($mode) {
+                            2 => 'طرح جدید رزرو می‌شود و پس از پایان کل اعتبار طرح فعلی فعال خواهد شد.',
+                            3 => 'طرح جدید رزرو می‌شود و ترافیک مصرفی فعلی همان لحظه بازنشانی می‌شود. طرح رزرو پس از پایان کل اعتبار طرح فعلی فعال خواهد شد.',
+                            1 => 'تمدید همان لحظه اعمال و ترافیک مصرفی فعلی بازنشانی می‌شود.',
+                            default => 'تمدید همان لحظه اعمال می‌شود و ترافیک مصرفی فعلی حفظ خواهد شد. اگر مصرف قبلی از سقف طرح جدید بیشتر باشد، اکانت به‌دلیل پایان ترافیک قابل استفاده نخواهد بود.',
+                        });
+                $text .= "\n⚠️ ".$notice."\n";
+            }
+        } elseif ($orderType === 'buy_traffic') {
+            $text .= "\n⚠️ ترافیک اضافه تابع زمان بازنشانی طرح فعلی است و باعث تمدید اعتبار اکانت نمی‌شود.\n";
         }
 
         $text .= "\n{$amountLabel}: <b>" . number_format($amount) . " تومان</b>";
@@ -2950,7 +2986,7 @@ class UserBotWebhookController extends Controller
                 $session->telegram_chat_id,
                 $msg,
                 $session->is_logged_in
-                    ? UserBotKeyboard::user($isVolumeAccount)
+                    ? UserBotKeyboard::user($isVolumeAccount, app(\App\Services\UserBot\AccountTrafficResetPolicy::class)->hasPeriodicReset($session->account_snapshot ?: []))
                     : UserBotKeyboard::guest((bool) $setting->active_users_only, $isVolumePartner && !$isBothPartner)
             );
 
@@ -2999,7 +3035,7 @@ class UserBotWebhookController extends Controller
             $session->telegram_chat_id,
             $msg,
             $session->is_logged_in
-                ? UserBotKeyboard::user($isVolumeAccount)
+                ? UserBotKeyboard::user($isVolumeAccount, app(\App\Services\UserBot\AccountTrafficResetPolicy::class)->hasPeriodicReset($session->account_snapshot ?: []))
                 : UserBotKeyboard::guest((bool) $setting->active_users_only, $isVolumePartner && !$isBothPartner)
         );
     }

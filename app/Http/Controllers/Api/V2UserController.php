@@ -445,188 +445,28 @@ class V2UserController extends Controller
 
     public function extend(Request $request)
     {
-        $me = $request->user();
-
-        $validated = $request->validate([
-            'email'  => 'required|email',
-            'period' => 'required|in:1m,3m,6m,12m',
-            'tariff_group_id' => ['nullable','integer','exists:panel_tariff_groups,id'],
-        ]);
-
-        $email  = strtolower($validated['email']);
-        $period = $validated['period'];
-        $tariffGroupId = $this->resolveTariffGroupId((int) ($validated['tariff_group_id'] ?? 0), 'time');
-
-        // امنیت tenant
-        if ((int)($me->role ?? 2) !== 1) {
-            $panelCode = $me->code ?? '';
-            if (!$this->emailBelongsToPanelCode($email, $panelCode)) {
-                return response()->json(['status' => 'error', 'message' => 'Forbidden'], 403);
-            }
-        }
-
-        $user = DB::table('v2_user')->where('email', $email)->first();
-        if (!$user) return response()->json(['status' => 'error', 'message' => 'کاربر یافت نشد'], 404);
-
-        $panelUser = DB::table('panel_users')->where('email', strtolower($me->email))->first();
-        if (!$panelUser) return response()->json(['status' => 'error', 'message' => 'Panel user not found'], 404);
-
-        if (!app(PartnerTariffAccessService::class)->canSeeTariffGroup($panelUser, (int)$tariffGroupId)) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'این طرح برای شما فعال نیست',
-            ], 403);
-        }
-
-        /** @var PanelPricingService $pricing */
-        $pricing = app(PanelPricingService::class);
-        /** @var TransactionLogger $logger */
-        $logger  = app(TransactionLogger::class);
-
-        $trxId = null;
-
-        try {
-            DB::beginTransaction();
-
-            DB::table('panel_users')->where('id', $panelUser->id)->lockForUpdate()->first();
-            $user = DB::table('v2_user')->where('id', $user->id)->lockForUpdate()->first();
-            if (!$user) throw new \RuntimeException('کاربر یافت نشد.');
-            $start = $pricing->ensureBalanceAndCharge((int)$panelUser->id, $period, 1, $tariffGroupId, (int) $user->id);
-            if (empty($start['ok'])) {
-                DB::rollBack();
-                return response()->json(['status'  => 'error','message' => $start['message'] ?? 'اعتبار شما کافی نیست '], 422);
-            }
-            $trxId = $start['transaction_id'] ?? null;
-            if ($trxId) {
-                DB::table('panel_transactions')->where('id', $trxId)->update(['type' => 'account_extend']);
-            }
-
-            $panelPlan = DB::table('panel_plan')
-                ->where('tariff_group_id', $tariffGroupId)
-                ->where('plan_key', $period)
-                ->where('enable', 1)
-                ->first();
-            if (!$panelPlan || empty($panelPlan->v2_plan_id)) throw new \RuntimeException('Plan not found');
-            $v2PlanId = $panelPlan->v2_plan_id;
-            $v2Plan   = DB::table('v2_plan')->where('id', $v2PlanId)->first();
-
-            $daysMap = ['1m' => 30, '3m' => 90, '6m' => 180, '12m' => 365];
-            $addDays = $daysMap[$period];
-
-            $nowTs       = time();
-            $oldExpTs    = (int)($user->expired_at ?? 0);
-            $hasTimeLeft = $oldExpTs > $nowTs;
-
-            $usedBytes  = (int)($user->u ?? 0) + (int)($user->d ?? 0);
-            $quotaBytes = (int)($user->transfer_enable ?? 0);
-            $quotaExhausted = ($quotaBytes > 0) && ($usedBytes >= $quotaBytes);
-
-            $beforePlanKey = null;
-            if (!empty($user->plan_id)) {
-                $beforePlanKey = DB::table('panel_plan')->where('v2_plan_id', $user->plan_id)->value('plan_key');
-            }
-            $currentPlanIs1m = ($beforePlanKey === '1m');
-
-            //$shouldResetUsage = (!$hasTimeLeft) || ($hasTimeLeft && $quotaExhausted && $currentPlanIs1m);
-            $shouldResetUsage = !$hasTimeLeft;
-
-            $baseTs   = app(\App\Services\SubscriptionOrderPolicy::class)->renewalBaseTimestamp($user, $nowTs);
-            $newExpTs = Carbon::createFromTimestamp($baseTs)->addDays($addDays)->timestamp;
-
-            $update = [
-                'expired_at' => $newExpTs,
-                'updated_at' => $nowTs,
-                'plan_id'    => $v2PlanId,
-                'u'          => 0,
-                'd'          => 0,
-                'account_plan_name'       => (string) DB::table('panel_tariff_groups')->where('id', $tariffGroupId)->value('name'),
-                'account_group_type'      => 'time',
-                'account_tariff_group_id' => (int) $tariffGroupId,
-                'account_plan_key'        => $period,
-            ];
-            if ($v2Plan && isset($v2Plan->transfer_enable)) {
-                $gb = (int)preg_replace('/\D+/', '', (string)$v2Plan->transfer_enable);
-                $update['transfer_enable'] = $gb * 1024 * 1024 * 1024;
-            }
-            $update['device_limit'] = app(\App\Services\TariffConnectionPolicy::class)->resolve((int) $update['plan_id'], (int) $update['account_tariff_group_id'], $update['account_plan_key']);
-            if ($v2Plan && isset($v2Plan->speed_limit))  $update['speed_limit']  = $v2Plan->speed_limit;
-            if ($v2Plan && isset($v2Plan->group_id))     $update['group_id']     = $v2Plan->group_id;
-
-            $update = app(\App\Services\SubscriptionOrderPolicy::class)->prepare($user, $update);
-            $newExpTs = $update['expired_at'];
-            DB::table('v2_user')->where('email', $email)->update($update);
-
-            if ($trxId) {
-                $logger->finalize($trxId, [
-                    'reference_type' => 'v2_user',
-                    'reference_id'   => $user->id ?? null,
-                    'user_ids'       => [$user->id ?? null],
-                    'extra_meta'     => [
-                        'unit_price'      => $start['unit_price']  ?? null,
-                        'expired_before'  => $oldExpTs,
-                        'expired_after'   => $newExpTs,
-                        'plan_key_after'  => $period,
-                        'tariff_group_id' => $tariffGroupId,
-                        'tariff_group_name' => $start['tariff_group_name'] ?? null,                        
-                    ],
-                ]);
-            }
-
-            DB::commit();
-            return response()->json(['status' => 'ok','expired_at' => $newExpTs]);
-        } catch (\Throwable $e) {
-            DB::rollBack();
-            if (!empty($trxId)) {
-                try { $logger->fail($trxId, ['reason' => 'extend_failed','error'  => $e->getMessage(),'email'  => $email,'plan'   => $period]); } catch (\Throwable $e2) {}
-            }
-            return response()->json(['status' => 'error', 'message' => $e instanceof \DomainException ? $e->getMessage() : 'تمدید انجام نشد'], $e instanceof \DomainException ? 422 : 500);
-        }
+        $data = $request->validate(['email' => ['required', 'email'], 'period' => ['required', 'in:1m,3m,6m,12m'],
+            'request_id' => ['nullable', 'uuid'], 'tariff_group_id' => ['nullable', 'integer', 'exists:panel_tariff_groups,id']]);
+        $owner = $request->user();
+        if (!$owner) return response()->json(['message' => 'Unauthorized'], 401);
+        $owner = DB::table('panel_users')->where('id', $owner->id)->first();
+        if (!$owner) return response()->json(['message' => 'Panel user not found'], 404);
+        $result = app(\App\Services\PanelAccountActionService::class)->renewAccountForPanelUser(
+            $owner, $data['email'], $data['period'], isset($data['tariff_group_id']) ? (int) $data['tariff_group_id'] : null, requestId: $data['request_id'] ?? null);
+        return response()->json(['status' => !empty($result['ok']) ? 'ok' : 'error'] + $result, !empty($result['ok']) ? 200 : 422);
     }
 
     public function topup(Request $request)
     {
-        $me = $request->user();
-
-        if (!$me) {
-            return response()->json(['status' => 'error', 'message' => 'Unauthorized'], 401);
-        }
-
-        $data = $request->validate([
-            'email' => ['required', 'email'],
-            'gb' => ['required', 'integer', 'min:1'],
-            'tariff_group_id' => ['nullable', 'integer', 'exists:panel_tariff_groups,id'],
-        ]);
-
-        $panelUser = DB::table('panel_users')->where('id', $me->id)->first();
-
-        if (!$panelUser && !empty($me->email)) {
-            $panelUser = DB::table('panel_users')->where('email', strtolower($me->email))->first();
-        }
-
-        if (!$panelUser) {
-            return response()->json(['status' => 'error', 'message' => 'Panel user not found'], 404);
-        }
-
-        $result = app(PanelAccountActionService::class)->topupTrafficForPanelUser(
-            $panelUser,
-            strtolower(trim($data['email'])),
-            (int) $data['gb'],
-            isset($data['tariff_group_id']) ? (int) $data['tariff_group_id'] : null
-        );
-
-        if (empty($result['ok'])) {
-            return response()->json([
-                'status' => 'error',
-                'message' => $result['message'] ?? 'خرید ترافیک انجام نشد',
-            ], 422);
-        }
-
-        return response()->json([
-            'status' => 'ok',
-            'd_after' => $result['d_after'] ?? null,
-            'expired_at' => $result['expired_at'] ?? null,
-            'transaction_id' => $result['transaction_id'] ?? null,
-        ]);
+        $data = $request->validate(['email' => ['required', 'email'], 'gb' => ['required', 'integer', 'min:1'],
+            'request_id' => ['nullable', 'uuid'], 'tariff_group_id' => ['nullable', 'integer', 'exists:panel_tariff_groups,id']]);
+        $owner = $request->user();
+        if (!$owner) return response()->json(['message' => 'Unauthorized'], 401);
+        $owner = DB::table('panel_users')->where('id', $owner->id)->first();
+        if (!$owner) return response()->json(['message' => 'Panel user not found'], 404);
+        $result = app(\App\Services\PanelAccountActionService::class)->topupTrafficForPanelUser(
+            $owner, $data['email'], (int) $data['gb'], isset($data['tariff_group_id']) ? (int) $data['tariff_group_id'] : null, requestId: $data['request_id'] ?? null);
+        return response()->json(['status' => !empty($result['ok']) ? 'ok' : 'error'] + $result, !empty($result['ok']) ? 200 : 422);
     }
 
     private function resolveTariffGroupId(int $tariffGroupId = 0, string $groupType = 'time'): int

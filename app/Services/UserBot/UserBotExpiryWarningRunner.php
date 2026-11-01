@@ -146,7 +146,7 @@ class UserBotExpiryWarningRunner
                 ->sendMessage(
                     $session->telegram_chat_id,
                     $this->warningText($snapshot, $expiredAt, $isVolume),
-                    UserBotKeyboard::user($isVolume)
+                    UserBotKeyboard::user($isVolume, app(AccountTrafficResetPolicy::class)->hasPeriodicReset($snapshot))
                 );
 
             $session->forceFill([
@@ -192,7 +192,9 @@ class UserBotExpiryWarningRunner
             . "کاربر عزیز، کمتر از ۲۴ ساعت تا پایان اعتبار اکانت شما باقی مانده است.\n\n"
             . "👤 نام کاربری: <code>{$username}</code>\n"
             . "📅 تاریخ انقضا: <b>{$date}</b>\n\n"
-            . "برای جلوگیری از قطع‌شدن سرویس، لطفاً از گزینه «{$action}» استفاده کنید.";
+            . (!empty($snapshot['reservation'])
+                ? '📦 طرح رزرو: '.e($snapshot['reservation']['title'])."\n".e($snapshot['reservation']['activation_label'])
+                : "برای جلوگیری از قطع‌شدن سرویس، لطفاً از گزینه «{$action}» استفاده کنید.");
     }
 
     private function formatUsername(?string $email): string

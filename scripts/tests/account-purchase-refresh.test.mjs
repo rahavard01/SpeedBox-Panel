@@ -30,7 +30,7 @@ for (const role of ['admin', 'representative']) {
     const posts=[],reads=[],toasts=ui.useToast().toasts;toasts.splice(0);
     let release;const pause=new Promise(done=>{release=done});
     ui.http.post=async(url,body)=>{if(url==='/users/online')return {data:{data:[]}};assert.equal(url,(role==='admin'?'/admin':'')+'/users/'+(kind==='renew'?'extend':'topup'));posts.push({url,body});if(scenario==='busy')await pause;if(scenario==='post-error')throw {response:{data:{message:'Server rejected purchase'}}};return {data:{}};};
-    ui.http.get=async url=>{reads.push(url);if(scenario==='read-error')throw Error('Offline');if(scenario==='changed-modal')Object.assign(state.viewUserData,{id:12,email:'other@owner.com',d:77});return {data:{data:scenario==='wrong-id'?{...fresh,id:12}:{...fresh}}};};
+    ui.http.get=async url=>{reads.push(url);if(scenario==='read-error')throw Error('Offline');if(url==='/user/wallet')return {data:{credit:321000}};if(scenario==='changed-modal')Object.assign(state.viewUserData,{id:12,email:'other@owner.com',d:77});return {data:{data:scenario==='wrong-id'?{...fresh,id:12}:{...fresh}}};};
     const purchase=kind==='renew'?()=>state.submitExtend():()=>state.submitTopup();
     const first=purchase();
     if(scenario==='busy'){await purchase();assert.equal(posts.length,1,'Double click cannot charge twice');release();}
@@ -41,7 +41,8 @@ for (const role of ['admin', 'representative']) {
     if(scenario==='post-error'){
       assert.equal(reads.length,0);assert.equal(successes.length,0);assert.deepEqual(Array.from(errors,item=>item.message),['Server rejected purchase']);
     }else{
-      assert.deepEqual(reads,['/users/11/details']);assert.equal(successes.length,1);assert.equal(errors.length,0,'A post-purchase read failure adds no error toast');
+      assert.deepEqual(reads,role==='representative'?['/users/11/details','/user/wallet']:['/users/11/details']);assert.equal(successes.length,1);assert.equal(errors.length,0,'A post-purchase read failure adds no error toast');
+      if(role==='representative'&&scenario!=='read-error')assert.equal(state.walletCredit,321000,'Successful purchases refresh the drawer wallet independently of account details');
       if(['read-error','wrong-id'].includes(scenario))assert.equal(state.users[0].d,900);
       else{
         for(const list of [state.users,state.tokenHit])for(const [field,value]of Object.entries(fresh))assert.equal(list[0][field],value,field+' refreshes in both lists');

@@ -15,7 +15,7 @@ foreach (['APP_ENV'=>'testing','APP_DEBUG'=>'false','APP_URL'=>'https://audit.ex
     'DB_CONNECTION'=>'sqlite','DB_DATABASE'=>':memory:','DB_URL'=>'','CACHE_STORE'=>'array','SESSION_DRIVER'=>'array','QUEUE_CONNECTION'=>'database',
     'LOG_CHANNEL'=>'null','MAIL_MAILER'=>'array','LARAVEL_STORAGE_PATH'=>$temporary.'/storage',
     'APP_CONFIG_CACHE'=>$temporary.'/config.php','APP_ROUTES_CACHE'=>$temporary.'/routes.php','APP_EVENTS_CACHE'=>$temporary.'/events.php',
-    'SPEEDBOX_TRUSTED_PROXIES'=>'127.0.0.1,::1','SPEEDBOX_API_RATE_LIMIT'=>'60','SPEEDBOX_NODE_RATE_LIMIT'=>'1200',
+    'SPEEDBOX_TRUSTED_PROXIES'=>'127.0.0.1,::1','SPEEDBOX_NODE_RATE_LIMIT'=>'1200',
     'SPEEDBOX_NODE_IP_RATE_LIMIT'=>'12000','SPEEDBOX_WEBHOOK_RATE_LIMIT'=>'600','SANCTUM_STATEFUL_DOMAINS'=>'',
     'CORS_ALLOWED_ORIGINS'=>'https://allowed.example.test','CORS_ALLOWED_ORIGINS_PATTERNS'=>''] as $key=>$value) {
     putenv("$key=$value"); $_ENV[$key]=$_SERVER[$key]=$value;
@@ -68,7 +68,7 @@ try {
     $check($normalize(realpath((new ReflectionClass(App\Http\Kernel::class))->getFileName()))===$normalize(realpath($root.'/app/Http/Kernel.php')),'This project source is loaded');
     $check(isset($console->all()['inspire']),'Console route registered');
     $events=$app->make(Illuminate\Console\Scheduling\Schedule::class)->events();
-    $check(count($events)===14,'All 13 existing schedules and the tunnel monitor registered');
+    $check(count($events)===17,'Existing schedules, reservation activation/notifications and wallet warnings registered');
     $named=[];
     foreach($events as $event) if($event->description!==null) $named[$event->description]=$event;
     foreach(['connections:expired-leases','subscription:traffic-reset','announcements:due-tick',
@@ -79,6 +79,10 @@ try {
     }
     foreach(['crypto:verify-topups','userbot:verify-crypto-orders'] as $command) {
         $check(count(array_filter($events,static fn($event)=>str_contains($event->command??'',$command)))===1,'Existing command schedule preserved: '.$command);
+    }
+    foreach(['subscription-reservation-activation','subscription-reservation-notifications','panel-wallet:low-balance-warning'] as $name) {
+        $event=$named[$name]??null;
+        $check($event!==null && $event->expression==='* * * * *' && $event->withoutOverlapping,'Reservation/wallet schedule runs every minute without overlapping: '.$name);
     }
     $monitor=$named['tunnels:outage-monitor']??null;
     $check($monitor!==null && $monitor->expression==='* * * * *' && $monitor->withoutOverlapping,'Tunnel monitor runs every minute without overlapping');
@@ -116,8 +120,8 @@ try {
         $check(str_starts_with($data['url'],$value?'https:':'http:'),'HTTPS setting resets per request');
     }
     $routes::middleware('api')->get('/api/_final_audit/rate',fn()=>response('ok'));
-    $statuses=[];for($i=0;$i<61;$i++)$statuses[]=$request('/api/_final_audit/rate',[],['REMOTE_ADDR'=>'192.0.2.77'])->getStatusCode();
-    $check(count(array_filter($statuses,fn($s)=>$s===200))===60&&end($statuses)===429,'API request 61 is throttled');
+    $statuses=[];for($i=0;$i<75;$i++)$statuses[]=$request('/api/_final_audit/rate',[],['REMOTE_ADDR'=>'192.0.2.77'])->getStatusCode();
+    $check(count(array_filter($statuses,fn($s)=>$s===200))===75,'General panel requests remain unthrottled beyond the former ceiling');
     $limiter=Illuminate\Support\Facades\RateLimiter::limiter('api');
     $limits=[];foreach([1,2] as $id){$r=Illuminate\Http\Request::create('http://panel.example.test/api/v2/server/config','GET',['machine_id'=>1,'node_id'=>$id]);$limits[]=$limiter($r);}
     $check($limits[0][0]->key!==$limits[1][0]->key&&$limits[0][1]->key===$limits[1][1]->key,'Node buckets separate, shared IP ceiling retained');

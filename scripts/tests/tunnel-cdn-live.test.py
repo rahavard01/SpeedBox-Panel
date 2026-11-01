@@ -2,7 +2,7 @@
 """Real engines behind a local TLS-terminating edge with a different origin certificate.
 No systemd, external network, global routes or privileged ports are used.
 """
-import contextlib,gzip,hashlib,importlib.util,json,os,pathlib,socket,ssl,subprocess,tempfile,threading,time
+import contextlib,gzip,hashlib,importlib.util,json,os,pathlib,select,socket,ssl,subprocess,tempfile,threading,time
 ROOT=pathlib.Path(__file__).resolve().parents[2]
 spec=importlib.util.spec_from_file_location('wat_test',ROOT/'scripts/tests/wattunnel-host.test.py');fixture=importlib.util.module_from_spec(spec);spec.loader.exec_module(fixture)
 def port():
@@ -18,44 +18,56 @@ def transfer(entry,udp=False):
         assert reply==payload,'payload integrity'
 class Edge:
     def __init__(self,origin,cert,key,tls):
-        self.s=socket.socket();self.s.bind(('127.0.0.1',0));self.s.listen(64);self.s.settimeout(.2);self.port=self.s.getsockname()[1];self.closed=False;self.count=0;self.sni=[];self.streams=[]
+        self.s=socket.socket();self.s.bind(('127.0.0.1',0));self.s.listen(64);self.s.settimeout(.2);self.port=self.s.getsockname()[1];self.closed=False;self.count=0;self.sni=[];self.workers=[];self.errors=[]
         ctx=ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER);ctx.load_cert_chain(cert,key);ctx.set_alpn_protocols(['h2','http/1.1']);ctx.set_servername_callback(lambda sock,name,ctx:self.sni.append(name))
         def connection(raw):
             downstream=upstream=None
             try:
+                if self.closed:return
                 raw.settimeout(4);downstream=ctx.wrap_socket(raw,server_side=True) if tls else raw
                 upstream=socket.create_connection(('127.0.0.1',origin),3)
                 if tls:
                     client=ssl._create_unverified_context();alpn=downstream.selected_alpn_protocol()
                     if alpn:client.set_alpn_protocols([alpn])
                     upstream=client.wrap_socket(upstream,server_hostname='tunnel.example.com')
-                downstream.settimeout(None);upstream.settimeout(None);self.count+=1;self.streams.extend([downstream,upstream])
-                def pipe(a,b):
-                    try:
-                        while True:
-                            data=a.recv(65536)
-                            if not data:break
-                            b.sendall(data)
-                    except OSError:pass
-                    finally:
-                        with contextlib.suppress(OSError):a.shutdown(socket.SHUT_RDWR)
-                        with contextlib.suppress(OSError):b.shutdown(socket.SHUT_RDWR)
-                worker=threading.Thread(target=pipe,args=(downstream,upstream),daemon=True);worker.start();pipe(upstream,downstream)
-            except OSError:pass
+                self.count+=1
+                streams=(downstream,upstream);pending={stream:bytearray() for stream in streams}
+                for stream in streams:stream.setblocking(False)
+                # One owner performs every SSL read/write/close. Concurrent
+                # SSLSocket operations and cross-thread shutdown can corrupt
+                # TLS state or crash the Python/OpenSSL test proxy.
+                while not self.closed:
+                    readers=[stream for stream in streams if len(pending[streams[1] if stream is streams[0] else streams[0]])<1048576]
+                    buffered=[stream for stream in readers if isinstance(stream,ssl.SSLSocket) and stream.pending()]
+                    ready,writable,_=select.select(readers,[stream for stream in streams if pending[stream]],[],0 if buffered else .2)
+                    for stream in set(ready+buffered):
+                        try:data=stream.recv(65536)
+                        except (BlockingIOError,ssl.SSLWantReadError,ssl.SSLWantWriteError):continue
+                        if not data:return
+                        pending[streams[1] if stream is streams[0] else streams[0]].extend(data)
+                    for stream in writable:
+                        try:sent=stream.send(pending[stream])
+                        except (BlockingIOError,ssl.SSLWantReadError,ssl.SSLWantWriteError):continue
+                        if not sent:return
+                        del pending[stream][:sent]
+            except OSError as error:self.errors.append(type(error).__name__+': '+str(error))
             finally:
                 for conn in [downstream,upstream,raw]:
                     if conn:
                         with contextlib.suppress(OSError):conn.close()
         def serve():
             while not self.closed:
-                try:raw,_=self.s.accept();threading.Thread(target=connection,args=(raw,),daemon=True).start()
+                try:
+                    raw,_=self.s.accept();worker=threading.Thread(target=connection,args=(raw,),daemon=True);self.workers.append(worker);worker.start()
                 except socket.timeout:pass
                 except OSError:return
-        threading.Thread(target=serve,daemon=True).start()
+        self.listener=threading.Thread(target=serve,daemon=True);self.listener.start()
     def close(self):
+        if self.closed:return
         self.closed=True;self.s.close()
-        for c in self.streams:
-            with contextlib.suppress(OSError):c.shutdown(socket.SHUT_RDWR);c.close()
+        self.listener.join(timeout=1)
+        for worker in self.workers:worker.join(timeout=8)
+        assert not any(worker.is_alive() for worker in self.workers),'TLS edge workers did not stop'
 
 with tempfile.TemporaryDirectory(prefix='speedbox-cdn-live-') as tmp:
     tmp=pathlib.Path(tmp);bins={}
@@ -90,7 +102,7 @@ with tempfile.TemporaryDirectory(prefix='speedbox-cdn-live-') as tmp:
             while True:
                 try:transfer(entry);transfer(entry,udp=True);break
                 except (OSError,AssertionError):
-                    if time.monotonic()>deadline:raise AssertionError(engine+'/'+carrier+' failed: '+'\n'.join(p.read_text()[-1600:] for p in logs))
+                    if time.monotonic()>deadline:raise AssertionError(engine+'/'+carrier+' failed: '+'\n'.join(p.read_text()[-1600:] for p in logs)+'\nedge errors: '+repr(edge.errors[-8:]))
                     time.sleep(.15)
             assert edge.count>0,'edge was bypassed'
             if secure:assert 'tunnel.example.com' in edge.sni,'domain not preserved as SNI'

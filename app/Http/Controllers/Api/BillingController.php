@@ -70,6 +70,7 @@ class BillingController extends Controller
         }
 
         // خروجی مطابق انتظارات فرانت
+        app(\App\Services\SubscriptionReservationHistory::class)->attach($rows);
         $out = $rows->map(function ($r) use ($user, $idToUsername) {
 
             // علامت مبلغ بر اساس جهت تراکنش
@@ -168,6 +169,8 @@ class BillingController extends Controller
                 'signed_amount'     => $signed,                          // برای کارت موبایل صورت‌حساب
                 'balance_after'     => (int) $r->balance_after,
                 'status'            => $r->status ?? 'unknown',
+                'reservation_state' => $r->reservation_history ? end($r->reservation_history)['state'] : null,
+                'reservation_history' => $r->reservation_history,
                 'performed_by_role' => \App\Services\TransactionOperator::displayRole($r->performed_by_role ?? null, $meta),
                 'meta'              => [
                     'operator_source' => $meta['operator_source'] ?? null,
@@ -247,6 +250,7 @@ class BillingController extends Controller
                 ->toArray();
         }
 
+        app(\App\Services\SubscriptionReservationHistory::class)->attach($rows);
         $out = $rows->map(function ($r) use ($idToUsername) {
             $base = (int) $r->amount;
             $dir  = strtolower((string) $r->direction);
@@ -338,6 +342,8 @@ class BillingController extends Controller
                 'signed_amount'     => $signed,
                 'balance_after'     => (int) $r->balance_after,
                 'status'            => $r->status ?? 'unknown',
+                'reservation_state' => $r->reservation_history ? end($r->reservation_history)['state'] : null,
+                'reservation_history' => $r->reservation_history,
                 'performed_by_role' => \App\Services\TransactionOperator::displayRole($r->performed_by_role ?? null, $meta),
                 'operator'          => \App\Services\TransactionOperator::displayRole($r->performed_by_role ?? null, $meta),
                 'meta'              => $meta,
@@ -363,3 +369,4 @@ class BillingController extends Controller
     }
 
 }
+

@@ -752,6 +752,19 @@ func (s *Service) prepareUserState(users []model.UserSpec) (prevUsers []model.Us
 	s.metricsMu.RUnlock()
 	prevHash = s.lastUserHash
 
+	if s.tracker != nil {
+		if s.kernel != nil && s.kernel.IsRunning() {
+			traffic, alive, count, err := s.kernel.GetUserTraffic(context.Background())
+			if err == nil {
+				s.tracker.Process(traffic, alive, count)
+			}
+		}
+		generations := make(map[int]uint64, len(users))
+		for _, user := range users {
+			generations[user.ID] = user.SubscriptionGeneration
+		}
+		s.tracker.SetGenerations(generations)
+	}
 	s.limiter.UpdateUsers(users)
 	s.speedTracker.UpdateBuckets()
 
@@ -765,6 +778,19 @@ func (s *Service) prepareUserState(users []model.UserSpec) (prevUsers []model.Us
 func (s *Service) restoreUserState(users []model.UserSpec, hash string) {
 	if users == nil {
 		users = []model.UserSpec{}
+	}
+	if s.tracker != nil {
+		if s.kernel != nil && s.kernel.IsRunning() {
+			traffic, alive, count, err := s.kernel.GetUserTraffic(context.Background())
+			if err == nil {
+				s.tracker.Process(traffic, alive, count)
+			}
+		}
+		generations := make(map[int]uint64, len(users))
+		for _, user := range users {
+			generations[user.ID] = user.SubscriptionGeneration
+		}
+		s.tracker.SetGenerations(generations)
 	}
 	s.limiter.UpdateUsers(users)
 	s.speedTracker.UpdateBuckets()
@@ -1050,7 +1076,7 @@ func (s *Service) pushReportAsync() {
 		return
 	}
 
-	traffic := s.tracker.FlushTraffic()
+	traffic, batches := s.tracker.FlushVersionedTraffic()
 	aliveIPs := s.tracker.FlushAliveIPs()
 	online := s.tracker.CurrentOnline()
 	status := monitor.Collect()
@@ -1059,10 +1085,10 @@ func (s *Service) pushReportAsync() {
 
 	go func() {
 		defer s.pushActive.Store(false)
-		if err := s.sink.Report(controlplane.ReportPayload{Traffic: traffic, Alive: aliveIPs, Online: online, CPU: status.CPU, Mem: [2]uint64{status.MemTotal, status.MemUsed}, Swap: [2]uint64{status.SwapTotal, status.SwapUsed}, Disk: [2]uint64{status.DiskTotal, status.DiskUsed}, Metrics: metrics}); err != nil {
+		if err := s.sink.Report(controlplane.ReportPayload{Traffic: traffic, TrafficBatches: batches, Alive: aliveIPs, Online: online, CPU: status.CPU, Mem: [2]uint64{status.MemTotal, status.MemUsed}, Swap: [2]uint64{status.SwapTotal, status.SwapUsed}, Disk: [2]uint64{status.DiskTotal, status.DiskUsed}, Metrics: metrics}); err != nil {
 			nlog.Core().Warn("failed to push report", "error", err)
 			if len(traffic) > 0 {
-				s.tracker.RestoreTraffic(traffic)
+				s.tracker.RestoreVersionedTraffic(traffic, batches)
 			}
 			if len(aliveIPs) > 0 {
 				s.tracker.RestoreAliveIPs(aliveIPs)
@@ -1080,14 +1106,14 @@ func (s *Service) pushReportSync() {
 	if !s.sink.SupportsReporting() {
 		return
 	}
-	traffic := s.tracker.FlushTraffic()
+	traffic, batches := s.tracker.FlushVersionedTraffic()
 	aliveIPs := s.tracker.FlushAliveIPs()
 	online := s.tracker.CurrentOnline()
 	status := monitor.Collect()
 	metrics := s.buildMetrics(status)
 	metrics["kernel_status"] = s.kernel.IsRunning()
 
-	if err := s.sink.Report(controlplane.ReportPayload{Traffic: traffic, Alive: aliveIPs, Online: online, CPU: status.CPU, Mem: [2]uint64{status.MemTotal, status.MemUsed}, Swap: [2]uint64{status.SwapTotal, status.SwapUsed}, Disk: [2]uint64{status.DiskTotal, status.DiskUsed}, Metrics: metrics}); err != nil {
+	if err := s.sink.Report(controlplane.ReportPayload{Traffic: traffic, TrafficBatches: batches, Alive: aliveIPs, Online: online, CPU: status.CPU, Mem: [2]uint64{status.MemTotal, status.MemUsed}, Swap: [2]uint64{status.SwapTotal, status.SwapUsed}, Disk: [2]uint64{status.DiskTotal, status.DiskUsed}, Metrics: metrics}); err != nil {
 		nlog.Core().Warn("failed to push final report", "error", err)
 	}
 }
@@ -1206,6 +1232,8 @@ func computeUserHash(users []model.UserSpec) string {
 		h.Write(buf[:])
 		io.WriteString(h, u.UUID)
 		binary.LittleEndian.PutUint64(buf[:], uint64(u.SpeedLimit))
+		h.Write(buf[:])
+		binary.LittleEndian.PutUint64(buf[:], u.SubscriptionGeneration)
 		h.Write(buf[:])
 		binary.LittleEndian.PutUint64(buf[:], uint64(u.DeviceLimit))
 		h.Write(buf[:])

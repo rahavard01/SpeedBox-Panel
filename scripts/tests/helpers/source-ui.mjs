@@ -14,13 +14,13 @@ async function compiled() {
   if (bundle) return bundle;
   const loaded = await loadConfigFromFile({ command: 'build', mode: 'production' }, path.join(root, 'vite.config.js'));
   const components = {
-    Users: 'pages/admin/Users.vue', Settings: 'pages/admin/Settings.vue', Partners: 'pages/admin/Partners.vue',
+    AppSettings: 'pages/admin/AppSettings.vue', Users: 'pages/admin/Users.vue', Settings: 'pages/admin/Settings.vue', Partners: 'pages/admin/Partners.vue',
     AdminDashboard: 'pages/admin/Dashboard.vue', Dashboard: 'pages/Dashboard.vue', Panel: 'pages/Panel.vue',
     Billing: 'pages/Billing.vue', Invoices: 'pages/admin/Invoices.vue', Requests: 'pages/admin/Requests.vue',
     Tickets: 'pages/Tickets.vue', Announcements: 'pages/Announcements.vue', Tutorials: 'pages/Tutorials.vue',
     AdminAnnouncements: 'pages/admin/Announcements.vue', AdminTutorials: 'pages/admin/Tutorials.vue',
     UserAccountActions: 'components/UserAccountActions.vue', InvoiceFilterSelect: 'components/InvoiceFilterSelect.vue',
-    AccountPlanSelect: 'components/AccountPlanSelect.vue', GlobalBotFaqs: 'components/GlobalBotFaqs.vue',
+    AccountReservation: 'components/AccountReservation.vue', AccountPlanSelect: 'components/AccountPlanSelect.vue', GlobalBotFaqs: 'components/GlobalBotFaqs.vue',
   };
   const entry = [
     "export * as Vue from 'vue';",
@@ -29,13 +29,15 @@ async function compiled() {
     "export * from '@/composables/useToast';",
     "export * from '@/utils/commonUtils';",
     "export * from '@/speedbox/partner-accounts';",
+    "export * from '@/speedbox/sticky-actions';",
     "export * from '@/speedbox/global-bot-faqs';",
     ...Object.entries(components).map(([name, file]) => `export { default as ${name} } from '@/` + file + "';"),
   ].join('\n');
   const exposes = {
+    'pages/admin/Partners.vue': 'edit,savePartner,form,rows,mode,activeTab,showModal,selectedRow',
     'pages/admin/Settings.vue': 'form,saveAll,toggleUserBotSetting,toggleUserBotCryptoOption',
-    'pages/Panel.vue': 'bootstrapAnnouncements,ticketUnreadCount,totalHeaderBadge,speedboxRefreshPartnerNotices,users,tokenHit,viewUserData,showViewUser,extendChoice,extendBusy,topupGB,topupBusy,tariffPlanGroups,selectedTariffGroupId,submitExtend,submitTopup',
-    'pages/admin/Users.vue': 'users,tokenHit,viewUserData,showViewUser,extendChoice,extendBusy,topupGB,topupBusy,tariffPlanGroups,selectedTariffGroupId,submitExtend,submitTopup',
+    'pages/Panel.vue': 'bootstrapAnnouncements,ticketUnreadCount,totalHeaderBadge,speedboxRefreshPartnerNotices,users,tokenHit,viewUserData,showViewUser,extendChoice,extendBusy,topupGB,topupBusy,tariffPlanGroups,selectedTariffGroupId,submitExtend,submitTopup,toggleExtendPane,toggleTopupPane,reservationWarning,showExtendPane,showTopupPane,viewMode,viewUser,showCreateUser,showCreateResult,showTransactionRecords,transactionRecords,transactionRecordsUser,transactionPagination,showDrawer,drawerOpen,toggleDrawer,fetchLatestWallet,bootstrapBalance,walletCredit,showTariffs,openTariffs',
+    'pages/admin/Users.vue': 'viewIsVolumeAccount,users,tokenHit,viewUserData,showViewUser,extendChoice,extendBusy,topupGB,topupBusy,tariffPlanGroups,selectedTariffGroupId,submitExtend,submitTopup,toggleExtendPane,toggleTopupPane,reservationWarning,showExtendPane,showTopupPane,viewMode,viewUser,showCreateUser,showCreateResult,showTransactionRecords,transactionRecords,transactionRecordsUser,transactionPagination',
   };
   const fixture = {
     name: 'source-ui-test-fixture', enforce: 'pre',
@@ -71,3 +73,6 @@ export async function loadSourceUi(dom) {
     ref: ui.Vue.ref, nextTick: ui.Vue.nextTick, notifications: ui.useToast });
   return { ...module.namespace, css: source.css };
 }
+
+// Headless browser QA can serve this same compiled fixture without a jsdom VM.
+export { compiled as compileSourceUi };

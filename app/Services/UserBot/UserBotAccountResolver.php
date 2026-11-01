@@ -142,6 +142,7 @@ class UserBotAccountResolver
             . "✅ ترافیک باقی‌مانده: <b>" . $this->formatBytes($remain) . "</b>\n"
             . "📅 تاریخ انقضا: <b>{$expireText}</b>\n"
             . "🕒 زمان باقی‌مانده: <b>{$daysText}</b>\n\n"
+            . (!empty($snapshot['reservation']) ? "📦 طرح رزرو: <b>" . e($snapshot['reservation']['title']) . "</b>\n📊 ترافیک: " . e($snapshot['reservation']['traffic_label']) . "\n⏳ " . e($snapshot['reservation']['activation_label']) . "\n\n" : '')
             . "🔗 لینک سابسکرایب:\n"
             . "<code>{$subText}</code>";
     }
@@ -195,6 +196,8 @@ class UserBotAccountResolver
             'token' => $token,
             'sub_link' => $subLink,
             'snapshot' => [
+                'reservation' => app(\App\Services\SubscriptionReservationService::class)->current((int) $user->id),
+                'account_has_periodic_reset' => app(\App\Services\SubscriptionReservationService::class)->periodic($user),
                 'id' => $user->id ?? null,
                 'email' => $user->email ?? null,
                 'transfer_enable' => $user->transfer_enable ?? null,

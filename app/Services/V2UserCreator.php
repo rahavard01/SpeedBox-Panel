@@ -181,6 +181,7 @@ class V2UserCreator
                     'updated_at'       => $nowTs,
                 ];
 
+                if (\Illuminate\Support\Facades\Schema::hasColumn('v2_user', 'account_reset_traffic_method')) $insert['account_reset_traffic_method'] = $planKey === 'volume_gig' ? 2 : (int) ($plan->reset_traffic_method ?? RuntimeSetting::get('reset_traffic_method', 2));
                 $insert['next_reset_at'] = app(SubscriptionTrafficReset::class)->next((object) $insert, $plan, $nowTs);
                 $insert['last_reset_at'] = null;
                 $insert['reset_count'] = 0;

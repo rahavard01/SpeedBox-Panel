@@ -155,13 +155,11 @@ try {
     $app['cache']->flush();
     for ($i=0; $i<3; $i++) $response=$send($auth, '198.51.100.24', 'user', 'GET');
     $check($response->getStatusCode() === 429, 'Normal node polling retains its existing ceiling');
-    config(['speedbox.api_rate_limit'=>1]);
-    foreach ([200,429] as $status) {
+    for ($i=0; $i<75; $i++) {
         $request=Request::create('https://preventive.example.test/api/ping','GET',[],[],[],['REMOTE_ADDR'=>'198.51.100.25','HTTP_ACCEPT'=>'application/json']);
         $response=$http->handle($request);$http->terminate($request,$response);
-        $check($response->getStatusCode() === $status, 'Public API throttling remains active');
+        $check($response->getStatusCode() === 200, 'General panel requests remain outside node-specific rate ceilings');
     }
-    config(['speedbox.api_rate_limit'=>60]);
     config(['speedbox.node_rate_limit'=>1200, 'speedbox.node_ip_rate_limit'=>12000]);
     $app['cache']->flush();
     DB::table('speedbox_connection_leases')->delete();

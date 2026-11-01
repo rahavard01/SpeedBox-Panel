@@ -13,7 +13,7 @@ class SubscriptionTrafficReset
         if (($user->account_group_type ?? '') === 'volume' || !($user->expired_at ?? 0) || !($user->plan_id ?? null)) return null;
         $plan ??= DB::table('v2_plan')->where('id', $user->plan_id)->first();
         if (!$plan) return null;
-        $method = $plan->reset_traffic_method ?? RuntimeSetting::get('reset_traffic_method', 2);
+        $method = $user->account_reset_traffic_method ?? $plan->reset_traffic_method ?? RuntimeSetting::get('reset_traffic_method', 2);
         $from = CarbonImmutable::createFromTimestamp($after ?? time(), 'Asia/Tehran');
         $expiry = CarbonImmutable::createFromTimestamp((int) $user->expired_at, 'Asia/Tehran');
         [$year, $month] = JalaliCalendar::parts($from);
@@ -40,12 +40,26 @@ class SubscriptionTrafficReset
     {
         DB::table('v2_user')->where('banned', 0)->whereNotNull('plan_id')->where('expired_at', '>', time())
             ->where(fn ($query) => $query->whereNull('account_group_type')->orWhere('account_group_type', '<>', 'volume'))
-            ->whereExists(function ($query) {
+            ->where(function ($query) {
+                if (\Illuminate\Support\Facades\Schema::hasColumn('v2_user', 'account_reset_traffic_method')) {
+                    $query->whereIn('account_reset_traffic_method', [0, 1, 3, 4])->orWhere(function ($legacy) {
+                        $legacy->whereNull('account_reset_traffic_method')->whereExists(function ($plan) {
+                            $plan->selectRaw('1')->from('v2_plan')->whereColumn('v2_plan.id', 'v2_user.plan_id')
+                                ->where(function ($methods) {
+                                    $methods->whereIn('reset_traffic_method', [0, 1, 3, 4]);
+                                    if ((int) RuntimeSetting::get('reset_traffic_method', 2) !== 2) $methods->orWhereNull('reset_traffic_method');
+                                });
+                        });
+                    });
+                } else {
+                $query->whereExists(function ($query) {
                 $query->selectRaw('1')->from('v2_plan')->whereColumn('v2_plan.id', 'v2_user.plan_id')
                     ->where(function ($plan) {
                         $plan->whereIn('reset_traffic_method', [0, 1, 3, 4]);
                         if ((int) RuntimeSetting::get('reset_traffic_method', 2) !== 2) $plan->orWhereNull('reset_traffic_method');
                     });
+                });
+                }
             })
             ->where(fn ($query) => $query->whereNull('next_reset_at')->orWhere('next_reset_at', '<=', time()))
             ->orderBy('id')->chunkById(200, function ($users) {
@@ -61,6 +75,7 @@ class SubscriptionTrafficReset
                         $update = ['next_reset_at' => $next];
                         if ($user->next_reset_at !== null && (int) $user->next_reset_at <= time()) {
                             $update += ['u' => 0, 'd' => 0, 'last_reset_at' => time(), 'reset_count' => (int) $user->reset_count + 1, 'traffic_warning_version' => (int) ($user->traffic_warning_version ?? 0) + 1, 'updated_at' => time()];
+                            if ((int) ($user->subscription_generation ?? 0) > 0) $update['subscription_generation'] = (int) ($user->subscription_generation ?? 0) + 1;
                         }
                         DB::table('v2_user')->where('id', $user->id)->update($update);
                         if (array_key_exists('u', $update)) {

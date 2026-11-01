@@ -550,7 +550,7 @@ class UserBotCryptoOrderVerifier
             : ($isVolumePartner && !$isBothPartner);
 
         $keyboard = $session->is_logged_in
-            ? UserBotKeyboard::user($isVolumeAccount)
+            ? UserBotKeyboard::user($isVolumeAccount, app(\App\Services\UserBot\AccountTrafficResetPolicy::class)->hasPeriodicReset($session->account_snapshot ?: []))
             : UserBotKeyboard::guest((bool) $setting->active_users_only, $isVolumePartner && !$isBothPartner);
 
         $bot->sendMessage(
@@ -622,7 +622,7 @@ class UserBotCryptoOrderVerifier
             . "👤 نام کاربری اکانت: <code>" . e($this->formatUsername($order->account_email ?? ($session->account_email ?? null))) . "</code>\n"
             . "📦 نوع سفارش: <b>{$orderTypeText}</b>\n"
             . "🧩 طرح: <b>" . e($this->planFullTitle(is_array($selected) ? $selected : [])) . "</b>\n"
-            . ($order->traffic_gb ? "📊 حجم: <b>{$order->traffic_gb} گیگ</b>\n" : "")
+            . ($order->traffic_gb ? "📊 ترافیک: <b>{$order->traffic_gb} گیگ</b>\n" : "")
             . "💰 مبلغ سفارش: <b>" . number_format((int) $order->amount) . " تومان</b>\n"
             . "💲 ارز: <code>{$order->crypto_asset}</code>\n"
             . "🌐 شبکه: <code>{$order->crypto_network}</code>\n"
@@ -648,7 +648,7 @@ class UserBotCryptoOrderVerifier
             : ($isVolumePartner && !$isBothPartner);
 
         $keyboard = $session->is_logged_in
-            ? UserBotKeyboard::user($isVolumeAccount)
+            ? UserBotKeyboard::user($isVolumeAccount, app(\App\Services\UserBot\AccountTrafficResetPolicy::class)->hasPeriodicReset($session->account_snapshot ?: []))
             : UserBotKeyboard::guest((bool) $setting->active_users_only, $isVolumePartner && !$isBothPartner);
 
         $amount = number_format((int) $order->amount);
@@ -692,6 +692,7 @@ class UserBotCryptoOrderVerifier
             . "شبکه: <code>{$order->crypto_network}</code>\n"
             . "مبلغ پرداخت: <code>{$cryptoAmount}</code>\n\n";
 
+        $result = array_replace($result, $order->payload['subscription_result'] ?? []);
         $selected = $order->payload['selected_plan'] ?? [];
 
         $buyerText = match ($order->order_type) {
@@ -715,6 +716,14 @@ class UserBotCryptoOrderVerifier
                 . "👤 نام کاربری:\n<code>" . $this->formatUsername($result['email'] ?? null) . "</code>\n\n"
                 . "🔗 لینک سابسکرایب:\n<code>{$result['subscribe_url']}</code>",
         };
+
+        if (!empty($result['reserved'])) {
+            $reserve = $result['reservation'];
+            $buyerText = $header . "✅ طرح رزرو شما با موفقیت ثبت شد.\n\n"
+                . "👤 نام کاربری: <code>" . e($this->formatUsername($result['email'] ?? null)) . "</code>\n"
+                . "📦 طرح رزرو: <b>" . e($reserve['title']) . "</b>\n"
+                . "📊 ترافیک: " . e($reserve['traffic_label']) . "\n⏳ " . e($reserve['activation_label']);
+        }
 
         if ($order->order_type === 'buy_account' && !empty($result['subscribe_url'])) {
             $bot->sendQrPhotoOrMessage(

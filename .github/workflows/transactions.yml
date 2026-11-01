@@ -6,6 +6,11 @@ on:
     paths:
       - app/Services/TransactionOperator.php
       - app/Services/TransactionLogger.php
+      - app/Services/SubscriptionReservation*.php
+      - app/Services/UserBot/UserBotReservationGuard.php
+      - database/migrations/2026_10_29_000001_create_subscription_reservations.php
+      - tests/Feature/SubscriptionReservationTest.php
+      - tests/Feature/ReservationConcurrencyTest.php
       - app/Services/SubscriptionOrderPolicy.php
       - app/Services/PanelAccountActionService.php
       - app/Http/Controllers/Api/BillingController.php
@@ -38,3 +43,10 @@ jobs:
           if [ -f tests/Feature/RenewalExpiryTest.php ]; then
             php vendor/bin/phpunit tests/Feature/RenewalExpiryTest.php
           fi
+
+      - name: Reservation lifecycle and payment regressions
+        run: php vendor/bin/phpunit tests/Feature/SubscriptionReservationTest.php
+      - name: Real concurrent purchases
+        run: |
+          dbfile=$(mktemp /tmp/speedbox-reservation-XXXXXXXX.sqlite)
+          DB_CONNECTION=sqlite DB_DATABASE="$dbfile" php vendor/bin/phpunit tests/Feature/ReservationConcurrencyTest.php

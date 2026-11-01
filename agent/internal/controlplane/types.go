@@ -2,6 +2,7 @@ package controlplane
 
 import (
 	"context"
+	"github.com/cedar2025/xboard-node/internal/tracker"
 
 	"github.com/cedar2025/xboard-node/internal/model"
 )
@@ -35,13 +36,13 @@ type APIMetrics struct {
 }
 
 type Bootstrap struct {
- ConnectionAdmission bool
-	PushInterval int
-	PullInterval int
-	Push         PushClient
-	Config       *model.NodeSpec
-	Users        []model.UserSpec
-	Mailbox      *NodeMailbox
+	ConnectionAdmission bool
+	PushInterval        int
+	PullInterval        int
+	Push                PushClient
+	Config              *model.NodeSpec
+	Users               []model.UserSpec
+	Mailbox             *NodeMailbox
 }
 
 type Snapshot struct {
@@ -50,14 +51,15 @@ type Snapshot struct {
 }
 
 type ReportPayload struct {
-	Traffic map[int][2]int64
-	Alive   map[int][]string
-	Online  map[int]int
-	CPU     float64
-	Mem     [2]uint64
-	Swap    [2]uint64
-	Disk    [2]uint64
-	Metrics map[string]interface{}
+	TrafficBatches []tracker.TrafficBatch
+	Traffic        map[int][2]int64
+	Alive          map[int][]string
+	Online         map[int]int
+	CPU            float64
+	Mem            [2]uint64
+	Swap           [2]uint64
+	Disk           [2]uint64
+	Metrics        map[string]interface{}
 }
 
 type PushClient interface {

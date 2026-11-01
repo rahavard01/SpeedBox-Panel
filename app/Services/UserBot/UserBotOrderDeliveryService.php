@@ -238,6 +238,7 @@ class UserBotOrderDeliveryService
         $isBothPartner =
             $this->isBothPartner($setting);
 
+        $result = array_replace($result, $order->payload['subscription_result'] ?? []);
         $buyerText = match ($order->order_type) {
             'buy_traffic' =>
                 "✅ {$result['traffic_gb']} گیگ ترافیک با موفقیت به اکانت زیر اضافه شد:\n\n"
@@ -310,11 +311,21 @@ class UserBotOrderDeliveryService
                 . "</code>",
         };
 
+        if (!empty($result['reserved'])) {
+            $reserve = $result['reservation'];
+            $buyerText = "✅ طرح رزرو شما با موفقیت ثبت شد.\n\n"
+                . "👤 نام کاربری: <code>" . e($this->formatUsername($result['email'] ?? null)) . "</code>\n"
+                . "📦 طرح رزرو: <b>" . e($reserve['title']) . "</b>\n"
+                . "📊 ترافیک: " . e($reserve['traffic_label']) . "\n"
+                . "⏳ " . e($reserve['activation_label']) . "\n"
+                . "هزینه پرداخت شده است و هنگام فعال‌سازی دوباره کسر نمی‌شود.";
+        }
+
         $buyerKeyboard = $buyerSession->is_logged_in
             ? UserBotKeyboard::user(
                 $this->isLoggedInVolumeAccount(
                     $buyerSession
-                )
+                ), app(AccountTrafficResetPolicy::class)->hasPeriodicReset($buyerSession->account_snapshot ?: [])
             )
             : UserBotKeyboard::guest(
                 (bool) $setting->active_users_only,
@@ -899,7 +910,7 @@ class UserBotOrderDeliveryService
             . "</b>\n"
             . (
                 $order->traffic_gb
-                    ? "📊 حجم: <b>"
+                    ? "📊 ترافیک: <b>"
                         . $order->traffic_gb
                         . " گیگ</b>\n"
                     : ""

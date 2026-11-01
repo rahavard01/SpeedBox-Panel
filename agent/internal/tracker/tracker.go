@@ -43,7 +43,10 @@ type Tracker struct {
 
 	// pending accumulates deltas between flushes.
 	// Protected by mu — written by Process, drained by FlushTraffic.
-	pendingTraffic map[int][2]int64
+	pendingTraffic  map[int][2]int64
+	generations     map[int]uint64
+	pendingBatches  map[trafficKey]*TrafficBatch
+	restoredBatches []TrafficBatch
 
 	// live holds the current snapshot, swapped atomically.
 	// Readers load this pointer without any lock.
@@ -62,6 +65,8 @@ func New() *Tracker {
 		lastSeen:       make(map[int][2]int64),
 		pendingTraffic: make(map[int][2]int64),
 		aliveIPsBuf:    make(map[int][]string),
+		generations:    make(map[int]uint64),
+		pendingBatches: make(map[trafficKey]*TrafficBatch),
 	}
 	// Publish initial empty snapshot.
 	t.live.Store(&snapshot{
@@ -107,6 +112,7 @@ func (t *Tracker) Process(
 			cur[0] += deltaUp
 			cur[1] += deltaDown
 			t.pendingTraffic[uid] = cur
+			t.accumulateBatch(uid, deltaUp, deltaDown)
 
 			cycleOut += deltaUp
 			cycleIn += deltaDown

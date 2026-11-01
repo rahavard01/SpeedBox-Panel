@@ -66,6 +66,9 @@ class AccountOperationsController extends Controller
         $result = DB::transaction(function () use ($data, $id, $request) {
             $user = $this->account($id, true);
             $update = array_intersect_key($data, array_flip(self::FIELDS));
+            if (app(\App\Services\SubscriptionReservationService::class)->current($id)) {
+                abort_if(isset($data['panel_plan_id']), 422, 'این اکانت طرح رزرو دارد؛ پیش از تغییر نوع طرح، رزرو را تعیین تکلیف کنید.');
+            }
             if (isset($data['email'])) {
                 $email = strtolower($data['email']);
                 [$local, $domain] = explode('@', $email, 2);
@@ -96,6 +99,7 @@ class AccountOperationsController extends Controller
                     'account_group_type' => $tariff->plan_key === 'volume_gig' ? 'volume' : ($group->group_type ?? 'time'),
                     'account_tariff_group_id' => $group->id, 'account_plan_key' => $tariff->plan_key,
                     'speed_limit' => $plan->speed_limit,
+                    'account_reset_traffic_method' => $tariff->plan_key === 'volume_gig' ? 2 : (int) ($plan->reset_traffic_method ?? \App\Services\RuntimeSetting::get('reset_traffic_method', 2)),
                     'device_limit' => app(TariffConnectionPolicy::class)->resolve((int) $plan->id, (int) $group->id, $tariff->plan_key),
                 ];
             }
@@ -107,6 +111,7 @@ class AccountOperationsController extends Controller
             if (array_intersect(['u', 'd', 'transfer_enable', 'expired_at', 'plan_id'], array_keys($update))) {
                 $update['traffic_warning_version'] = (int) ($user->traffic_warning_version ?? 0) + 1;
             }
+            if (!Schema::hasColumn('v2_user', 'account_reset_traffic_method')) unset($update['account_reset_traffic_method']);
             $update['updated_at'] = time();
             DB::table('v2_user')->where('id', $id)->update($update);
             $after = $this->account($id);
@@ -167,6 +172,7 @@ class AccountOperationsController extends Controller
                 'next_reset_at' => app(SubscriptionTrafficReset::class)->next($user),
                 'traffic_warning_version' => (int) ($user->traffic_warning_version ?? 0) + 1, 'updated_at' => time(),
             ];
+            if ((int) ($user->subscription_generation ?? 0) > 0) $update['subscription_generation'] = (int) ($user->subscription_generation ?? 0) + 1;
             DB::table('v2_user')->where('id', $id)->update($update);
             app(TrafficResetHistory::class)->record($user, $update, 'manual', 'manual', [
                 'reason' => $data['reason'] ?? null, 'admin_id' => $request->user()?->id,
@@ -183,6 +189,7 @@ class AccountOperationsController extends Controller
         $this->confirm($request);
         DB::transaction(function () use ($id, $request) {
             $user = $this->account($id, true);
+            abort_if(app(\App\Services\SubscriptionReservationService::class)->current($id), 422, 'این اکانت طرح رزرو دارد؛ ابتدا رزرو را تعیین تکلیف کنید.');
             abort_if($this->hasOpenBotOrders($user), 422, 'این اکانت سفارش در جریان در ربات دارد؛ ابتدا آن سفارش را تعیین تکلیف کنید.');
             $this->audit($user, $request, 'delete', ['account' => $this->publicAccount($user)]);
             $this->syncBotSessions($user, null);
@@ -204,7 +211,8 @@ class AccountOperationsController extends Controller
 
     private function publicAccount(object $user): array
     {
-        return array_intersect_key((array) $user, array_flip(self::FIELDS));
+        app(\App\Services\SubscriptionReservationPresenter::class)->attach([$user]);
+        return array_intersect_key((array) $user, array_flip(array_merge(self::FIELDS, ['reservation', 'account_has_periodic_reset', 'account_ended'])));
     }
 
     private function currentTariff(object $user): ?object

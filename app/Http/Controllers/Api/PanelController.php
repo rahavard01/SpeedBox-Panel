@@ -113,6 +113,7 @@ class PanelController extends Controller
             ->orderBy('v2_user.created_at', 'asc')
             ->get();
 
+        app(\App\Services\SubscriptionReservationPresenter::class)->attach($rows);
         return response()->json([
             'status' => 'ok',
             'data'   => $rows,
@@ -236,6 +237,7 @@ class PanelController extends Controller
             "12m"      => "یک‌ساله",
         ];
 
+        app(\App\Services\SubscriptionReservationHistory::class)->attach($rows->items());
         $items = collect($rows->items())->map(function ($r) use ($planMap) {
             $meta = [];
 
@@ -290,6 +292,8 @@ class PanelController extends Controller
                 "type"              => $r->type ?? "-",
                 "amount"            => $signed,
                 "status"            => $r->status ?? "unknown",
+                "reservation_state" => $r->reservation_history ? end($r->reservation_history)["state"] : null,
+                "reservation_history" => $r->reservation_history,
                 "performed_by_role" => \App\Services\TransactionOperator::displayRole($r->performed_by_role ?? null, $meta),
 
                 "plan_key"          => $planKey,
@@ -346,6 +350,7 @@ class PanelController extends Controller
             }
         }
 
+        app(\App\Services\SubscriptionReservationPresenter::class)->attach([$user]);
         return response()->json(['status' => 'ok', 'data' => [$user]]);
     }
 
@@ -372,13 +377,14 @@ class PanelController extends Controller
 
         $u = \DB::table('v2_user')
             ->where('email', $email)
-            ->select('email', 'token')
+            ->select('id', 'email', 'token', 'plan_id', 'expired_at', 'u', 'd', 'transfer_enable', 'account_group_type', 'account_tariff_group_id', 'account_reset_traffic_method')
             ->first();
 
         if (!$u || empty($u->token)) {
             return response()->json(['status' => 'ok', 'data' => []], 200);
         }
 
+        app(\App\Services\SubscriptionReservationPresenter::class)->attach([$u]);
         $u->subscribe_url = \App\Utils\Helper::getSubscribeUrl((string) $u->token);
 
         return response()->json(['status' => 'ok', 'data' => [$u]], 200);
@@ -471,4 +477,5 @@ class PanelController extends Controller
     }
 
 }
+
 

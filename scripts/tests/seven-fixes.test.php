@@ -146,7 +146,9 @@ try {
     $owner=DB::table('panel_users')->where('id',$ownerId)->first();
     $group=(int)DB::table('panel_tariff_groups')->where('group_type','time')->where('is_default',1)->value('id');
     $volumeGroup=(int)DB::table('panel_tariff_groups')->where('group_type','volume')->where('is_default',1)->value('id');
-    $plan=DB::table('v2_plan')->insertGetId(['name'=>'Fixture plan','group_id'=>1,'transfer_enable'=>10,'reset_traffic_method'=>2,'created_at'=>time(),'updated_at'=>time()]);
+    // Crypto traffic purchases exercise a monthly-reset account, where extra
+    // traffic is eligible under the shared reservation/renewal policy.
+    $plan=DB::table('v2_plan')->insertGetId(['name'=>'Fixture plan','group_id'=>1,'transfer_enable'=>10,'reset_traffic_method'=>0,'created_at'=>time(),'updated_at'=>time()]);
     foreach([[$group,'1m'],[$group,'gig'],[$group,'test'],[$volumeGroup,'volume_gig']] as [$g,$key])DB::table('panel_plan')->updateOrInsert(['tariff_group_id'=>$g,'plan_key'=>$key],['name'=>'Fixture','default_price'=>100,'enable'=>1,'v2_plan_id'=>$plan]);
     $created=app(App\Services\V2UserCreator::class)->createUsers('fixrep',$plan,1,'1m',false,null,['account_group_type'=>'time','account_tariff_group_id'=>$group,'account_plan_key'=>'1m'],$ownerId);
     $userId=$created['created'][0]['id'];$email=$created['created'][0]['email'];

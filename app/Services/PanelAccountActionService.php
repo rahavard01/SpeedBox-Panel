@@ -3,7 +3,6 @@
 namespace App\Services;
 
 use App\Models\PanelPlan;
-use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
@@ -199,410 +198,106 @@ class PanelAccountActionService
     }
 
     public function renewAccountForPanelUser(
-        object $panelUser,
-        string $email,
-        string $period,
-        ?int $tariffGroupId = null,
-        ?string $operatorSource = null
+        object $panelUser, string $email, string $period, ?int $tariffGroupId = null,
+        ?string $operatorSource = null, ?int $botOrderId = null, ?array $purchaseSnapshot = null, ?string $requestId = null
     ): array {
-        $pricing = app(PanelPricingService::class);
-        $logger = app(TransactionLogger::class);
-
-        $email = strtolower(trim($email));
-        $tariffGroupId = $this->resolveTariffGroupId($tariffGroupId);
-
-        if (!app(PartnerTariffAccessService::class)->canSeeTariffGroup($panelUser, (int)$tariffGroupId)) {
-            return ['ok' => false, 'message' => 'این طرح برای شما فعال نیست'];
-        }
-
-        if (!$email || !in_array($period, ['test', '1m', '3m', '6m', '12m'], true)) {
-            return ['ok' => false, 'message' => 'ورودی تمدید نامعتبر است'];
-        }
-
-        if ((int)($panelUser->role ?? 2) !== 1) {
-            $panelCode = $panelUser->code ?? '';
-            if (!$this->emailBelongsToPanelCode($email, $panelCode)) {
-                return ['ok' => false, 'message' => 'Forbidden'];
-            }
-        }
-
-        $user = $this->findV2UserByEmailSafe($email);
-        if (!$user) {
-            return ['ok' => false, 'message' => 'کاربر یافت نشد'];
-        }
-
-        DB::beginTransaction();
-
-        try {
-            $trxId = null;
-            DB::table('panel_users')->where('id', $panelUser->id)->lockForUpdate()->first();
-            $user = DB::table('v2_user')->where('id', $user->id)->lockForUpdate()->first();
-            if (!$user) throw new \RuntimeException('کاربر یافت نشد.');
-
-            if ((int)($panelUser->role ?? 2) !== 1) {
-                $charge = $pricing->ensureBalanceAndCharge(
-                    (int)$panelUser->id,
-                    $period,
-                    1,
-                    $tariffGroupId,
-                    (int) $user->id
-                );
-
-                if (empty($charge['ok'])) {
-                    DB::rollBack();
-
-                    return [
-                        'ok' => false,
-                        'insufficient_credit' => (($charge['reason'] ?? null) === 'INSUFFICIENT_CREDIT'),
-                        'message' => (($charge['reason'] ?? null) === 'INSUFFICIENT_CREDIT')
-                            ? 'اعتبار شما کافی نیست'
-                            : ($charge['message'] ?? $charge['reason'] ?? 'خطا در محاسبه هزینه تمدید'),
-                    ];
-                }
-
-                $trxId = $charge['transaction_id'] ?? null;
-
-                if ($trxId) {
-                    DB::table('panel_transactions')->where('id', $trxId)->update([
-                        'type' => 'account_extend',
-                    ]);
-                }} else {
-                $trxId = $this->startAdminZeroTransaction(
-                    $panelUser,
-                    'account_extend',
-                    $period,
-                    1,
-                    $tariffGroupId,
-                    [
-                        'source' => 'admin_panel',
-                        'is_admin_free_operation' => true,
-                    ]
-                );
-            }
-
-            $panelPlan = PanelPlan::where('tariff_group_id', $tariffGroupId)
-                ->where('plan_key', $period)
-                ->where('enable', 1)
-                ->first();
-
-            if (!$panelPlan || empty($panelPlan->v2_plan_id)) {
-                throw new \RuntimeException('پلن تمدید پیدا نشد');
-            }
-
-            $v2Plan = DB::table('v2_plan')->where('id', $panelPlan->v2_plan_id)->first();
-
-            $daysMap = ['test' => 1, '1m' => 30, '3m' => 90, '6m' => 180, '12m' => 365];
-            $addDays = $daysMap[$period] ?? 30;
-
-            $nowTs = time();
-            $oldExpTs = (int)($user->expired_at ?? 0);
-            $baseTs = app(SubscriptionOrderPolicy::class)->renewalBaseTimestamp($user, $nowTs);
-            $newExpTs = Carbon::createFromTimestamp($baseTs)->addDays($addDays)->timestamp;
-
-            $update = [
-                'expired_at' => $newExpTs,
-                'updated_at' => $nowTs,
-                'plan_id' => $panelPlan->v2_plan_id,
-                'u' => 0,
-                'd' => 0,
-                'account_plan_name'       => (string) DB::table('panel_tariff_groups')->where('id', $tariffGroupId)->value('name'),
-                'account_group_type'      => 'time',
-                'account_tariff_group_id' => (int) $tariffGroupId,
-                'account_plan_key'        => $period,
-            ];
-
-            if ($v2Plan && isset($v2Plan->transfer_enable)) {
-                $gb = (int)preg_replace('/\D+/', '', (string)$v2Plan->transfer_enable);
-                if ($gb > 0) {
-                    $update['transfer_enable'] = $gb * 1024 * 1024 * 1024;
-                }
-            }
-
-            $update['device_limit'] = app(\App\Services\TariffConnectionPolicy::class)->resolve((int) $update['plan_id'], (int) $update['account_tariff_group_id'], $update['account_plan_key']);
-
-            if ($v2Plan && isset($v2Plan->speed_limit)) {
-                $update['speed_limit'] = $v2Plan->speed_limit;
-            }
-
-            if ($v2Plan && isset($v2Plan->group_id)) {
-                $update['group_id'] = $v2Plan->group_id;
-            }
-
-            $update = app(SubscriptionOrderPolicy::class)->prepare($user, $update);
-            $newExpTs = $update['expired_at'];
-            DB::table('v2_user')->where('id', $user->id)->update($update);
-            app(TrafficResetHistory::class)->renewal($user, $update);
-
-            if ($trxId) {
-                $logger->finalize($trxId, [
-                    'reference_type' => 'v2_user',
-                    'reference_id' => $user->id,
-                    'user_ids' => [$user->id],
-                    'extra_meta' => [
-                        'source' => $operatorSource ?: 'panel',
-                        'operator_source' => $operatorSource,
-                        'expired_before' => $oldExpTs,
-                        'expired_after' => $newExpTs,
-                        'plan_key_after' => $period,
-                        'tariff_group_id' => $tariffGroupId,
-                    ],
-                ]);
-            }
-
-            DB::commit();
-
-            return [
-                'ok' => true,
-                'email' => $email,
-                'expired_at' => $newExpTs,
-                'transaction_id' => $trxId,
-            ];
-        } catch (\Throwable $e) {
-            DB::rollBack();
-
-            return [
-                'ok' => false,
-                'message' => $e instanceof \DomainException ? $e->getMessage() : 'تمدید انجام نشد',
-                'error' => $e->getMessage(),
-            ];
-        }
+        if (!in_array($period, ['test', '1m', '3m', '6m', '12m'], true)) return ['ok' => false, 'message' => 'ورودی تمدید نامعتبر است'];
+        return $this->purchaseExisting($panelUser, $email, $period, 1, $tariffGroupId, $operatorSource, $botOrderId, $purchaseSnapshot, $requestId);
     }
 
     public function topupTrafficForPanelUser(
-        object $panelUser,
-        string $email,
-        int $gb,
-        ?int $tariffGroupId = null,
-        ?string $operatorSource = null,
-        bool $blockExpiredTimeAccount = false
+        object $panelUser, string $email, int $gb, ?int $tariffGroupId = null,
+        ?string $operatorSource = null, bool $blockExpiredTimeAccount = false,
+        ?int $botOrderId = null, ?array $purchaseSnapshot = null, ?string $requestId = null
     ): array {
-        $pricing = app(PanelPricingService::class);
-        $logger = app(TransactionLogger::class);
-
-        $email = strtolower(trim($email));
-        $gb = max(0, $gb);
-
-        if (!$email || $gb < 1) {
-            return ['ok' => false, 'message' => 'ورودی نامعتبر است'];
-        }
-
-        if ((int)($panelUser->role ?? 2) !== 1) {
-            $panelCode = $panelUser->code ?? '';
-            if (!$this->emailBelongsToPanelCode($email, $panelCode)) {
-                return ['ok' => false, 'message' => 'Forbidden'];
-            }
-        }
-
+        if ($gb < 1) return ['ok' => false, 'message' => 'ورودی نامعتبر است'];
         $user = $this->findV2UserByEmailSafe($email);
-        if (!$user) {
-            return ['ok' => false, 'message' => 'کاربر یافت نشد'];
+        if (!$user) return ['ok' => false, 'message' => 'کاربر یافت نشد'];
+        $volume = app(AccountTariffResolver::class)->isVolume($user);
+        return $this->purchaseExisting($panelUser, $email, $volume ? 'volume_gig' : 'gig', $gb,
+            $tariffGroupId, $operatorSource, $botOrderId, $purchaseSnapshot, $requestId);
+    }
+
+    private function purchaseExisting(
+        object $owner, string $email, string $key, int $quantity, ?int $groupId,
+        ?string $source, ?int $orderId, ?array $snapshot, ?string $requestId
+    ): array {
+        $email = strtolower(trim($email));
+        if ((int) ($owner->role ?? 2) !== 1 && !$this->emailBelongsToPanelCode($email, (string) ($owner->code ?? ''))) {
+            return ['ok' => false, 'message' => 'Forbidden'];
         }
-
-        DB::beginTransaction();
-
         try {
-            DB::table('panel_users')->where('id', $panelUser->id)->lockForUpdate()->first();
-            $user = DB::table('v2_user')->where('id', $user->id)->lockForUpdate()->first();
-            if (!$user) throw new \RuntimeException('کاربر یافت نشد');
-            $trxId = null;
-            $bytes = $gb * 1024 * 1024 * 1024;
-
-            $isAdmin = ((int)($panelUser->role ?? 2) === 1);
-
-            $resolver=app(AccountTariffResolver::class);
-            $accountGroup=$resolver->group($user);
-            if (!$accountGroup) {
-                DB::rollBack();
-                return ['ok'=>false,'message'=>'طرح این اکانت قابل تشخیص نیست؛ طرح اکانت را در پنل بررسی کنید.'];
-            }
-            $isVolumeMode=$resolver->isVolume($user);
-            if (!app(PartnerTariffAccessService::class)->canCreateType($panelUser,$isVolumeMode?'volume':'time')) {
-                DB::rollBack();
-                return ['ok'=>false,'message'=>'این نوع پلن برای شما فعال نیست'];
-            }
-
-            if (
-                $blockExpiredTimeAccount
-                && !$isVolumeMode
-                && !SubscriptionValidity::unexpired($user->expired_at ?? null)
-            ) {
-                DB::rollBack();
-
-                return [
-                    'ok' => false,
-                    'account_expired' => true,
-                    'message' => 'اکانت منقضی شده است؛ ابتدا باید اکانت را تمدید کنید',
-                ];
-            }
-
-            $planKeyForTopup = $isVolumeMode ? 'volume_gig' : 'gig';
-
-            // Time top-ups always use the account's own group. Volume purchases may
-            // explicitly select another allowed volume group, but never a global default.
-            $tariffGroupId=(!$isVolumeMode || !$tariffGroupId)?(int)$accountGroup->id:(int)$tariffGroupId;
-            $selectedGroup=DB::table('panel_tariff_groups')->where('id',$tariffGroupId)
-                ->where('group_type',$isVolumeMode?'volume':'time')->where('enable',1)->first();
-            if (!$selectedGroup) {
-                DB::rollBack();
-                return ['ok'=>false,'message'=>'طرح اکانت غیرفعال است یا با نوع اکانت مطابقت ندارد'];
-            }
-
-            if (!app(PartnerTariffAccessService::class)->canSeeTariffGroup($panelUser, (int)$tariffGroupId)) {
-                DB::rollBack();
-
-                return ['ok' => false, 'message' => 'این طرح برای شما فعال نیست'];
-            }
-
-            if ($isVolumeMode) {
-                $minimum = VolumeTrafficPolicy::minimum($tariffGroupId);
-                if ($gb < $minimum) {
-                    DB::rollBack();
-                    return ['ok' => false, 'message' => VolumeTrafficPolicy::message($minimum)];
+            return DB::transaction(function () use ($owner, $email, $key, $quantity, $groupId, $source, $orderId, $snapshot, $requestId) {
+                DB::table('panel_users')->where('id', $owner->id)->lockForUpdate()->first();
+                $requestKey = $requestId ? hash('sha256', $owner->id.':'.$requestId) : null;
+                $fingerprint = hash('sha256', json_encode([$email, $key, $quantity, $groupId]));
+                if ($requestKey && ($previous = DB::table('speedbox_account_purchase_requests')->where('request_key', $requestKey)->first())) {
+                    if (!hash_equals($previous->fingerprint, $fingerprint)) throw new \DomainException('شناسه درخواست با مشخصات سفارش مطابقت ندارد.');
+                    return json_decode($previous->result, true, 512, JSON_THROW_ON_ERROR);
                 }
-            }
-
-            if ((int)($panelUser->role ?? 2) !== 1) {
-                $charge = $pricing->ensureBalanceAndCharge(
-                    (int)$panelUser->id,
-                    $planKeyForTopup,
-                    $gb,
-                    $tariffGroupId
-                );
-
-                if (empty($charge['ok'])) {
-                    DB::rollBack();
-
-                    return [
-                        'ok' => false,
-                        'insufficient_credit' => (($charge['reason'] ?? null) === 'INSUFFICIENT_CREDIT'),
-                        'message' => (($charge['reason'] ?? null) === 'INSUFFICIENT_CREDIT')
-                            ? 'اعتبار شما کافی نیست'
-                            : ($charge['reason'] ?? 'خطا در محاسبه قیمت ترافیک'),
-                    ];
+                $user = DB::table('v2_user')->whereRaw('LOWER(email) = ?', [$email])->lockForUpdate()->first();
+                if (!$user) throw new \DomainException('کاربر یافت نشد');
+                $reservation = app(SubscriptionReservationService::class);
+                $volume = app(AccountTariffResolver::class)->isVolume($user);
+                $extra = $key === 'gig';
+                if ($extra && (!$reservation->periodic($user) || $volume)) throw new \DomainException('خرید ترافیک اضافه برای طرح‌های بدون ریست دوره‌ای فعال نیست؛ از گزینه تمدید اکانت استفاده کنید.');
+                if ($extra && !SubscriptionValidity::unexpired($user->expired_at ?? null)) throw new \DomainException('اکانت منقضی شده است؛ ابتدا اکانت را تمدید کنید.');
+                if (!$extra && $key !== 'volume_gig' && $volume && !$reservation->ended($user)) throw new \DomainException('برای این اکانت از گزینه خرید ترافیک استفاده کنید.');
+                if (!$extra) $reservation->assertAvailable($user, $orderId);
+                $currentGroup = app(AccountTariffResolver::class)->group($user);
+                if ($extra && (!$currentGroup || !$currentGroup->enable || !app(PartnerTariffAccessService::class)->canSeeTariffGroup($owner, (int) $currentGroup->id)
+                    || !app(PartnerTariffAccessService::class)->canCreateType($owner, 'time'))) throw new \DomainException('تعرفه فروش ترافیک برای این اکانت فعال نیست.');
+                $selectedGroup = $extra ? (int) ($currentGroup->id ?? 0) : ($groupId ?: (int) ($currentGroup->id ?? 0));
+                if (!$selectedGroup) throw new \DomainException('طرح اکانت قابل تشخیص نیست؛ با پشتیبانی تماس بگیرید.');
+                // Only an internally stored, paid bot order may supply a frozen purchase snapshot.
+                if ($snapshot !== null && !$orderId) throw new \LogicException('Purchase snapshot requires its bot order.');
+                if (!$extra) {
+                    $reservation->ensureGenerationSupport($user);
+                    $snapshot ??= $reservation->snapshot($owner, $selectedGroup, $key, $key === 'volume_gig' ? $quantity : null);
+                    if ((int) $snapshot['update']['account_tariff_group_id'] !== $selectedGroup || $snapshot['update']['account_plan_key'] !== $key) throw new \DomainException('اطلاعات طرح سفارش مطابقت ندارد.');
+                    $reservation->assertCompatible($user, $snapshot);
+                    $reservation->ensureGenerationSupport((object) array_merge((array) $user, $snapshot['update']));
                 }
-
-                $trxId = $charge['transaction_id'] ?? null;
-
-                if ($trxId) {
-                    DB::table('panel_transactions')->where('id', $trxId)->update([
-                        'type' => 'traffic_purchase',
-                    ]);
-                }} else {
-                $trxId = $this->startAdminZeroTransaction(
-                    $panelUser,
-                    'traffic_purchase',
-                    $planKeyForTopup,
-                    $gb,
-                    $tariffGroupId,
-                    [
-                        'source' => 'admin_panel',
-                        'is_admin_free_operation' => true,
-                        'quantity' => "{$gb}GB",
-                        'is_volume_mode' => $isVolumeMode,
-                    ]
-                );
-            }
-
-            $nowTs = time();
-
-            $dBefore = (int)($user->d ?? 0);
-            $dAfter = $dBefore - $bytes;
-
-            $updateData = [
-                'd' => $dAfter,
-                'traffic_warning_version' => (int) ($user->traffic_warning_version ?? 0) + 1,
-                'updated_at' => $nowTs,
-            ];
-
-            if ($isVolumeMode) {
-                $isExpiredVolumeAccount = !SubscriptionValidity::unexpired($user->expired_at ?? null, $nowTs);
-
-                if ($isExpiredVolumeAccount) {
-                    // دوره قبلی تمام شده؛ مانده ترافیک قبلی نباید منتقل شود.
-                    $dAfter = 0;
-
-                    $updateData['u'] = 0;
-                    $updateData['d'] = 0;
-                    $updateData['transfer_enable'] = $bytes;
+                if ((int) ($owner->role ?? 2) === 1) {
+                    $tx = $this->startAdminZeroTransaction($owner, $extra ? 'traffic_purchase' : 'account_extend', $key, $quantity, $selectedGroup);
+                } else {
+                    $charge = $extra
+                        ? app(PanelPricingService::class)->ensureBalanceAndCharge((int) $owner->id, $key, $quantity, $selectedGroup)
+                        : app(PanelPricingService::class)->chargeSnapshot((int) $owner->id, $snapshot);
+                    if (empty($charge['ok'])) throw new \DomainException(($charge['reason'] ?? '') === 'INSUFFICIENT_CREDIT' ? 'اعتبار شما کافی نیست' : ($charge['message'] ?? 'قیمت طرح مشخص نشده است'));
+                    $tx = (int) $charge['transaction_id'];
                 }
-
-                $updateData['expired_at'] = $nowTs + (30 * 86400);
-
-                $panelPlan = DB::table('panel_plan')
-                    ->where('tariff_group_id', $tariffGroupId)
-                    ->where('plan_key', 'volume_gig')
-                    ->where('enable', 1)
-                    ->first();
-
-                if (!$panelPlan || empty($panelPlan->v2_plan_id)) {
-                    DB::rollBack();
-
-                    return [
-                        'ok' => false,
-                        'message' => 'پلن حجمی انتخاب‌شده با پلن ثبت‌شده مطابقت ندارد',
-                    ];
+                DB::table('panel_transactions')->where('id', $tx)->update(['type' => $extra ? 'traffic_purchase' : 'account_extend']);
+                $result = ['reserved' => false, 'expired_at' => $user->expired_at];
+                if ($extra) {
+                    $down = (int) $user->d - $quantity * 1073741824;
+                    DB::table('v2_user')->where('id', $user->id)->update(['d' => $down,
+                        'traffic_warning_version' => (int) ($user->traffic_warning_version ?? 0) + 1, 'updated_at' => time()]);
+                } else {
+                    $result = $reservation->purchase($user, $owner, $snapshot, $tx, $orderId);
                 }
-
-                $v2Plan = DB::table('v2_plan')
-                    ->where('id', $panelPlan->v2_plan_id)
-                    ->first();
-
-                $updateData['plan_id'] = (int) $panelPlan->v2_plan_id;
-
-                $tariffGroup = DB::table('panel_tariff_groups')->where('id', $tariffGroupId)->first();
-
-                $updateData['account_plan_name'] = (string) ($tariffGroup->name ?? '');
-                $updateData['account_group_type'] = 'volume';
-                $updateData['account_tariff_group_id'] = (int) $tariffGroupId;
-                $updateData['account_plan_key'] = 'volume_gig';
-
-                $updateData['device_limit'] = app(\App\Services\TariffConnectionPolicy::class)->resolve((int) $updateData['plan_id'], (int) $updateData['account_tariff_group_id'], $updateData['account_plan_key']);
-
-                if ($v2Plan && isset($v2Plan->speed_limit)) {
-                    $updateData['speed_limit'] = $v2Plan->speed_limit;
-                }
-
-                if ($v2Plan && isset($v2Plan->group_id)) {
-                    $updateData['group_id'] = $v2Plan->group_id;
-                }
-            }
-
-            DB::table('v2_user')->where('id', $user->id)->update($updateData);
-
-            if ($trxId) {
-                $logger->finalize($trxId, [
-                    'reference_type' => 'v2_user',
-                    'reference_id' => (int)$user->id,
-                    'user_ids' => [(int)$user->id],
-                    'extra_meta' => [
-                        'source' => $operatorSource ?: 'panel',
-                        'operator_source' => $operatorSource,
-                        'quantity' => "{$gb}GB",
-                        'plan_key_after' => $planKeyForTopup,
-                        'tariff_group_id' => $tariffGroupId,
-                        'is_volume_mode' => $isVolumeMode,
-                    ],
+                app(TransactionLogger::class)->finalize($tx, [
+                    'reference_type' => 'v2_user', 'reference_id' => $user->id, 'user_ids' => [$user->id],
+                    'performed_by_id' => $owner->id, 'performed_by_role' => $owner->role ?? 2,
+                    'extra_meta' => ['source' => $source ?: 'panel', 'operator_source' => $source,
+                        'expired_before' => $user->expired_at, 'expired_after' => $result['expired_at'],
+                        'plan_key_after' => $key, 'tariff_group_id' => $selectedGroup,
+                        'reservation_id' => $result['reservation_id'] ?? null, 'reservation_pending' => $result['reserved'],
+                        'force_new_cycle' => !empty($result['fresh_cycle']), 'is_volume_mode' => $key === 'volume_gig',
+                        'purchase_snapshot' => $extra ? null : $snapshot, 'quantity' => $extra || $key === 'volume_gig' ? $quantity.'GB' : null],
                 ]);
-            }
-
-            DB::commit();
-
-            return [
-                'ok' => true,
-                'email' => $email,
-                'traffic_gb' => $gb,
-                'd_after' => $dAfter,
-                'expired_at' => $updateData['expired_at'] ?? ($user->expired_at ?? null),
-                'transaction_id' => $trxId,
-            ];
+                $result = ['ok' => true, 'email' => $email, 'transaction_id' => $tx,
+                    'traffic_gb' => $quantity, 'd_after' => DB::table('v2_user')->where('id', $user->id)->value('d')] + $result;
+                if ($requestKey) DB::table('speedbox_account_purchase_requests')->insert([
+                    'request_key' => $requestKey, 'fingerprint' => $fingerprint, 'result' => json_encode($result, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR), 'created_at' => now(),
+                ]);
+                return $result;
+            }, 3);
+        } catch (\DomainException $e) {
+            return ['ok' => false, 'message' => $e->getMessage(), 'insufficient_credit' => $e->getMessage() === 'اعتبار شما کافی نیست'];
         } catch (\Throwable $e) {
-            DB::rollBack();
-
-            return [
-                'ok' => false,
-                'message' => 'افزایش ترافیک انجام نشد',
-                'error' => $e->getMessage(),
-            ];
+            report($e);
+            return ['ok' => false, 'message' => 'انجام سفارش ناموفق بود؛ دوباره تلاش کنید.'];
         }
     }
 

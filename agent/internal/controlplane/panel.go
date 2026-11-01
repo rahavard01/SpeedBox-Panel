@@ -106,7 +106,7 @@ func (p *PanelControlPlane) Discover(ctx context.Context, metricsFn func() map[s
 }
 
 func (p *PanelControlPlane) Report(payload ReportPayload) error {
-	return p.client.Report(payload.Traffic, payload.Alive, payload.Online, payload.CPU, payload.Mem, payload.Swap, payload.Disk, payload.Metrics)
+	return p.client.Report(payload.Traffic, payload.Alive, payload.Online, payload.CPU, payload.Mem, payload.Swap, payload.Disk, payload.Metrics, payload.TrafficBatches)
 }
 
 func (p *PanelControlPlane) ReportDevices(push PushClient, devices map[int][]string) {
@@ -183,6 +183,6 @@ func (p *panelPushClient) SendDeviceReport(devices map[int][]string) {
 	p.inner.SendDeviceReport(devices)
 }
 
-func (p *PanelControlPlane) ConnectionLease(ctx context.Context, op string, uid int, ip, id string) (bool,int,error) {
- return p.client.ConnectionLease(ctx,op,uid,ip,id)
+func (p *PanelControlPlane) ConnectionLease(ctx context.Context, op string, uid int, ip, id string) (bool, int, error) {
+	return p.client.ConnectionLease(ctx, op, uid, ip, id)
 }
