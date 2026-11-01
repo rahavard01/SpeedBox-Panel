@@ -143,7 +143,9 @@ jobs:
           DB_DATABASE: speedbox_ci
           DB_USERNAME: root
           DB_PASSWORD: speedbox-test
-        run: php artisan migrate --force
+        # The concurrency regression above leaves fixture tables in this
+        # disposable MySQL service; installation must start from an empty schema.
+        run: php artisan migrate:fresh --force
 
   agent:
     runs-on: ubuntu-latest
