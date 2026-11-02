@@ -41,6 +41,9 @@ jobs:
           python3 scripts/verify-origin.py
       - name: Unit tests
         run: php artisan test --testsuite=Unit
+
+      - name: Wallet low-balance warning
+        run: php artisan test --filter=PanelWalletLowBalanceTest
       - name: Octane isolated worker regression
         run: PHP_BIN="$(command -v php)" python3 scripts/tests/octane-runtime.test.py
       - name: SpeedBox integration tests
