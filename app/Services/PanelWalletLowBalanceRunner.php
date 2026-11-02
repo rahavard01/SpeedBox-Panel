@@ -99,11 +99,8 @@ final class PanelWalletLowBalanceRunner
             $response = Http::connectTimeout(3)->timeout(10)->asForm()->post(
                 'https://api.telegram.org/bot'.TelegramConfig::token().'/sendMessage', [
                     'chat_id' => $claim->chat_id,
-                    'text' => $this->message((string) $user->code, (int) $user->credit),
+                    'text' => $this->message((int) $user->credit),
                     'disable_web_page_preview' => true,
-                    'reply_markup' => json_encode(['inline_keyboard' => [[[
-                        'text' => '💳 شارژ کیف پول', 'url' => rtrim(config('app.url'), '/').'/panel/wallet/topup',
-                    ]]]], JSON_UNESCAPED_UNICODE),
                 ]
             );
             if (!$response->successful() || $response->json('ok') !== true) {
@@ -118,11 +115,11 @@ final class PanelWalletLowBalanceRunner
         }
     }
 
-    public function message(string $panelCode, int $balance): string
+    public function message(int $balance): string
     {
         $digits = strtr(number_format($balance), ['0'=>'۰','1'=>'۱','2'=>'۲','3'=>'۳','4'=>'۴','5'=>'۵','6'=>'۶','7'=>'۷','8'=>'۸','9'=>'۹']);
         return "\u{200F}⚠️ اعتبار کیف پول شما رو به پایان است\n\n"
-            ."👤 کد پنل: {$panelCode}\n💰 موجودی فعلی: {$digits} تومان\n\n"
+            ."💰 موجودی فعلی: {$digits} تومان\n\n"
             .'لطفاً برای جلوگیری از اختلال در خرید و تمدید اکانت‌ها، کیف پول خود را شارژ کنید.';
     }
 }

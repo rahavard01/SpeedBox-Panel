@@ -57,10 +57,10 @@ class PanelWalletLowBalanceTest extends TestCase
         $this->balance(120000); $this->assertSame(0, $this->tick()); $this->assertSame(0, $this->tick());
         Http::assertSentCount(1);
         Http::assertSent(function ($request) {
-            $keyboard = json_decode($request['reply_markup'], true)['inline_keyboard'][0][0];
             return $request['chat_id'] === '101' && str_contains($request['text'], '۵۰۰,۰۰۰ تومان')
-                && str_contains($request['text'], '👤 کد پنل: rep') && str_contains($request['text'], '⚠️ اعتبار کیف پول شما رو به پایان است')
-                && $keyboard === ['text' => '💳 شارژ کیف پول', 'url' => 'https://panel.example.test/panel/wallet/topup'];
+                && str_contains($request['text'], '⚠️ اعتبار کیف پول شما رو به پایان است')
+                && !str_contains($request['text'], 'کد پنل') && !str_contains($request['text'], 'rep')
+                && !isset($request['reply_markup']);
         });
     }
 
