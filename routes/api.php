@@ -84,6 +84,9 @@ Route::prefix('v2/server')->group(function () {
     Route::post('/connections/lease', [NodeController::class, 'connectionLease'])
         ->withoutMiddleware('throttle:api')
         ->middleware(\App\Http\Middleware\AuthenticateConnectionLease::class);
+    Route::post('/connections/lease/renew-batch', [NodeController::class, 'renewConnectionLeases'])
+        ->withoutMiddleware('throttle:api')
+        ->middleware(\App\Http\Middleware\AuthenticateConnectionLease::class);
     Route::post('/machine/nodes', [NodeMachineController::class, 'nodes']);
     Route::post('/machine/status', [NodeMachineController::class, 'status']);
 });
@@ -481,6 +484,7 @@ Route::middleware(['auth:sanctum', CheckTokenExpiration::class, CheckUserBanned:
 });
 
 Route::get('/auth/validate-link', [AuthLinkController::class, 'validateLink']);
+
 
 
 

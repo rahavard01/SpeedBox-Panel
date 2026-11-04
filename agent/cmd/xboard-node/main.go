@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"net"
@@ -14,6 +15,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/cedar2025/xboard-node/internal/admission"
 	"github.com/cedar2025/xboard-node/internal/config"
 	"github.com/cedar2025/xboard-node/internal/machine"
 	"github.com/cedar2025/xboard-node/internal/nlog"
@@ -87,6 +89,16 @@ func runWithReload(initialRoot *config.RootConfig, configPath string) {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
 			w.Write([]byte(`{"status":"ok"}`))
+		})
+		mux.HandleFunc("/admission-pressure", func(w http.ResponseWriter, r *http.Request) {
+			host, _, err := net.SplitHostPort(r.RemoteAddr)
+			ip := net.ParseIP(host)
+			if err != nil || ip == nil || !ip.IsLoopback() {
+				http.Error(w, "local access only", http.StatusForbidden)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(admission.PressureSnapshot())
 		})
 		healthSrv = &http.Server{Handler: mux, ReadHeaderTimeout: 5 * time.Second}
 		healthPort = port

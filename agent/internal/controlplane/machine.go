@@ -3,6 +3,7 @@ package controlplane
 import (
 	"context"
 	"fmt"
+	"github.com/cedar2025/xboard-node/internal/admission"
 
 	"github.com/cedar2025/xboard-node/internal/config"
 	"github.com/cedar2025/xboard-node/internal/model"
@@ -154,4 +155,13 @@ func (p *MachinePanelControlPlane) Metrics() APIMetrics {
 
 func (p *MachinePanelControlPlane) ConnectionLease(ctx context.Context, op string, uid int, ip, id string) (bool, int, error) {
 	return p.client.ConnectionLease(ctx, op, uid, ip, id)
+}
+
+func (p *MachinePanelControlPlane) LeaseBatchSize() int { return p.client.LeaseBatchSize() }
+func (p *MachinePanelControlPlane) RenewConnectionLeases(ctx context.Context, leases []admission.Renewal) ([]admission.RenewalResult, error) {
+	return p.client.RenewConnectionLeases(ctx, leases)
+}
+
+func (p *MachinePanelControlPlane) AdmissionPressureKey() string {
+	return p.client.AdmissionPressureKey()
 }

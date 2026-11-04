@@ -27,7 +27,9 @@ class NodeController extends Controller
 
         return response()->json([
             'websocket' => $websocket,
-            'connection_limits' => ['enabled' => true],
+            'connection_limits' => ['enabled' => true, 'renew_batch' => [
+                'version' => 1, 'max_items' => (bool) RuntimeSetting::get('connection_lease_batch_enable', true) ? 64 : 0,
+            ]],
             'settings' => [
                 'push_interval' => (int) RuntimeSetting::get('server_push_interval', 30),
                 'pull_interval' => (int) RuntimeSetting::get('server_pull_interval', 60),
@@ -83,6 +85,41 @@ class NodeController extends Controller
         return response()->json($admission->handle($node, $data));
     }
 
+    public function renewConnectionLeases(Request $request, \App\Services\ConnectionAdmission $admission): JsonResponse
+    {
+        $node = $request->attributes->get('speedbox_node');
+        abort_if(!$node, 422, 'node_id is required.');
+        abort_unless((bool) RuntimeSetting::get('connection_lease_batch_enable', true), 404);
+        $data = $request->validate([
+            'leases' => ['required', 'array', 'min:1', 'max:64'],
+            'leases.*' => ['required', 'array:user_id,source_ip,lease_id'],
+            'leases.*.user_id' => ['required', 'integer', 'min:1'],
+            'leases.*.source_ip' => ['required', 'ip'],
+            'leases.*.lease_id' => ['required', 'string', 'size:64', 'regex:/^[a-f0-9]+$/D'],
+        ]);
+        $leases = $data['leases'];
+        abort_unless(array_is_list($leases), 422, 'leases must be a list.');
+        // Validate every identity before any write. Each item still takes the
+        // existing account lock in its own transaction on the authenticated node.
+        $seen = [];
+        foreach ($leases as $lease) {
+            $ip = inet_ntop(inet_pton($lease['source_ip']));
+            if (str_starts_with($ip, '::ffff:') && filter_var(substr($ip, 7), FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) $ip = substr($ip, 7);
+            $key = (int) $lease['user_id'].'/'.$ip;
+            abort_if(isset($seen[$key]), 422, 'Duplicate renewal identity.');
+            $seen[$key] = true;
+        }
+        $results = [];
+        foreach ($leases as $lease) {
+            $grant = $admission->handle($node, $lease + ['operation' => 'renew']);
+            $results[] = [
+                'user_id' => (int) $lease['user_id'], 'source_ip' => $lease['source_ip'], 'lease_id' => $lease['lease_id'],
+                'allowed' => (bool) $grant['allowed'], 'ttl' => (int) ($grant['ttl'] ?? 0),
+            ];
+        }
+        return response()->json(['results' => $results]);
+    }
+
     private function etag(Request $request, array $payload, string $prefix): JsonResponse
     {
         $etag = '"'.hash('sha256', $prefix.':'.json_encode($payload)).'"';
@@ -92,3 +129,4 @@ class NodeController extends Controller
         return response()->json($payload)->header('ETag', $etag);
     }
 }
+

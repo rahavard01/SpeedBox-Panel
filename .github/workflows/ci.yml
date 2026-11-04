@@ -72,6 +72,10 @@ jobs:
           sudo python3 scripts/tests/ssh-route.test.py --php "$(command -v php)"
       - name: Preventive runtime regression
         run: php scripts/tests/preventive-runtime.test.php
+      - name: Recorded agent rollback safety
+        run: sudo python3 scripts/tests/lease-batch-rollback.test.py
+      - name: Packaged agent source and archive identity
+        run: php scripts/agent-artifacts.php verify "$GITHUB_WORKSPACE"
       - name: Preventive MySQL renewals and concurrent admission
         env:
           SPEEDBOX_TEST_MYSQL_PORT: '3306'
@@ -172,6 +176,8 @@ jobs:
           gzip -dc ../wattunnel-dist/wattun-linux-amd64.gz > "$RUNNER_TEMP/speedbox-wattun"
           chmod 700 "$RUNNER_TEMP/speedbox-wattun"
           echo "SPEEDBOX_TEST_WATTUN=$RUNNER_TEMP/speedbox-wattun" >> "$GITHUB_ENV"
+      - name: Lease admission and HTTP failure race regressions
+        run: go test -race ./internal/admission ./internal/panel ./internal/controlplane -count=1
       - run: go test ./internal/...
       - run: make build-all
       - uses: actions/upload-artifact@v4

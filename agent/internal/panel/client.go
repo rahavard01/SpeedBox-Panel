@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/cedar2025/xboard-node/internal/tracker"
 	"io"
@@ -16,6 +17,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/cedar2025/xboard-node/internal/admission"
 	"github.com/cedar2025/xboard-node/internal/config"
 	"github.com/cedar2025/xboard-node/internal/nlog"
 	"github.com/go-viper/mapstructure/v2"
@@ -41,8 +43,9 @@ type Client struct {
 	configETag string
 	userETag   string
 
-	apiSuccess atomic.Uint64
-	apiFailure atomic.Uint64
+	apiSuccess    atomic.Uint64
+	apiFailure    atomic.Uint64
+	leaseBatchMax atomic.Int64
 }
 
 // NewClient creates a new panel API client.
@@ -101,6 +104,14 @@ func (c *Client) Handshake() (*HandshakeResponse, error) {
 	if err := json.NewDecoder(resp.Body).Decode(&hs); err != nil {
 		return nil, fmt.Errorf("decode handshake: %w", err)
 	}
+	size := hs.ConnectionLimits.RenewBatch.MaxItems
+	if !hs.ConnectionLimits.Enabled || hs.ConnectionLimits.RenewBatch.Version != 1 || size < 2 {
+		size = 0
+	}
+	if size > admission.MaxRenewalBatch {
+		size = admission.MaxRenewalBatch
+	}
+	c.leaseBatchMax.Store(int64(size))
 	return &hs, nil
 }
 
@@ -488,6 +499,8 @@ func (c *Client) SnapshotMetrics() APIMetrics {
 }
 
 // ConnectionLease uses a bounded context so panel failure cannot stall inbound routing.
+func (c *Client) AdmissionPressureKey() string { return c.baseURL }
+
 func (c *Client) ConnectionLease(ctx context.Context, op string, uid int, ip, leaseID string) (bool, int, error) {
 	payload := map[string]interface{}{"operation": op, "user_id": uid, "source_ip": ip, "lease_id": leaseID}
 	c.injectAuth(payload)
@@ -502,9 +515,12 @@ func (c *Client) ConnectionLease(ctx context.Context, op string, uid int, ip, le
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return false, 0, err
+		return false, 0, errors.Join(admission.ErrTransientLease, err)
 	}
 	defer drainAndClose(resp.Body)
+	if resp.StatusCode == http.StatusRequestTimeout || resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500 {
+		return false, 0, fmt.Errorf("%w (HTTP %d)", admission.ErrTransientLease, resp.StatusCode)
+	}
 	if resp.StatusCode != http.StatusOK {
 		return false, 0, fmt.Errorf("connection admission status %d", resp.StatusCode)
 	}
@@ -513,7 +529,7 @@ func (c *Client) ConnectionLease(ctx context.Context, op string, uid int, ip, le
 		TTL     int  `json:"ttl"`
 	}
 	if err := json.NewDecoder(io.LimitReader(resp.Body, 4096)).Decode(&grant); err != nil {
-		return false, 0, err
+		return false, 0, errors.Join(admission.ErrTransientLease, err)
 	}
 	return grant.Allowed, grant.TTL, nil
 }

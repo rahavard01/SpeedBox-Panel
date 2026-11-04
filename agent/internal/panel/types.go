@@ -27,7 +27,11 @@ func (s *StringOrArray) UnmarshalJSON(data []byte) error {
 // HandshakeResponse is the response from POST /api/v2/server/handshake
 type HandshakeResponse struct {
 	ConnectionLimits struct {
-		Enabled bool `json:"enabled"`
+		Enabled    bool `json:"enabled"`
+		RenewBatch struct {
+			Version  int `json:"version"`
+			MaxItems int `json:"max_items"`
+		} `json:"renew_batch"`
 	} `json:"connection_limits"`
 	WebSocket WSConfig `json:"websocket"`
 	Settings  Settings `json:"settings"`

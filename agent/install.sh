@@ -53,6 +53,7 @@ DOWNLOAD_URL=""
 CURRENT_STATE="fresh"
 TMP_DIR=""
 BACKUP_PATH=""
+REQUESTED_BACKUP=""
 SERVICE_EXISTED=0
 SERVICE_ENABLED=0
 CLEANUP_DONE=0
@@ -182,6 +183,7 @@ usage() {
   ACTIONS:
     install      Install or reconcile the configured deployment (default)
     upgrade      Upgrade binary and restart service
+    rollback     Restore a recorded backup using --backup-dir PATH
     uninstall    Remove installed service and binary (config kept unless --purge)
     status       Show current installation status
     help         Show this help
@@ -227,9 +229,13 @@ parse_args() {
     local positional=()
     while [ $# -gt 0 ]; do
         case "$1" in
-            install|upgrade|uninstall|status|help)
+            install|upgrade|rollback|uninstall|status|help)
                 ACTION="$1"
                 shift
+                ;;
+            --backup-dir)
+                REQUESTED_BACKUP="$2"
+                shift 2
                 ;;
             --mode)
                 MODE="$2"
@@ -723,8 +729,34 @@ backup_existing_state() {
     else
         SERVICE_EXISTED=0
     fi
+    printf '%s %s\n' "$SERVICE_ENABLED" "$SERVICE_EXISTED" > "$candidate/rollback-state"
+    install -m 700 "${BASH_SOURCE[0]}" "$candidate/rollback-installer.sh"
+    (cd "$candidate" && sha256sum -- * > SHA256SUMS)
+    chmod 600 "$candidate/rollback-state" "$candidate/SHA256SUMS"
     # Publish the rollback path only after every existing file is backed up.
     BACKUP_PATH="$candidate"
+    log_info "Rollback command: bash $candidate/rollback-installer.sh rollback --backup-dir $candidate"
+}
+
+perform_recorded_rollback() {
+    local resolved enabled existed
+    [ -n "$REQUESTED_BACKUP" ] || { log_error "--backup-dir is required"; return 1; }
+    resolved=$(realpath -e -- "$REQUESTED_BACKUP")
+    [ "$(dirname "$resolved")" = "$(realpath -e -- "$BACKUP_DIR")" ] || { log_error "Backup outside this installation"; return 1; }
+    [ ! -L "$REQUESTED_BACKUP" ] && [ "$(stat -c %u "$resolved")" -eq 0 ] || return 1
+    [ "$(stat -c %a "$resolved")" = 700 ] || return 1
+    [ -f "$resolved/rollback-state" ] && [ -f "$resolved/SHA256SUMS" ] || return 1
+    [ -z "$(find "$resolved" -mindepth 1 -maxdepth 1 -type l -print -quit)" ] || return 1
+    (cd "$resolved" && sha256sum --status -c SHA256SUMS) || { log_error "Backup checksum mismatch"; return 1; }
+    read -r enabled existed < "$resolved/rollback-state"
+    [[ "$enabled $existed" =~ ^[01]\ [01]$ ]] || return 1
+    # Reuse the same recovery path as a failed installation, preserving the
+    # previous service configuration as well as both executable files.
+    BACKUP_PATH="$resolved"
+    SERVICE_ENABLED="$enabled"
+    SERVICE_EXISTED="$existed"
+    rollback_install
+    COMMITTED=1
 }
 
 stop_existing_service() {
@@ -931,6 +963,9 @@ main() {
         install)
             perform_install
             ;;
+        rollback)
+            perform_recorded_rollback
+            ;;
         upgrade)
             perform_upgrade
             ;;
@@ -946,4 +981,5 @@ main() {
 }
 
 main "$@"
+
 

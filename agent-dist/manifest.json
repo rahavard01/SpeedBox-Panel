@@ -4,68 +4,68 @@
       "binaries": {
         "xbctl-linux-amd64": {
           "bytes": 7155874,
-          "sha256": "5c541ceda68a9b5a0311a91eaaacf7ab2f27b08e6cde1a466045f7dcd8a1fa0c"
+          "sha256": "3261629b551f8d9eb39e31ec35a7f9e29438d636ad7a4134968ad67d4c03b284"
         },
         "xboard-node-linux-amd64": {
-          "bytes": 66936994,
-          "sha256": "795995ffa161e87412cebff36ad3c84f7b3ee82de328e913a9849dc4be29fbfc"
+          "bytes": 66994338,
+          "sha256": "5d971d7a2c7860918994549c653f9e8191ba51a4866b83b6fc05e9dcc7bdf253"
         }
       },
-      "bytes": 25984400,
+      "bytes": 26007120,
       "parts": [
         {
           "bytes": 8388608,
           "file": "linux-amd64.tar.gz.part-000",
-          "sha256": "eab33ad6a8bf9ee6786185d0ae31d60e2113e77ef4e79b6c68d556eb43734b0a"
+          "sha256": "69a144fbe9b4a9a711cedbf322ba46b7b6800682f7c32fa897af6c3c4bf5bcef"
         },
         {
           "bytes": 8388608,
           "file": "linux-amd64.tar.gz.part-001",
-          "sha256": "d6bcdcba064c36a90463711680f7a13ac7af03f8b7a6d2b6e01a643094e2d20b"
+          "sha256": "f156633fe438954e9779a9a866b76719d9ed79170b0222b36b44ab564fb9cec7"
         },
         {
           "bytes": 8388608,
           "file": "linux-amd64.tar.gz.part-002",
-          "sha256": "814d7903dfc6d22b2cb68e70ff54ab628d08d121bde8d4c3e6eb35505c94ac7b"
+          "sha256": "6d1854fd84ac4884c9f8a7af498e1f023c9e765795c7571303b016b00b2fea2e"
         },
         {
-          "bytes": 818576,
+          "bytes": 841296,
           "file": "linux-amd64.tar.gz.part-003",
-          "sha256": "90daac05ed012befce4563b72ee6ad78f95c8d5cde2a8128855b3370dc25bc53"
+          "sha256": "d339458582bdf4094ccde56045b707ab6d8e190200efe4ceca600338837050ea"
         }
       ],
-      "sha256": "0e4e0b6437b96b79cf0636021a80481134d50ddddc808827e97c77b1980303da"
+      "sha256": "aad588a6e6e9d722e8f2bc4153da2640a702ee64f9f63284b4a9383109c6f167"
     },
     "arm64": {
       "binaries": {
         "xbctl-linux-arm64": {
           "bytes": 6619298,
-          "sha256": "f749c7666442c4d5b157a37ffb6c8517015d0d2655622524c33abf6eacfb9a08"
+          "sha256": "2498730c44ac5b858d5e7a3928ebef09ec1b136cc2951b462e36e5c882cbd555"
         },
         "xboard-node-linux-arm64": {
-          "bytes": 61866146,
-          "sha256": "d1222c6f4818e978eaecc31562778c20daf5919ddf9dbc7cf5a104e2be3f3006"
+          "bytes": 61931682,
+          "sha256": "b1da57e92edceffe642f2b150999d89e45cf89cd48ddc9f2bb78f22c001c37ba"
         }
       },
-      "bytes": 23402295,
+      "bytes": 23426937,
       "parts": [
         {
           "bytes": 8388608,
           "file": "linux-arm64.tar.gz.part-000",
-          "sha256": "c8ec43a7668d4174a28888125300482deeacce5d40c4ffd2d5cc143c01738d91"
+          "sha256": "47808eed2e6b3308d48e6c62ce8119a23b4b3f05bce1c4a50f39e54018897d9f"
         },
         {
           "bytes": 8388608,
           "file": "linux-arm64.tar.gz.part-001",
-          "sha256": "9f3b25aa48337da5570fd4236bd8b3cedaee0f45004b9ab0bd88e0583ef41388"
+          "sha256": "61046d1f7386b720324815566d0b8659ca5a7a347314c573d139acd28272f3e6"
         },
         {
-          "bytes": 6625079,
+          "bytes": 6649721,
           "file": "linux-arm64.tar.gz.part-002",
-          "sha256": "fb965b05018613f1dff3cf7018c7701214490ec026a1dacc7a7f80a38a6c163c"
+          "sha256": "c9e390164a3df388d3b156c908b1cd7411abc0ca4a25cfc162c86590c59c8dd7"
         }
       ],
-      "sha256": "c012d7d41207c36bb61be940097713da80463b323ec7d0cef8cadd99f449b918"
+      "sha256": "ec87a804dc5286b5afa027c041798574e8d8ebf6c837421f568ff92e03d56fd7"
     }
   },
   "format": 1,
@@ -78,15 +78,19 @@
     "agent/cmd/xbctl/main.go": "e2dbf1be7405ec6269ccb4843b8699d7487d5bdbc52427c3a70cd0791ad3002e",
     "agent/cmd/xbctl/node_tools.go": "57e6a986fba32a3ed0bbbfb002829fd8aefd8cc57aac837da4f3e5a96ef8aaa2",
     "agent/cmd/xbctl/sync.go": "42319e94f6fa806ba81a5ba51ddd88382e25c067c2b49580ed018810f4069647",
-    "agent/cmd/xboard-node/main.go": "deea9bc7388685e21d657c29e5cc4b142c01c46a1a12f6fbf3cf1869a31c0db5",
+    "agent/cmd/xboard-node/main.go": "ee748a22932f39f6c0253d65dc88b1419a72e04474c049e13e78355e56378ae4",
     "agent/config.yml.example": "4775cb073a1cc091bddb27e974d0561960729a5d1a3179cdd9a5022abbd4a183",
     "agent/docs-custom-outbounds.md": "3fd117f5f441161bd8b369001ac45482af5b239404767c7838cf58e55d020e52",
     "agent/docs-custom-routes.md": "81359165ddfb1b0d542ba3ebb9039abd583effa57dd7b1e7c4daf34d230e7d92",
     "agent/docs-dns-providers.md": "aabbcb8217d5215278c847ac1ee57775b5833394abdbf05b273682b59dacda11",
     "agent/go.mod": "b2e0334684fe99c1f07d60c92e95d27240bd2e8dab325566bf13f4a76b1eab85",
     "agent/go.sum": "5ff09d3f8858746dbf6fdd8fc46b5a496a9c06c068c2c5ea172a48a6b88cade0",
-    "agent/install.sh": "9b885e44ba7155654657311e92a4a3268795fdc7636edcafc5977351be349caf",
-    "agent/internal/admission/manager.go": "dcf81d217b2fc6cd21791a51bda0f2d817812ae14763bbf44451e8afdd862003",
+    "agent/install.sh": "a448b1f79b1d8610759df94793102c8b68a72e39bfd55f4db33e8ba2500e0689",
+    "agent/internal/admission/batch.go": "3abf1f4b532261559c2dab55cd71480808a725156215e6c5e8cb5f6f25b9f393",
+    "agent/internal/admission/batch_test.go": "3e0e53318b1557b57edaa394d3d332cd3a64f24d9e272320a16f58cd04859c31",
+    "agent/internal/admission/manager.go": "4aba5f73f950e5e8cfa7a8ccfb393a98c4c965658e369a40bccd6eaf9e782e31",
+    "agent/internal/admission/pressure.go": "04e3b932e626c64cf92f1bdb22b3f78f9b544c51e4d19de97d82548ca972544b",
+    "agent/internal/admission/pressure_test.go": "84891f6233759f8d08a6b28bee1a3a4dcc82eaf5652cecd1b8d83d5ba7aff51f",
     "agent/internal/cert/cert.go": "e6c9ae8cc481853e930bf09c86b440a5bb8aca328f7b632b0d6ae7bd8a61e395",
     "agent/internal/cert/cert_test.go": "515e0c0f47c46964ce5c8b4bf146cb73a3110063100aa148434801f5c36a2491",
     "agent/internal/cert/dnsproviders/alidns.go": "8fb89ac1428ca3e8727aae60c29823522cc427da658693b1012681c7b0771606",
@@ -120,10 +124,10 @@
     "agent/internal/controlplane/fresh_test.go": "e55bca34ca0eadad49d707174ac566ddfa63acddbff4283a3628543af39e4ae5",
     "agent/internal/controlplane/local.go": "f19b8327fd4b2efd088710b19cab996cf144b82afd925487215e88e33a08c835",
     "agent/internal/controlplane/local_test.go": "531fb7a9cf98d6f88ed1d5ed9696dc8190d401c53c52c6b14b7daf86e33718e3",
-    "agent/internal/controlplane/machine.go": "fe20763e2cd7b36110bc327ef427b58ac06c9858bf783c3c8814751b45d4a1b6",
+    "agent/internal/controlplane/machine.go": "266f3ceb08bbaa4d339787d4f75f6b67ba45a852ca3e8d0003811d5499c1eb8d",
     "agent/internal/controlplane/mailbox.go": "7cec1bab7cb128f8658d59fb867c908df4e79756fa99c03bbe721bb4bf7590b5",
     "agent/internal/controlplane/mailbox_test.go": "dfda36fb5a9fd3b2bdcf3041d424eee48d82c49b6f8e2dad5884dff7de08b5c8",
-    "agent/internal/controlplane/panel.go": "73dffa5858472f241f138aa14f466daebd30cc6b747b1ddc91d4178cedd3db21",
+    "agent/internal/controlplane/panel.go": "0e442d521ff381c02b19f059d6ecfc622a491c45937d29f018524b8d30463f54",
     "agent/internal/controlplane/panel_test.go": "1f944dab5ea321512e52cec7265466755217bd21a228c16b1472d93a49922ee7",
     "agent/internal/controlplane/types.go": "86f615f5c3f5b19df18ad3b73be689d0eed25823d32340d060b901972a230431",
     "agent/internal/kernel/custom_route_compile.go": "eb0c928ee8aee2953b2e2a8703f6ac0805d4d0e2c67adaf9bbb5cd48ca5f7648",
@@ -191,10 +195,13 @@
     "agent/internal/nlog/nlog.go": "211142223c7708793c2ccf26bcb3aa3de1ce1c8f64ca18617b1928ee482dfdfb",
     "agent/internal/origin/registry.go": "cc7dc77004ad7131f142f54b014c43cba47e9dfc83069a0aea8a099e242d8555",
     "agent/internal/origin/registry_test.go": "7bbe204c6eee2f85cfe9a6500479e76946a644eb9450e6d6fa9f6bcca55362e5",
-    "agent/internal/panel/client.go": "32142ed44714b25d2d98709cc9b804a3a6c5d96d92ee1070f5d1f11fa162352d",
+    "agent/internal/panel/client.go": "6223cd521376c33524ffcb4fe5a254e95ad73d1e18fbb423bda2b9ede3c6d638",
     "agent/internal/panel/client_test.go": "19f6b523fd97d290cfa7af758e6c9231eaeec7856992595f96884c1e8b0c448d",
+    "agent/internal/panel/lease_batch.go": "949c50ea9d2f1a979dee432db6e8dd9687c7e8f96f50be0a9cf144d9d0cd1d1e",
+    "agent/internal/panel/lease_batch_test.go": "4319acbb5481043cb8aa2906471e2117910a22fdbe3007401887bb018702e3ab",
+    "agent/internal/panel/lease_pressure_test.go": "898a0391ec1d5519ab14cc153cad7d4239a1e1650bc406da4b80231ee1264de1",
     "agent/internal/panel/machine_status_test.go": "2fdb47047ff898f73671299e72d9ff47f5f29c5144029f26baaf556817ea8060",
-    "agent/internal/panel/types.go": "a5781cdaf15efbec834bd2de8b76f5ff675d5b1b9a2e76ccb07b8220bf044328",
+    "agent/internal/panel/types.go": "874229680e4b8361c62ee5fa17c53a5b66e50c49e7c3e91dfb384b4d4028c93a",
     "agent/internal/panel/types_test.go": "3e2d2d835ea1b9939ea773d489e275e524453554720985fa40d69e2f486fccc1",
     "agent/internal/panel/ws.go": "dda733ec1976ce415ce7d7a6e5222d16e10cf22df53871a40eafe8ed5456c0a5",
     "agent/internal/panel/ws_test.go": "8a570638d05c345112ef4317589018d7f9521481bf78a20a2f43c695283fbc5d",
@@ -211,9 +218,9 @@
     "agent/internal/tracker/tracker.go": "d1f51c7919e2290d887848b8060b07b2f030f9bca0a76831a08b9bb037b3aa94",
     "agent/internal/tracker/tracker_test.go": "2a05026190894f66ea02f978796f9ad88201edab78b77c8c26a3ae0830d6abd1",
     "scripts/agent-artifacts.php": "9b510b05570d2439cd23ab23aa514d7e4fb5fc5035b4a6cbf7aab9e5ab6622fa",
-    "scripts/build-agent-from-source.sh": "3f2e5222acf70dda2346c2dc452bacdb684c7d683e37721873c333df4f858730",
+    "scripts/build-agent-from-source.sh": "09712f023d9c9045c64df154dc5006c1f296eee8bc24991c8120a4df16c61dc6",
     "scripts/build-agent.sh": "a740c3ff5ff2689ca123f5f96b94ef26981d5fb6c89fa97034204cb7790307fe",
-    "scripts/package-agent.py": "ff3baaefd6bbde595ce3844d5c14798480da677017e884a04f1da563dbfc8e83"
+    "scripts/package-agent.py": "cbca0f752d251f9a6daa08271b61d85e8676d81e2f1928c28e8a1ede5201405c"
   },
-  "version": "panel-speedbox-http-obfs-uuid-v1-node-sync-v1-subscription-generation-v1"
+  "version": "panel-speedbox-http-obfs-uuid-v1-node-sync-v1-subscription-generation-v1-lease-batch-v1-lease-pressure-v1"
 }

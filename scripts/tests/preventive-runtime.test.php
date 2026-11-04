@@ -32,6 +32,7 @@ $loader->setPsr4('App\\', $root.'/app');
 $worker = ($argv[1] ?? '') === '--worker';
 $mysql = in_array('--mysql', $argv, true) || $worker;
 $timed = in_array('--timed', $argv, true);
+$baseline = in_array('--baseline', $argv, true);
 $temporary = $worker ? ($argv[2] ?? '') : sys_get_temp_dir().'/speedbox-preventive-'.bin2hex(random_bytes(10));
 $database = $admin = null;
 $processes = [];
@@ -125,6 +126,64 @@ try {
     $lease = ['user_id'=>$userId, 'source_ip'=>'192.0.2.1', 'lease_id'=>hash('sha256','lease'), 'operation'=>'acquire'];
     $allowed = static fn ($response) => $response->getStatusCode() === 200 && json_decode($response->getContent(), true)['allowed'] === true;
     $check($allowed($send($lease+$auth)), 'Authenticated lease is admitted');
+
+    // Exercise the hot service independently of HTTP authentication and caches.
+    // --baseline runs the same behavior checks against the old service too.
+    $admission = new ConnectionAdmission;
+    $owner = DB::table('speedbox_connection_leases')->where('user_id',$userId)->first();
+    DB::flushQueryLog(); DB::enableQueryLog();
+    try {
+        $renewed = $admission->handle($node, array_replace($lease,['operation'=>'renew']));
+        $queryCount = count(DB::getQueryLog());
+        $ipAggregates = array_filter(DB::getQueryLog(), static fn ($query) =>
+            str_contains(strtolower($query['query']), 'group by') && str_contains($query['query'], 'source_ip'));
+    } finally { DB::disableQueryLog(); DB::flushQueryLog(); }
+    echo "Unlimited renewal SQL statements: $queryCount\n";
+    $check($renewed['allowed'] && $queryCount <= ($baseline ? ($mysql ? 7 : 8) : ($mysql ? 5 : 6)), 'Unlimited lease renewal query budget');
+    $check(count($ipAggregates) === 1, 'Unlimited accounts still aggregate every source IP');
+    $check(DB::table('speedbox_connection_leases')->where('id',$owner->id)->value('lease_id') === $lease['lease_id']
+        && DB::table('speedbox_connection_leases')->where('user_id',$userId)->count() === 1,
+        'Renewal preserves the address ordering ID without duplicate rows');
+
+    // Child-only access must still honor enabled state and traffic availability.
+    $child = $node->replicate();
+    $child->parent_id=$node->id; $child->group_ids=[2]; $child->save();
+    DB::table('v2_user')->where('id',$userId)->update(['group_id'=>2]);
+    $renew = array_replace($lease,['operation'=>'renew']);
+    $check($admission->handle($node,$renew)['allowed'], 'Active child grants its group on the parent');
+    $node->transfer_enable=100; $node->u=100;
+    $check(!$admission->handle($node,$renew)['allowed'], 'Child access cannot bypass exhausted parent quota');
+    $node->transfer_enable=0; $node->u=0;
+    $child->enabled=false; $child->save();
+    $check(!$admission->handle($node,$renew)['allowed'], 'Disabled child cannot grant group access');
+    $child->enabled=true; $child->transfer_enable=100; $child->u=100; $child->save();
+    $check(!$admission->handle($node,$renew)['allowed'], 'Exhausted child cannot grant group access');
+    $child->delete();
+    DB::table('v2_user')->where('id',$userId)->update(['group_id'=>1]);
+
+    // Reducing an existing unlimited account must immediately keep only its
+    // oldest source IP, including leases spread over more than one node.
+    $later = array_replace($lease,['source_ip'=>'192.0.2.9','lease_id'=>hash('sha256','later')]);
+    $check($admission->handle($otherNode,$later)['allowed'], 'Second IP admitted while account is unlimited');
+    DB::table('v2_user')->where('id',$userId)->update(['device_limit'=>1]);
+    DB::flushQueryLog(); DB::enableQueryLog();
+    try {
+        $limitedRenewal=$admission->handle($node,$renew);
+        $limitedQueryCount=count(DB::getQueryLog());
+        $limitedIpAggregates=array_filter(DB::getQueryLog(), static fn ($query) =>
+            str_contains(strtolower($query['query']), 'group by') && str_contains($query['query'], 'source_ip'));
+    } finally { DB::disableQueryLog(); DB::flushQueryLog(); }
+    echo "Limited renewal SQL statements: $limitedQueryCount\n";
+    $check($limitedRenewal['allowed'], 'Oldest IP survives a device limit reduction');
+    $check($limitedQueryCount <= ($baseline ? ($mysql ? 7 : 8) : ($mysql ? 5 : 6)), 'Limited lease renewal query budget');
+    $check(count($limitedIpAggregates) === 1, 'Limited accounts still aggregate every source IP');
+    $check(!$admission->handle($otherNode,array_replace($later,['operation'=>'renew']))['allowed'],
+        'Newer IP is denied after a device limit reduction');
+    $admission->handle($otherNode,array_replace($later,['operation'=>'release']));
+    $admission->handle($node,array_replace($lease,['operation'=>'release','lease_id'=>str_repeat('f',64)]));
+    $check(DB::table('speedbox_connection_leases')->where('id',$owner->id)->exists(), 'Stale release cannot remove the owned lease');
+    DB::table('v2_user')->where('id',$userId)->update(['device_limit'=>0]);
+
     config(['speedbox.node_rate_limit'=>2, 'speedbox.node_ip_rate_limit'=>3]);
     // Invalid traffic exhausts both buckets; rotating fake IDs cannot evade the IP bucket.
     $bad = $auth; $bad['token']='bad';
@@ -324,6 +383,7 @@ try {
         }
         $check($admitted === 1 && DB::table('speedbox_connection_leases')->count() === 1, 'MySQL row lock admits exactly one IP under a simultaneous race');
     }
+    if (!$baseline) require __DIR__.'/lease-batch-runtime.inc.php';
     echo 'PREVENTIVE RUNTIME OK: '.$checks.' checks; '.($mysql ? 'MySQL' : 'SQLite :memory: fixture (not MySQL)')."; temporary data only.\n";
 } catch (Throwable $error) {
     fwrite(STDERR, 'PREVENTIVE RUNTIME FAILED: '.$error->getMessage()."\n");
@@ -344,3 +404,4 @@ try {
     }
 }
 exit(isset($failed) ? 1 : 0);
+

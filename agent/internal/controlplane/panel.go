@@ -3,6 +3,7 @@ package controlplane
 import (
 	"context"
 	"fmt"
+	"github.com/cedar2025/xboard-node/internal/admission"
 	"time"
 
 	"github.com/cedar2025/xboard-node/internal/config"
@@ -186,3 +187,10 @@ func (p *panelPushClient) SendDeviceReport(devices map[int][]string) {
 func (p *PanelControlPlane) ConnectionLease(ctx context.Context, op string, uid int, ip, id string) (bool, int, error) {
 	return p.client.ConnectionLease(ctx, op, uid, ip, id)
 }
+
+func (p *PanelControlPlane) LeaseBatchSize() int { return p.client.LeaseBatchSize() }
+func (p *PanelControlPlane) RenewConnectionLeases(ctx context.Context, leases []admission.Renewal) ([]admission.RenewalResult, error) {
+	return p.client.RenewConnectionLeases(ctx, leases)
+}
+
+func (p *PanelControlPlane) AdmissionPressureKey() string { return p.client.AdmissionPressureKey() }
