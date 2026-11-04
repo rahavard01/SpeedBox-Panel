@@ -2430,9 +2430,7 @@ class TelegramWebhookController extends Controller
         $candidates = array_values(array_unique(array_filter($candidates)));
 
         foreach ($candidates as $candidate) {
-            $found = DB::table('v2_user')
-                ->whereRaw('LOWER(`email`) = ?', [$candidate])
-                ->first();
+            $found = $this->findV2UserByEmailSafe($candidate);
 
             if ($found) {
                 return $found;
@@ -2444,8 +2442,12 @@ class TelegramWebhookController extends Controller
 
     protected function findV2UserByEmailSafe(string $email): ?object
     {
+        $comparison = DB::connection()->getDriverName() === 'mysql'
+            ? 'LOWER(CONVERT(`email` USING utf8mb4)) COLLATE utf8mb4_unicode_ci = CONVERT(? USING utf8mb4) COLLATE utf8mb4_unicode_ci'
+            : 'LOWER(`email`) = ?';
+
         return DB::table('v2_user')
-            ->whereRaw('LOWER(`email`) = ?', [strtolower(trim($email))])
+            ->whereRaw($comparison, [strtolower(trim($email))])
             ->first();
     }
 
