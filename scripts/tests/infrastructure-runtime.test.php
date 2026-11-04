@@ -4,6 +4,7 @@ namespace Illuminate\Bus { trait Queueable { public function onQueue($q){return 
 namespace Illuminate\Contracts\Queue { interface ShouldQueue {} }
 namespace Illuminate\Foundation\Bus { trait Dispatchable {} }
 namespace Illuminate\Queue { trait InteractsWithQueue {} trait SerializesModels {} }
+namespace Symfony\Component\Process\Exception { class ProcessTimedOutException extends \RuntimeException {} }
 namespace Illuminate\Support\Facades {
  class DB { public static function transaction($fn){return $fn();} }
  class File { public static function isFile($p){return is_file($p);} }
@@ -33,7 +34,8 @@ namespace App\Models {
 }
 namespace App\Services {
  class SshExecutor {
-  public array $restarts=[];public bool $failOld=false;public bool $localSnapshot=false;public bool $badMetrics=false;public $onInstall=null;
+  public array $restarts=[];public array $uploads=[];public array $budgets=[];public bool $failOld=false;public bool $localSnapshot=false;public bool $badMetrics=false;public $onInstall=null;public $onUpload=null;
+  public function withinBudget(int $seconds,callable $callback):mixed{$this->budgets[]=$seconds;return $callback();}
   public function run(\App\Models\ManagedServer $server,string $command,int $timeout=120,?string $input=null,?callable $onOutput=null):string{
    if($command==='sh -s'){
     if($this->badMetrics)throw new \RuntimeException('unavailable');
@@ -47,7 +49,7 @@ namespace App\Services {
    if(str_contains($command,'is-active'))return "active\npanel-speedbox-http-obfs";
    return '';
   }
-  public function upload(...$args):void{}
+  public function upload(...$args):void{$this->uploads[]=$args;if($this->onUpload)($this->onUpload)();}
  }
 }
 namespace {
@@ -82,6 +84,11 @@ namespace {
   ServerDeployment::$rows=[1=>new ServerDeployment(['managed_server_id'=>1,'action'=>'install','kernel'=>'singbox','log'=>'']),2=>new ServerDeployment(['managed_server_id'=>2,'action'=>'restart','log'=>''])];
   $ssh->onInstall=function($emit)use($ssh){$emit('out',"install phase\nprivate-");check(str_contains(ServerDeployment::$rows[1]->log,'install phase'),'install output was not persisted during execution');$emit('out',"token\n");$emit('err','ssh-password');};
   (new \App\Jobs\DeployManagedServer(1))->handle($ssh);check(ServerDeployment::$rows[1]->status==='succeeded','install failed');check(!str_contains(ServerDeployment::$rows[1]->log,'private-token')&&!str_contains(ServerDeployment::$rows[1]->log,'ssh-password'),'credentials leaked');
+  check(count($ssh->uploads)===3,'incomplete deployment payload');foreach($ssh->uploads as $upload)check($upload[3]===600,'slow deployment still uses short upload timeout');check($ssh->budgets===[1140],'deployment exceeds queue deadline');
+  $before=count($ssh->uploads);ManagedServer::$rows[3]=$makeServer(3);ManagedServer::$rows[3]->machine=null;ServerDeployment::$rows[3]=new ServerDeployment(['managed_server_id'=>3,'action'=>'install','kernel'=>'singbox','log'=>'']);
+  try{(new \App\Jobs\DeployManagedServer(3))->handle($ssh);throw new \RuntimeException('missing machine accepted');}catch(\RuntimeException $e){check(str_contains($e->getMessage(),'هیچ ماشینی'),'unexpected missing-machine failure');}check(count($ssh->uploads)===$before,'unlinked server wasted upload time');
+  ManagedServer::$rows[4]=$makeServer(4);ServerDeployment::$rows[4]=new ServerDeployment(['managed_server_id'=>4,'action'=>'install','kernel'=>'singbox','log'=>'']);$ssh->onUpload=function(){throw new \Symfony\Component\Process\Exception\ProcessTimedOutException('timed out');};
+  try{(new \App\Jobs\DeployManagedServer(4))->handle($ssh);throw new \RuntimeException('timeout accepted');}catch(\RuntimeException $e){check(str_contains($e->getMessage(),'مهلت انتقال فایل'),'timeout not explained');}check(count($ssh->uploads)===$before+1,'timed-out upload restarted from zero');check(ServerDeployment::$rows[4]->status==='failed','timeout left deployment running');$ssh->onUpload=null;
   $ssh->badMetrics=true;(new \App\Jobs\DeployManagedServer(2))->handle($ssh);check(ServerDeployment::$rows[2]->status==='succeeded','metrics failure broke healthy service');
   echo "PASS: streamed redacted/bounded logs, install progress, real Linux resource sample, fresh-sample precedence, capabilities/liveness; node assignment behavior is covered by node-runtime-apply.test.php\n";
  }finally{foreach(glob($tmp.'/app/agent/*')as $f)unlink($f);rmdir($tmp.'/app/agent');rmdir($tmp.'/app');rmdir($tmp);}

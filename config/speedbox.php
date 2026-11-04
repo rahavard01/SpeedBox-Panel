@@ -9,6 +9,7 @@ return [
     'agent_repository' => env('SPEEDBOX_AGENT_REPOSITORY', 'rahavard01/Panel-SpeedBox'),
     'agent_release' => env('SPEEDBOX_AGENT_RELEASE', 'latest'),
     'deploy_timeout' => (int) env('SPEEDBOX_DEPLOY_TIMEOUT', 900),
+    'deploy_upload_timeout' => max(180, min(900, (int) env('SPEEDBOX_DEPLOY_UPLOAD_TIMEOUT', 600))),
     'strict_host_key_checking' => (bool) env('SPEEDBOX_STRICT_HOST_KEY_CHECKING', true),
     'octane' => [
         'enabled' => (bool) env('SPEEDBOX_OCTANE_ENABLED', true),

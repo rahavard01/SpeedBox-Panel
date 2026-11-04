@@ -25,7 +25,7 @@ class SshExecutor
     {
         if ($this->budgetDeadline===null) return $timeout;
         $remaining=$this->budgetDeadline-microtime(true);
-        if ($remaining<=0) throw new RuntimeException('مهلت پاک‌سازی یا بررسی تمام شد.',1002);
+        if ($remaining<=0) throw new RuntimeException('مهلت عملیات SSH تمام شد.',1002);
         return min($timeout,$remaining);
     }
 
@@ -127,9 +127,12 @@ class SshExecutor
     private function scpOptions(ManagedServer $server,array $endpoint): array
     {
         return [
+            '-C',
             '-P', (string) $endpoint['port'],
             '-o', 'BatchMode='.($server->auth_type === 'key' && !$server->private_key_passphrase ? 'yes' : 'no'),
             '-o', 'ConnectTimeout='.($this->budgetDeadline===null?15:5),
+            '-o', 'ServerAliveInterval=20',
+            '-o', 'ServerAliveCountMax=3',
             '-o', 'StrictHostKeyChecking='.($this->pinnedHostFile?'yes':'accept-new'),
             '-o', 'UserKnownHostsFile='.($this->pinnedHostFile?:storage_path('app/private/known_hosts')),
             '-o', 'HostKeyAlias=speedbox-managed-'.$server->id,

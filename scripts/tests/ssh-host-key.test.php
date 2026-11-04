@@ -30,12 +30,15 @@ namespace {
     $server=new \App\Models\ManagedServer();foreach($fixture['server'] as $key=>$value)$server->$key=$value;
     $ssh=new \App\Services\SshExecutor();
     try {
+        $operation=static function()use($ssh,$server,$fixture){
         if(($fixture['mode']??'')==='upload'){
-            $ssh->upload($server,$fixture['source'],$fixture['destination'],15);
-            echo $ssh->run($server,'cat '.escapeshellarg($fixture['destination']),15);
+            $ssh->upload($server,$fixture['source'],$fixture['destination'],$fixture['upload_timeout']??15);
+            if(!($fixture['upload_only']??false))echo $ssh->run($server,'cat '.escapeshellarg($fixture['destination']),15);
         }else {
             $stream=isset($fixture['stream_path'])?static function($type,$chunk)use($fixture){file_put_contents($fixture['stream_path'],$chunk,FILE_APPEND);}:null;
             echo $ssh->run($server,$fixture['command'],15,$fixture['input']??null,$stream);
         }
+        };
+        if(isset($fixture['budget']))$ssh->withinBudget($fixture['budget'],$operation);else $operation();
     }catch(\Throwable $error){fwrite(STDERR,$error->getMessage());exit(1);}
 }

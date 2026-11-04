@@ -13,6 +13,7 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\File;
+use Symfony\Component\Process\Exception\ProcessTimedOutException;
 use Throwable;
 
 class DeployManagedServer implements ShouldQueue
@@ -28,6 +29,12 @@ class DeployManagedServer implements ShouldQueue
     }
 
     public function handle(SshExecutor $ssh): void
+    {
+        // Leave time for failure bookkeeping before the queue worker's deadline.
+        $ssh->withinBudget($this->timeout - 60, fn () => $this->deploy($ssh));
+    }
+
+    private function deploy(SshExecutor $ssh): void
     {
         $deployment = ServerDeployment::findOrFail($this->deploymentId);
         $server = ManagedServer::with('machine')->findOrFail($deployment->managed_server_id);
@@ -50,6 +57,11 @@ class DeployManagedServer implements ShouldQueue
                 return;
             }
 
+            $machine = $server->machine;
+            if (!$machine) {
+                throw new \RuntimeException('هیچ ماشینی به این سرور متصل نیست.');
+            }
+
             $assetDir = storage_path('app/agent');
             $sudo = $server->ssh_user === 'root' ? '' : 'sudo -n ';
             $ssh->run($server, $sudo.'sh -c '.escapeshellarg('command -v systemctl >/dev/null && test -d /run/systemd/system && command -v sha256sum >/dev/null && command -v bash >/dev/null'), 45);
@@ -63,27 +75,29 @@ class DeployManagedServer implements ShouldQueue
                 "{$assetDir}/xbctl-linux-{$assetArch}" => "{$remoteDir}/xbctl",
             ];
             $checksums = [];
+            $uploadTimeout = max(180, min(900, (int) config('speedbox.deploy_upload_timeout', 600)));
             foreach ($assets as $local => $remote) {
                 if (!File::isFile($local)) {
                     throw new \RuntimeException('بسته نصب نود آماده نیست؛ ساخت خودکار بسته هنگام نصب یا به‌روزرسانی پنل باید کامل شود.');
                 }
                 $checksum = hash_file('sha256', $local);
                 if ($checksum === false) throw new \RuntimeException('خواندن بسته نصب برای بررسی صحت ناموفق بود.');
+                $deployment->update(['log' => $deployment->log."\nدر حال انتقال فشردهٔ ".basename($local)."؛ مهلت هر فایل تا {$uploadTimeout} ثانیه، در محدودهٔ زمان باقی‌ماندهٔ نصب."]);
                 try {
-                    $ssh->upload($server, $local, $remote);
+                    $ssh->upload($server, $local, $remote, $uploadTimeout);
+                } catch (ProcessTimedOutException $uploadError) {
+                    // A timed-out SCP starts over on retry; do not spend the
+                    // remaining installation budget sending the same file again.
+                    throw new \RuntimeException('مهلت انتقال فایل '.basename($local).' تمام شد؛ انتقال با سرعت فعلی در زمان باقی‌ماندهٔ نصب کامل نشد.', 0, $uploadError);
                 } catch (Throwable $uploadError) {
                     $deployment->update(['log' => $deployment->log."\nانتقال فایل کامل نشد؛ تلاش دوباره…"]);
-                    $ssh->upload($server, $local, $remote);
+                    $ssh->upload($server, $local, $remote, $uploadTimeout);
                 }
                 $checksums[] = $checksum.'  '.$remote;
             }
             $ssh->run($server, 'printf %s '.escapeshellarg(implode("\n", $checksums)."\n").' | sha256sum -c -', 60);
             $deployment->update(['progress' => 55, 'log' => $deployment->log."\nبسته نود شامل Xray و Sing-box منتقل شد و صحت فایل‌ها تأیید شد."]);
 
-            $machine = $server->machine;
-            if (!$machine) {
-                throw new \RuntimeException('هیچ ماشینی به این سرور متصل نیست.');
-            }
             $panelUrl = rtrim((string) config('app.url'), '/');
             $command = $sudo.'bash '.escapeshellarg("{$remoteDir}/install.sh").' install'.
                 ' --panel '.escapeshellarg($panelUrl).
