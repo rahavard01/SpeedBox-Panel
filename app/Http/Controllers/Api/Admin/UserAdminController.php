@@ -53,7 +53,10 @@ class UserAdminController extends Controller
         $counts = app(\App\Services\AccountOnlineStatus::class)->counts($users->pluck('id')->all());
         foreach ($users as $user) $user->online_count = $counts[$user->id] ?? 0;
         app(\App\Services\SubscriptionReservationPresenter::class)->attach($users);
-        return response()->json(['data' => $users]);
+        return response()->json(['data' => $users, 'meta' => ['filters' => [
+            'sales_plans' => DB::table('panel_tariff_groups')->orderBy('name')->get(['id', 'name']),
+            'main_plans' => DB::table('v2_plan')->orderBy('sort')->orderBy('id')->get(['id', 'name']),
+        ]]]);
     }
 
     public function trafficRecords(Request $request)

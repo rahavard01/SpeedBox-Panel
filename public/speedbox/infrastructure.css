@@ -473,41 +473,31 @@
 .speedbox-infrastructure .recent-server-item>footer{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:10px;color:var(--muted)}
 .speedbox-infrastructure .recent-server-item>footer b{font-weight:600;color:#dce2eb;margin-inline-start:4px}
 /* Single cards match mobile users; controls remain on their original elements. */
-@media(max-width:760px){
+@media(max-width:767px){
 .speedbox-infrastructure .configuration-tabs,.speedbox-infrastructure .template-tabs{display:flex;flex-wrap:nowrap;width:100%;max-width:100%;min-width:0;justify-content:center;align-items:stretch;direction:rtl;overflow:hidden;padding:0;gap:0;border-radius:12px}
 .speedbox-infrastructure .configuration-tabs .seg-btn,.speedbox-infrastructure .template-tabs .seg-btn{display:flex;align-items:center;justify-content:center;flex:1 1 0;min-width:0;width:auto;white-space:normal;padding:9px 4px;min-height:42px;font-size:11px;line-height:1.6;text-align:center;overflow-wrap:anywhere;border-radius:0}
 .speedbox-infrastructure .template-tabs .seg-btn{padding-inline:2px;font-size:clamp(9px,2.65vw,11px)}
 .speedbox-infrastructure .panel-card.entity-list-shell{padding:0;border:0;background:transparent;box-shadow:none;backdrop-filter:none;-webkit-backdrop-filter:none}
-.speedbox-infrastructure .mobile-entity-wrap{border:0;overflow:visible;border-radius:0;background:transparent}
-.speedbox-infrastructure .mobile-entity-table{display:block;width:100%;min-width:0;background:transparent}
-.speedbox-infrastructure .mobile-entity-table thead{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
-.speedbox-infrastructure .mobile-entity-table tbody{display:grid;gap:12px}
-.speedbox-infrastructure .mobile-entity-table tbody tr{position:relative;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;padding:12px;border:1px solid rgba(0,180,255,.28);border-radius:12px;background:radial-gradient(120% 120% at 50% -10%,rgba(0,160,255,.14),transparent 60%),linear-gradient(180deg,rgba(255,255,255,.07),rgba(255,255,255,.04));box-shadow:0 6px 18px rgba(0,0,0,.28),inset 0 1px 0 rgba(255,255,255,.12);min-width:0}
-.speedbox-infrastructure .mobile-entity-table[data-mobile-layout] tbody tr td:not(.entity-actions-cell){display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;min-width:0;width:auto;max-width:none;height:auto;min-height:62px;padding:10px!important;border:1px dashed rgba(255,255,255,.12);border-radius:10px;background:#00000061;white-space:normal;overflow-wrap:anywhere;text-align:center;font-size:11px}
-.speedbox-infrastructure .mobile-entity-table td::before{content:attr(data-label);display:block;font-size:10px;font-weight:900;color:#f0b98d;line-height:1.6;white-space:normal}
-.speedbox-infrastructure .mobile-entity-table[data-mobile-layout] tbody tr .entity-actions-cell{display:block;grid-column:1/-1;min-width:0;width:auto;height:auto;min-height:0;background:transparent!important;border:0!important;border-radius:0;box-shadow:none;padding:4px 0 0!important}
-.speedbox-infrastructure .mobile-entity-table .entity-actions-cell::before{display:none}
-.speedbox-infrastructure .mobile-entity-table .actions{width:100%;min-width:0;gap:8px;flex-wrap:wrap;white-space:normal;background:transparent;border:0;box-shadow:none;padding:0}
-.speedbox-infrastructure .mobile-entity-table .actions .button{flex:1 1 auto;min-width:0;min-height:36px;margin:0;padding:8px 10px;font-size:11px;line-height:1.6;white-space:normal}
-.speedbox-infrastructure .mobile-entity-table .entity{width:100%;justify-content:center;text-align:center}
-.speedbox-infrastructure .mobile-entity-table .entity>div{min-width:0;max-width:100%}
-.speedbox-infrastructure .mobile-entity-table .entity b{font-size:13px;line-height:1.8;overflow-wrap:anywhere}
-.speedbox-infrastructure .mobile-entity-table .entity small{white-space:normal;overflow-wrap:anywhere;text-align:center;line-height:1.8}
-.speedbox-infrastructure .mobile-entity-table[data-mobile-layout=servers] tbody tr td:first-child,.speedbox-infrastructure .mobile-entity-table[data-mobile-layout=plans] tbody tr td:first-child,.speedbox-infrastructure .mobile-entity-table[data-mobile-layout=nodes] tbody tr td:nth-child(3){grid-column:1/-1;order:-1;min-height:76px;border:1px dashed rgba(255,255,255,.12);border-radius:10px;padding:12px!important;background:#00000061;font-size:13px;font-weight:700;justify-content:center}
-.speedbox-infrastructure .mobile-entity-table[data-mobile-layout=servers] tbody tr td:first-child::before,.speedbox-infrastructure .mobile-entity-table[data-mobile-layout=plans] tbody tr td:first-child::before,.speedbox-infrastructure .mobile-entity-table[data-mobile-layout=nodes] tbody tr td:nth-child(3)::before{display:none}
-.speedbox-infrastructure .mobile-entity-table[data-mobile-layout=servers] tbody tr td:nth-child(4),.speedbox-infrastructure .mobile-entity-table[data-mobile-layout=servers] tbody tr td:nth-child(5),.speedbox-infrastructure .mobile-entity-table[data-mobile-layout=plans] tbody tr td:nth-child(6){grid-column:1/-1}
-.speedbox-infrastructure .mobile-entity-table .server-resources{width:100%;min-width:0;max-width:none}
-.speedbox-infrastructure .mobile-entity-table .deployment-progress{width:100%;max-width:100%;min-width:0}
-.speedbox-infrastructure .mobile-entity-table[data-mobile-layout=nodes] tbody tr td:first-child{position:absolute;top:21px;right:19px;width:32px;min-height:0;padding:0!important;border:0;background:transparent;gap:0;z-index:1}
-.speedbox-infrastructure .mobile-entity-table[data-mobile-layout=nodes] tbody tr td:first-child::before{display:none}
-.speedbox-infrastructure .mobile-entity-table[data-mobile-layout=nodes] tbody tr td:nth-child(3){padding-inline:48px!important}
-.speedbox-infrastructure .mobile-entity-table[data-mobile-layout=nodes] tbody tr td:nth-child(7),.speedbox-infrastructure .mobile-entity-table[data-mobile-layout=nodes] tbody tr td:nth-child(10){grid-column:1/-1}
-.speedbox-infrastructure .mobile-entity-table .node-traffic{width:100%;min-width:0;max-width:none}
-.speedbox-infrastructure .mobile-entity-table .node-order-controls{justify-content:center;gap:0}
-.speedbox-infrastructure .mobile-entity-table .node-order-controls .node-drag{display:none}
-.speedbox-infrastructure .mobile-entity-table .node-order-controls>span{gap:4px}
-.speedbox-infrastructure .mobile-entity-table .node-order-controls button{min-width:30px;min-height:24px;border-radius:6px;background:rgba(255,255,255,.06)}
-.speedbox-infrastructure .mobile-entity-table .node-identity,.speedbox-infrastructure .mobile-entity-table .server-identity{min-width:0}
+.speedbox-infrastructure .entity-card-list{display:grid;gap:12px;min-width:0}
+.speedbox-infrastructure .entity-mobile-card{min-width:0;padding:12px;border:1px solid rgba(0,180,255,.28);border-radius:12px;color:#fff;background:radial-gradient(120% 120% at 50% -10%,rgba(0,160,255,.14),transparent 60%),linear-gradient(180deg,rgba(255,255,255,.07),rgba(255,255,255,.04));box-shadow:0 6px 18px rgba(0,0,0,.28),inset 0 1px 0 rgba(255,255,255,.12)}
+.speedbox-infrastructure .entity-card-heading{min-width:0;text-align:center;padding:4px 0 12px;margin-bottom:12px;border-bottom:1px dashed rgba(255,255,255,.15);font-size:13px;line-height:1.8;overflow-wrap:anywhere}
+.speedbox-infrastructure .entity-card-heading .entity{justify-content:center;text-align:center}
+.speedbox-infrastructure .entity-card-heading .entity>div{min-width:0;max-width:100%}
+.speedbox-infrastructure .entity-card-heading .entity b{font-size:13px;line-height:1.8;overflow-wrap:anywhere}
+.speedbox-infrastructure .entity-card-heading .entity small{white-space:normal;overflow-wrap:anywhere;text-align:center;line-height:1.8}
+.speedbox-infrastructure .entity-card-body{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;min-width:0}
+.speedbox-infrastructure .entity-card-field{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;min-width:0;min-height:62px;padding:10px;border:1px dashed rgba(255,255,255,.12);border-radius:10px;background:#00000061;overflow-wrap:anywhere;text-align:center;font-size:11px;line-height:1.7}
+.speedbox-infrastructure .entity-card-field--wide{grid-column:1/-1}
+.speedbox-infrastructure .entity-card-label{font-size:10px;font-weight:900;color:#f0b98d;line-height:1.6}
+.speedbox-infrastructure .entity-card-actions{margin-top:12px}
+.speedbox-infrastructure .entity-card-actions .actions{gap:8px;flex-wrap:wrap}
+.speedbox-infrastructure .entity-card-actions .button{flex:1 1 auto;min-width:0;min-height:36px;margin:0;padding:8px 10px;font-size:11px;line-height:1.6;white-space:normal}
+.speedbox-infrastructure .entity-mobile-card :is(.server-resources,.deployment-progress,.node-traffic){width:100%;min-width:0;max-width:none}
+.speedbox-infrastructure .entity-mobile-card .node-order-controls{justify-content:center;gap:0}
+.speedbox-infrastructure .entity-mobile-card .node-order-controls>span{gap:6px}
+.speedbox-infrastructure .entity-mobile-card .node-order-controls button{min-width:30px;min-height:28px;border-radius:6px;background:rgba(255,255,255,.06)}
+.speedbox-infrastructure .entity-card-loading{grid-column:1/-1;min-height:82px;border:0;background:transparent}
+
 }
 
 /* Token controls share the same hit area and icon size. */
@@ -521,8 +511,7 @@
 .speedbox-infrastructure .queue-run-status.is-running svg{color:#4ade80}
 .speedbox-infrastructure .queue-run-status.is-stopped svg{color:#f87171}
 @media(max-width:760px){
- .speedbox-infrastructure .mobile-entity-table[data-mobile-layout] tbody tr .entity-loading-cell{grid-column:1/-1;min-height:82px;background:transparent;border:0}
- .speedbox-infrastructure .entity-loading-cell::before{display:none}
+ .speedbox-infrastructure .entity-card-loading .loading{min-height:60px}
  .speedbox-infrastructure-overlay .job-detail-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:4px 14px;font-size:11px}
  .speedbox-infrastructure-overlay .infrastructure-modal.job-modal{padding:16px}
 }

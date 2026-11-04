@@ -296,15 +296,21 @@ class InfrastructureController extends Controller
             if (!$plan) return DB::table('v2_plan')->insertGetId([...$data, 'created_at' => time()]);
             $existing = DB::table('v2_plan')->where('id', $plan)->lockForUpdate()->first();
             abort_unless($existing, 404, 'پلن یافت نشد.');
+            $changed = [];
+            foreach (['group_id', 'transfer_enable', 'speed_limit', 'device_limit'] as $field) {
+                if (!array_key_exists($field, $data)) continue;
+                $previous = $existing->{$field} === null ? null : (int) $existing->{$field};
+                if ($previous !== $data[$field]) $changed[$field] = $data[$field];
+            }
             DB::table('v2_plan')->where('id', $plan)->update($data);
             if ($forceUpdate) {
-                // Same four fields as XBoard; keep usage, expiry and Panel account snapshots.
-                DB::table('v2_user')->where('plan_id', $plan)->update([
-                    'group_id' => $data['group_id'],
-                    'transfer_enable' => (int) $data['transfer_enable'] * 1073741824,
-                    'speed_limit' => $data['speed_limit'] ?? null,
-                ]);
-                app(\App\Services\TariffConnectionPolicy::class)->applyPlanDefault((int) $plan, $data['device_limit'] ?? null);
+                // Compare plan defaults, not each account's independently purchased quota.
+                $userChanges = array_intersect_key($changed, array_flip(['group_id', 'transfer_enable', 'speed_limit']));
+                if (array_key_exists('transfer_enable', $userChanges)) $userChanges['transfer_enable'] *= 1073741824;
+                if ($userChanges) DB::table('v2_user')->where('plan_id', $plan)->update($userChanges);
+                if (array_key_exists('device_limit', $changed)) {
+                    app(\App\Services\TariffConnectionPolicy::class)->applyPlanDefault((int) $plan, $changed['device_limit']);
+                }
             }
             $previousReset = $existing->reset_traffic_method === null ? null : (int) $existing->reset_traffic_method;
             if (array_key_exists('reset_traffic_method', $data) && $previousReset !== $data['reset_traffic_method']) {

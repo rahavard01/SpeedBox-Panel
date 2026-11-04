@@ -451,21 +451,53 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
     }).join('')}</div>`;
   }
   function entityCardLayout(markup, kind) {
+    if (!mobileMedia.matches) return markup;
     const template = document.createElement('template');
     template.innerHTML = markup;
     const table = template.content.querySelector('table');
     if (!table) return markup;
-    table.classList.add('mobile-entity-table');
-    table.dataset.mobileLayout = kind;
-    table.parentElement.classList.add('mobile-entity-wrap');
     const labels = [...table.querySelectorAll('thead th')].map(cell => cell.textContent.trim());
+    const cards = document.createElement('div');
+    cards.className = 'entity-card-list';
+    cards.dataset.mobileLayout = kind;
+    const titleIndex = kind === 'nodes' ? 2 : 0;
+    const wideFields = {servers: [3, 4], nodes: [8], plans: [5]};
     table.querySelectorAll('tbody tr').forEach(row => {
+      const card = document.createElement('article');
+      card.className = 'entity-mobile-card';
+      for (const attribute of row.attributes) card.setAttribute(attribute.name, attribute.value);
+      const body = document.createElement('div');
+      body.className = 'entity-card-body';
+      let footer = null;
       [...row.cells].forEach((cell, index) => {
-        cell.dataset.label = labels[index] || '';
-        if (cell.querySelector('.actions')) cell.classList.add('entity-actions-cell');
+        const actions = cell.querySelector('.actions');
+        if (actions) {
+          footer = document.createElement('footer');
+          footer.className = 'entity-card-actions';
+          footer.appendChild(actions);
+          return;
+        }
+        const title = index === titleIndex && !cell.classList.contains('entity-loading-cell');
+        const field = document.createElement(title ? 'header' : 'div');
+        field.className = title ? 'entity-card-heading' : 'entity-card-field';
+        if ((wideFields[kind] || []).includes(index) || cell.colSpan > 1) field.classList.add('entity-card-field--wide');
+        if (cell.classList.contains('entity-loading-cell')) field.classList.add('entity-card-loading');
+        if (!title && cell.colSpan === 1) {
+          const label = document.createElement('small');
+          label.className = 'entity-card-label';
+          label.textContent = labels[index] || '';
+          field.appendChild(label);
+        }
+        while (cell.firstChild) field.appendChild(cell.firstChild);
+        // Mobile order controls use arrows; dragging is a desktop table action.
+        field.querySelectorAll('[data-drag-node]').forEach(handle => handle.remove());
+        if (title) card.prepend(field); else body.appendChild(field);
       });
+      card.appendChild(body);
+      if (footer) card.appendChild(footer);
+      cards.appendChild(card);
     });
-    return template.innerHTML;
+    return cards.outerHTML;
   }
   function serverTable(list,actions=true){
     if(!list.length)return empty('سروری ثبت نشده است');
@@ -674,7 +706,7 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
       ${field('capacity_limit','محدودیت ظرفیت',plan?.capacity_limit??'',false,'number','ltr')}
       <div class="field"><label for="planReset">روش بازنشانی ترافیک</label><select id="planReset" name="reset_traffic_method">${trafficResetOptions.map(([value,label])=>`<option value="${value}" ${String(plan?.reset_traffic_method??'')===value?'selected':''}>${label}</option>`).join('')}</select></div>
       <p class="plan-form-hint">ظرفیت، سقف تعداد کاربران فعال این پلن است؛ خالی یعنی نامحدود و صفر یعنی توقف ساخت کاربر جدید.</p>
-      ${plan?'<div class="switch-field full"><span>اعمال تغییرات روی کاربران فعلی</span><label class="switch-line ios"><input type="checkbox" name="force_update" aria-label="اعمال تغییرات روی کاربران فعلی"></label></div><p class="plan-form-hint">با فعال‌کردن این گزینه، گروه دسترسی، ترافیک، محدودیت سرعت و اتصال کاربران این پلن به‌روز می‌شود. محدودیت اختصاصی تعرفه، مصرف و تاریخ انقضای آن‌ها حفظ می‌شود.</p>':''}
+      ${plan?'<div class="switch-field full"><span>اعمال تغییرات روی کاربران فعلی</span><label class="switch-line ios"><input type="checkbox" name="force_update" aria-label="اعمال تغییرات روی کاربران فعلی"></label></div><p class="plan-form-hint">فقط گزینه‌های تغییرکردهٔ گروه دسترسی، ترافیک، محدودیت سرعت و اتصال روی کاربران این پلن اعمال می‌شوند. محدودیت اختصاصی تعرفه، مصرف و تاریخ انقضا حفظ می‌شود.</p>':''}
       </div><div class="form-actions"><button class="button primary" type="submit">ذخیره پلن</button></div></form>`,{kind:'plan'});
     const form=scope.getElementById('planForm');
     for(const key of ['transfer_enable','speed_limit','device_limit','capacity_limit'])form.elements[key].min='0';
@@ -942,6 +974,14 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
     if(mobileMedia.matches)closeAllSelects();
   }
   mobileMedia.addEventListener('change',updateNativeSelects);
+  function updateEntityLayout() {
+    if (disposed || !content.querySelector('.entity-list-shell')) return;
+    hideEntityTooltip();
+    if (state.view === 'servers') renderServerRows();
+    else if (state.view === 'nodes' && draggingNode === null) renderNodeRows();
+    else if (state.view === 'plans') renderPlanRows();
+  }
+  mobileMedia.addEventListener('change',updateEntityLayout);
   function closeSelect(wrap){wrap.classList.remove('is-open');wrap.querySelector('[role=listbox]').hidden=true;wrap.querySelector('.invoice-custom-select__trigger').setAttribute('aria-expanded','false');}
   function closeAllSelects(){scope.querySelectorAll('.invoice-custom-select.is-open').forEach(closeSelect);}
   const closeActionMenus=except=>scope.querySelectorAll('details.tunnel-actions[open],details[data-panel-menu][open]').forEach(menu=>{if(!except?.includes(menu))menu.open=false;});
@@ -982,6 +1022,7 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
       window.removeEventListener('scroll',hideRankTooltip,true); window.removeEventListener('resize',hideRankTooltip); rankTooltip.remove();
       root.removeEventListener('pointerover',entityTooltipEvent);root.removeEventListener('focusin',entityTooltipEvent);root.removeEventListener('pointerout',leaveEntityTooltip);root.removeEventListener('focusout',leaveEntityTooltip);document.removeEventListener('click',entityTooltipEvent);window.removeEventListener('scroll',hideEntityTooltip,true);window.removeEventListener('resize',hideEntityTooltip);hideEntityTooltip();entityTooltip.remove();
       mobileMedia.removeEventListener('change',updateNativeSelects);
+      mobileMedia.removeEventListener('change',updateEntityLayout);
       overlay.remove(); document.body.style.overflow='';
     }
   };

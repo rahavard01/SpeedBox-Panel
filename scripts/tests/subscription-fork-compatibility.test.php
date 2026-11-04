@@ -164,7 +164,7 @@ $names=array_column($decorated,'name');
 $check(array_slice($names,0,2) === ['🇮🇷❌ ترافیک شما رو به اتمام است ❌','🇮🇷❌ اکانت شما رو به اتمام است ❌'], 'Exact fork warnings and order');
 $jalaliExpiry=App\Support\JalaliDateFormatter::format((int)$account()->expired_at,'Y-m-d');
 $check(array_slice($names,2,4) === [
-    '🇮🇷☠️ Remaining Traffic  ：1 GB',
+    '🇮🇷☠️ Traffic  ：1 GB',
     '🇮🇷👤 USER  ：user-example ',
     '🇮🇷♻️ Reset Traffic ：3 Days',
     "🇮🇷⛔️️ Expire ：{$jalaliExpiry} / 2 Days",
@@ -175,7 +175,7 @@ $check(str_contains($names[5],'/ 2') && str_contains($names[4],'3'), 'Civil rema
 $user=$account(); $user->expired_at=null; $user->next_reset_at=null; $user->transfer_enable=20*$gb;
 $unlimitedNames=array_column($private('decorateServers',[$private('serversFor',$account())[0]],$user),'name');
 $check(array_slice($unlimitedNames,0,3) === [
-    '🇮🇷☠️ Remaining Traffic  ：20 GB','🇮🇷👤 USER  ：user-example ',
+    '🇮🇷☠️ Traffic  ：20 GB','🇮🇷👤 USER  ：user-example ',
     '🇮🇷⛔️️ Expire ：Updating Soon ... /  Days',
 ], 'Fork unlimited expiry placeholder and omitted reset row');
 $user->expired_at=strtotime(date('Y-m-d').' -1 day');
@@ -187,7 +187,7 @@ $zeroResetNames=array_column($private('decorateServers',[$private('serversFor',$
 $check(!str_contains(implode('',$zeroResetNames),'Reset Traffic'), 'Fork zero reset day row omitted');
 $flagless=$private('serversFor',$account())[0]; $flagless['name']='No flag';
 $flaglessNames=array_column($private('decorateServers',[$flagless],$user),'name');
-$check($flaglessNames[0] === '☠️ Remaining Traffic  ：20 GB', 'Fork output without a leading country flag');
+$check($flaglessNames[0] === '☠️ Traffic  ：20 GB', 'Fork output without a leading country flag');
 $user->transfer_enable=0;
 $exhaustedNames=array_column($private('decorateServers',[$flagless],$user),'name');
 $check($exhaustedNames[0] === '⛔ ترافیک شما به اتمام رسید ⛔', 'Fork exhausted warning retained without bidi controls');
@@ -387,3 +387,4 @@ $check($subscribe() === 'https://request.example/custom/sub/'.$urlToken, 'Resett
 foreach (['subscribe_url', 'subscribe_path', 'force_https'] as $name) $clearUrlSetting($name);
 
 echo "SUBSCRIPTION COMPATIBILITY OK: {$checks} checks passed; SQLite :memory: only.\n";
+

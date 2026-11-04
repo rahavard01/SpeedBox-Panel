@@ -242,12 +242,16 @@ class SubscriptionController extends Controller
             $expiry = \App\Services\SubscriptionValidity::hasExpiry($user->expired_at) ? JalaliDateFormatter::format((int) $user->expired_at, 'Y-m-d') : __('Updating Soon ...');
             $account = str_replace(['@', '.com'], ['-', ''], $user->email);
             $names = $showInfo ? [
-                "{$flag}☠️ Remaining Traffic  ：{$remaining} GB",
+                "{$flag}☠️ Traffic  ：{$remaining} GB",
                 "{$flag}👤 USER  ：{$account} ",
             ] : [];
             $reset = app(SubscriptionResetDay::class)->forUser($user);
             if ($showInfo && $reset) $names[] = "{$flag}♻️ Reset Traffic ：{$reset} Days";
-            if ($showInfo) $names[] = "{$flag}⛔️️ Expire ：{$expiry} / {$days} Days";
+            if ($showInfo) {
+                $reservation = app(\App\Services\SubscriptionReservationService::class)->current((int) $user->id);
+                $expiryIcon = ($reservation['state'] ?? null) === 'reserved' ? '®️' : '⛔️️';
+                $names[] = "{$flag}{$expiryIcon} Expire ：{$expiry} / {$days} Days";
+            }
             if ($showOnline) {
                 $online = app(\App\Services\AccountOnlineStatus::class)->counts([(int) $user->id])[$user->id] ?? 0;
                 $limit = (int) ($user->device_limit ?? 0);
