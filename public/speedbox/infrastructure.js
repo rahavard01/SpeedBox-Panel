@@ -461,7 +461,7 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
     cards.className = 'entity-card-list';
     cards.dataset.mobileLayout = kind;
     const titleIndex = kind === 'nodes' ? 2 : 0;
-    const wideFields = {servers: [3, 4], nodes: [8], plans: [5]};
+    const wideFields = {servers: [3, 4], nodes: [], plans: [5]};
     table.querySelectorAll('tbody tr').forEach(row => {
       const card = document.createElement('article');
       card.className = 'entity-mobile-card';
@@ -469,7 +469,16 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
       const body = document.createElement('div');
       body.className = 'entity-card-body';
       let footer = null;
+      let nodeOrder = null, nodeNumber = null;
       [...row.cells].forEach((cell, index) => {
+        if (kind === 'nodes' && !cell.classList.contains('entity-loading-cell') && (index === 0 || index === 1)) {
+          const element = document.createElement('div');
+          element.className = index === 0 ? 'entity-card-order' : 'entity-card-meta';
+          while (cell.firstChild) element.appendChild(cell.firstChild);
+          element.querySelectorAll('[data-drag-node]').forEach(handle => handle.remove());
+          if (index === 0) nodeOrder = element; else nodeNumber = element;
+          return;
+        }
         const actions = cell.querySelector('.actions');
         if (actions) {
           footer = document.createElement('footer');
@@ -493,6 +502,18 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
         field.querySelectorAll('[data-drag-node]').forEach(handle => handle.remove());
         if (title) card.prepend(field); else body.appendChild(field);
       });
+      if (kind === 'nodes' && nodeNumber) {
+        const heading = card.querySelector('.entity-card-heading');
+        heading.classList.add('entity-card-heading--node');
+        const identity = document.createElement('div');
+        identity.className = 'entity-card-node-identity';
+        while (heading.firstChild) identity.appendChild(heading.firstChild);
+        const tools = document.createElement('div');
+        tools.className = 'entity-card-node-tools';
+        tools.appendChild(nodeNumber);
+        if (nodeOrder) tools.appendChild(nodeOrder);
+        heading.append(identity, tools);
+      }
       card.appendChild(body);
       if (footer) card.appendChild(footer);
       cards.appendChild(card);

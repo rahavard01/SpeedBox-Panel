@@ -67,6 +67,11 @@ let checks=0;
 const check=(value,message)=>{assert.ok(value,message);checks++;};
 const errors=[];
 let lastPage;
+async function chooseUserFilter(dialog, index, value, label) {
+  const field = dialog.locator('.field').nth(index);
+  if (await field.locator('select').count()) await field.locator('select').selectOption(value);
+  else { await field.locator('.invoice-custom-select__trigger').click(); await field.getByRole('button', {name:label,exact:true}).click(); }
+}
 const screenshot=async(page,name)=>{
   if(!process.env.SPEEDBOX_QA_ARTIFACT_DIR)return;
   mkdirSync(process.env.SPEEDBOX_QA_ARTIFACT_DIR,{recursive:true});
@@ -86,8 +91,8 @@ try {
     const dialog=page.getByRole('dialog',{name:'فیلتر کاربران'});await dialog.waitFor();
     check(await dialog.locator('label').allTextContents().then(v=>v.join('|')==='طرح فروش|پلن اصلی'),'Exact filter names');
     check(Math.abs((await page.locator('.table-toolbar').evaluate(el=>el.getBoundingClientRect().top+scrollY))-initialTableTop)<1,'Opening filters does not shift the table');
-    await dialog.locator('#user-sales-plan-filter').selectOption('10');
-    await dialog.locator('#user-main-plan-filter').selectOption('2');
+    await chooseUserFilter(dialog,0,'10','Sale A');
+    await chooseUserFilter(dialog,1,'2','Main B');
     await screenshot(page,'user-filters-'+width);
     await dialog.getByRole('button',{name:'اعمال',exact:true}).click();
     await page.locator('.users-table tbody tr').filter({hasText:'gamma'}).waitFor({state:'attached'});
@@ -100,7 +105,7 @@ try {
     await page.locator('.users-table tbody tr').filter({hasText:'gamma'}).waitFor({state:'attached'});
     check(await page.locator('.users-table tbody tr').count()===1,'Text search composes with filters');
     await page.locator('.user-list-filter-trigger').click();
-    await dialog.locator('#user-sales-plan-filter').selectOption('20');
+    await chooseUserFilter(dialog,0,'20','Sale B');
     await page.keyboard.press('Escape');
     check(await dialog.count()===0,'Escape closes the modal');
     check(await page.locator('.user-list-filter-trigger').evaluate(el=>el===document.activeElement),'Focus returns to the filter button');
@@ -111,7 +116,7 @@ try {
     await page.locator('.users-table tbody tr').filter({hasText:'sample45'}).waitFor({state:'attached'});
     check(await page.locator('.user-list-filter-count').count()===0,'Clear removes both filters');
     await page.locator('.user-list-filter-trigger').click();
-    await dialog.locator('#user-main-plan-filter').selectOption('2');
+    await chooseUserFilter(dialog,1,'2','Main B');
     await dialog.getByRole('button',{name:'اعمال',exact:true}).click();
     await page.locator('#userSearch').fill('1234567890abcdef1234567890abcdef');
     await page.locator('.users-table tbody tr').filter({hasText:'beta'}).waitFor({state:'attached'});
