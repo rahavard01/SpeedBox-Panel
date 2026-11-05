@@ -572,3 +572,11 @@
 .speedbox-infrastructure .panel-managed-table .actions{direction:rtl}
 
 .speedbox-infrastructure .panel-managed-table .node-name-line b{order:0}
+
+/* The grip stays to the right of both arrows on desktop and touch cards. */
+.speedbox-infrastructure .node-order-controls{direction:ltr;gap:4px}
+.speedbox-infrastructure .node-order-controls .node-drag{order:1;display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;width:26px;height:28px;min-width:0;min-height:0;padding:0;line-height:1;border:1px solid rgba(255,255,255,.15);border-radius:7px;background:rgba(255,255,255,.06);touch-action:none;user-select:none;-webkit-user-select:none}
+.speedbox-infrastructure .node-drag:active{cursor:grabbing}
+.speedbox-infrastructure .entity-mobile-card.is-dragging{opacity:.65}
+.speedbox-infrastructure .entity-mobile-card.node-drop-target{box-shadow:inset 0 3px #75cfff,0 0 0 1px #75cfff}
+.speedbox-infrastructure .entity-mobile-card.node-drop-target.node-drop-after{box-shadow:inset 0 -3px #75cfff,0 0 0 1px #75cfff}

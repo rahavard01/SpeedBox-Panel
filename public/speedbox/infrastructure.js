@@ -20,7 +20,7 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
   let tunnelSession = null;
   let modalCloseHandler = null;
   let draggingNode = null;
-  let nodeOrderSaving = false;
+  let nodeOrderSaving = false, nodeTouchCleanup = null;
   const later = (callback, delay) => { const id = setTimeout(() => { timers.delete(id); if (!disposed) callback(); }, delay); timers.add(id); return id; };
   const apiBase = '/api/admin/infrastructure';
   const token = localStorage.getItem('token');
@@ -492,7 +492,6 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
           const element = document.createElement('div');
           element.className = index === 0 ? 'entity-card-order' : 'entity-card-meta';
           while (cell.firstChild) element.appendChild(cell.firstChild);
-          element.querySelectorAll('[data-drag-node]').forEach(handle => handle.remove());
           if (index === 0) nodeOrder = element; else nodeNumber = element;
           return;
         }
@@ -515,8 +514,6 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
           field.appendChild(label);
         }
         while (cell.firstChild) field.appendChild(cell.firstChild);
-        // Mobile order controls use arrows; dragging is a desktop table action.
-        field.querySelectorAll('[data-drag-node]').forEach(handle => handle.remove());
         if (title) card.prepend(field); else body.appendChild(field);
       });
       if (kind === 'nodes' && nodeNumber) {
@@ -677,7 +674,7 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
   function nodeTable(list){
     if(!list.length)return empty('نودی ساخته نشده است');
     const markup = `<div class="table-wrap"><table class="node-table"><thead><tr><th>ترتیب</th><th>شماره نود</th><th>نود</th><th>نمایش</th><th>کاربران آنلاین</th><th>سرور مقصد</th><th>هسته</th><th>پورت</th><th>ترافیک مصرفی</th><th>عملیات</th></tr></thead><tbody>${list.map(n=>{
-      return `<tr data-node-row="${n.id}"><td><div class="node-order-controls"><button type="button" class="node-drag" draggable="true" data-drag-node="${n.id}" aria-label="جابه‌جایی نود" title="برای مرتب‌سازی بکشید"><i class="fas fa-grip-vertical" aria-hidden="true"></i></button><span><button type="button" data-node-move="${n.id}" data-step="-1" aria-label="یک ردیف بالاتر" ${state.nodes[0]?.id===n.id?'disabled':''}><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 15 12 9 18 15"/></svg></button><button type="button" data-node-move="${n.id}" data-step="1" aria-label="یک ردیف پایین‌تر" ${state.nodes.at(-1)?.id===n.id?'disabled':''}><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button></span></div></td><td><span class="node-number"><span class="node-id-badge"><bdi dir="ltr">${escape(n.id)}${n.parent_id?` <span class="node-parent-arrow" aria-hidden="true">→</span> ${escape(n.parent_id)}`:''}</bdi></span>${window.SpeedboxNodeEditor.protocolBadge(n.type)}</span></td><td><div class="entity node-identity"><div><div class="node-name-line">${nodeStatusDot(n)}<b>${escape(n.name)}</b></div><small dir="ltr">${escape(n.host)}</small></div></div></td><td><label class="switch-line ios"><input type="checkbox" data-node-show="${n.id}" aria-label="نمایش ${escape(n.name)} در سابسکرایب" ${n.show?'checked':''}></label></td><td><span dir="ltr">${Number(n.runtime?.online_users||0)}</span>${n.parent_id?'<small class="server-system">مشترک با نود اصلی</small>':''}</td><td>${escape(n.machine?.name||'—')}${n.parent_id?`<small class="server-system">نود اصلی: ${escape(n.parent_id)}</small>`:''}</td><td><span class="badge">${n.kernel==='xray'?'Xray':'Sing-box'}</span></td><td><span dir="ltr">${escape(n.port)}</span></td><td>${nodeTraffic(n)}</td><td><div class="actions"><button class="button entity-edit" data-node-edit="${n.id}">ویرایش</button><button class="button entity-copy" data-node-clone="${n.id}">کپی</button><button class="button entity-delete" data-node-delete="${n.id}">حذف</button></div></td></tr>`;
+      return `<tr data-node-row="${n.id}"><td><div class="node-order-controls"><button type="button" class="node-drag" draggable="true" data-drag-node="${n.id}" aria-label="جابه‌جایی نود" title="برای مرتب‌سازی بکشید"><svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><circle cx="9" cy="5" r="1.6"/><circle cx="15" cy="5" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="19" r="1.6"/><circle cx="15" cy="19" r="1.6"/></svg></button><span><button type="button" data-node-move="${n.id}" data-step="-1" aria-label="یک ردیف بالاتر" ${state.nodes[0]?.id===n.id?'disabled':''}><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 15 12 9 18 15"/></svg></button><button type="button" data-node-move="${n.id}" data-step="1" aria-label="یک ردیف پایین‌تر" ${state.nodes.at(-1)?.id===n.id?'disabled':''}><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button></span></div></td><td><span class="node-number"><span class="node-id-badge"><bdi dir="ltr">${escape(n.id)}${n.parent_id?` <span class="node-parent-arrow" aria-hidden="true">→</span> ${escape(n.parent_id)}`:''}</bdi></span>${window.SpeedboxNodeEditor.protocolBadge(n.type)}</span></td><td><div class="entity node-identity"><div><div class="node-name-line">${nodeStatusDot(n)}<b>${escape(n.name)}</b></div><small dir="ltr">${escape(n.host)}</small></div></div></td><td><label class="switch-line ios"><input type="checkbox" data-node-show="${n.id}" aria-label="نمایش ${escape(n.name)} در سابسکرایب" ${n.show?'checked':''}></label></td><td><span dir="ltr">${Number(n.runtime?.online_users||0)}</span>${n.parent_id?'<small class="server-system">مشترک با نود اصلی</small>':''}</td><td>${escape(n.machine?.name||'—')}${n.parent_id?`<small class="server-system">نود اصلی: ${escape(n.parent_id)}</small>`:''}</td><td><span class="badge">${n.kernel==='xray'?'Xray':'Sing-box'}</span></td><td><span dir="ltr">${escape(n.port)}</span></td><td>${nodeTraffic(n)}</td><td><div class="actions"><button class="button entity-edit" data-node-edit="${n.id}">ویرایش</button><button class="button entity-copy" data-node-clone="${n.id}">کپی</button><button class="button entity-delete" data-node-delete="${n.id}">حذف</button></div></td></tr>`;
     }).join('')}</tbody></table></div>`;
     return entityCardLayout(markup, 'nodes');
   }
@@ -716,6 +713,52 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
     ids.splice(to+(after?1:0),0,Number(id));
     saveNodeOrder(ids);
   }
+  function bindTouchNodeDrag(handle){
+    handle.draggable=false;
+    handle.onpointerdown=event=>{
+      if(event.button!==0||savingCount||nodeOrderSaving||disposed)return;
+      nodeTouchCleanup?.();event.preventDefault();
+      const id=Number(handle.dataset.dragNode),pointer=event.pointerId,row=handle.closest('[data-node-row]');
+      let x=event.clientX,y=event.clientY,target=null,after=false,active=false,frame;
+      const startY=y;
+      draggingNode=id;cancelNodeRefresh();nodeFetchVersion++;
+      handle.setPointerCapture(pointer);
+      const updateTarget=()=>{
+        const candidate=document.elementFromPoint(x,y)?.closest('[data-node-row]');
+        target=candidate&&candidate!==row&&content.contains(candidate)?candidate:null;
+        content.querySelectorAll('.node-drop-target,.node-drop-after').forEach(item=>item.classList.remove('node-drop-target','node-drop-after'));
+        if(target){const rect=target.getBoundingClientRect();after=y>rect.top+rect.height/2;target.classList.add('node-drop-target');target.classList.toggle('node-drop-after',after);}
+      };
+      const tick=()=>{
+        if(active){
+          const step=y<70?-10:y>window.innerHeight-70?10:0;
+          if(step)window.scrollBy(0,step);
+          updateTarget();
+        }
+        frame=requestAnimationFrame(tick);
+      };
+      nodeTouchCleanup=()=>{
+        cancelAnimationFrame(frame);
+        handle.onpointermove=handle.onpointerup=handle.onpointercancel=handle.onlostpointercapture=null;
+        if(handle.hasPointerCapture(pointer))handle.releasePointerCapture(pointer);
+        content.querySelectorAll('.is-dragging,.node-drop-target,.node-drop-after').forEach(item=>item.classList.remove('is-dragging','node-drop-target','node-drop-after'));
+        draggingNode=null;nodeTouchCleanup=null;scheduleNodeRefresh();
+      };
+      handle.onpointermove=move=>{
+        if(move.pointerId!==pointer)return;
+        x=move.clientX;y=move.clientY;
+        if(Math.abs(y-startY)>6){active=true;row.classList.add('is-dragging');updateTarget();}
+      };
+      handle.onpointerup=up=>{
+        if(up.pointerId!==pointer)return;
+        const destination=active?target?.dataset.nodeRow:null,insertAfter=after;
+        nodeTouchCleanup?.();
+        if(destination)moveNode(id,destination,insertAfter);
+      };
+      handle.onpointercancel=handle.onlostpointercapture=()=>nodeTouchCleanup?.();
+      frame=requestAnimationFrame(tick);
+    };
+  }
   function bindNodeRows(){
     content.querySelectorAll('[data-node-edit]').forEach(b=>b.onclick=()=>nodeForm(state.nodes.find(n=>n.id==b.dataset.nodeEdit)));
     content.querySelectorAll('[data-node-clone]').forEach(b=>b.onclick=async()=>{try{const r=await api(`/nodes/${b.dataset.nodeClone}/clone`,{method:'POST'});toast(r.message);await loadNodes();}catch(e){if(e.name!=='AbortError')toast(e.message,'error');}});
@@ -723,6 +766,7 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
     content.querySelectorAll('[data-node-show]').forEach(input=>input.onchange=async()=>{const id=input.dataset.nodeShow,value=input.checked;input.disabled=true;try{const r=await api(`/nodes/${id}/flags`,{method:'PATCH',body:JSON.stringify({show:value})});const node=state.nodes.find(n=>n.id==id);if(node)node.show=value;toast(r.message);}catch(e){input.checked=!value;if(e.name!=='AbortError')toast(e.message,'error');}finally{input.disabled=false;}});
     content.querySelectorAll('[data-node-move]').forEach(b=>b.onclick=()=>{const index=state.nodes.findIndex(n=>n.id==b.dataset.nodeMove),step=Number(b.dataset.step),target=state.nodes[index+step];if(target)moveNode(b.dataset.nodeMove,target.id,step>0);});
     content.querySelectorAll('[data-drag-node]').forEach(handle=>{
+      if(handle.closest('.entity-mobile-card')){bindTouchNodeDrag(handle);return;}
       handle.ondragstart=e=>{if(savingCount||nodeOrderSaving){e.preventDefault();return;}draggingNode=Number(handle.dataset.dragNode);cancelNodeRefresh();nodeFetchVersion++;e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/plain',String(draggingNode));handle.closest('[data-node-row]').classList.add('is-dragging');};
       handle.ondragend=()=>{draggingNode=null;content.querySelectorAll('.is-dragging,.node-drop-target').forEach(row=>row.classList.remove('is-dragging','node-drop-target'));scheduleNodeRefresh();};
     });
@@ -1040,6 +1084,7 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
   }
   mobileMedia.addEventListener('change',updateNativeSelects);
   function updateEntityLayout() {
+    nodeTouchCleanup?.();
     if (disposed || !content.querySelector('.entity-list-shell')) return;
     hideEntityTooltip();
     if (state.view === 'servers') renderServerRows();
@@ -1063,6 +1108,7 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
   function showView(view) {
     if (disposed) return;
     const selected = titles[view] ? view : 'overview';
+    if(selected!==state.view)nodeTouchCleanup?.();
     emergencySession?.dispose(); emergencySession=null;
     tunnelSession?.dispose(); tunnelSession=null;
     cancelServerRefresh(); serverFetchVersion++;cancelNodeRefresh();nodeFetchVersion++;
@@ -1078,6 +1124,7 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
   return {
     showView,
     dispose() {
+      nodeTouchCleanup?.();
       closeRankCalendar();
       nodeEditorDispose?.();nodeEditorDispose=null;
       emergencySession?.dispose(); emergencySession=null;
