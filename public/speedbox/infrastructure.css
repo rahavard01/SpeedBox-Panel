@@ -495,14 +495,14 @@
 .speedbox-infrastructure .entity-mobile-card :is(.server-resources,.deployment-progress,.node-traffic){width:100%;min-width:0;max-width:none}
 .speedbox-infrastructure .entity-mobile-card .node-order-controls{justify-content:center;gap:0}
 .speedbox-infrastructure .entity-mobile-card .node-order-controls>span{flex-direction:row;gap:6px}
-.speedbox-infrastructure .entity-card-heading--node{display:flex;align-items:center;justify-content:space-between;gap:12px;text-align:right}
+.speedbox-infrastructure .entity-card-heading--node{display:flex;flex-direction:row-reverse;align-items:center;justify-content:space-between;gap:12px;text-align:right}
 .speedbox-infrastructure .entity-card-node-identity{flex:1;min-width:0}
-.speedbox-infrastructure .entity-card-node-identity .entity{justify-content:flex-start;text-align:right}
-.speedbox-infrastructure .entity-card-node-identity .entity small{text-align:right}
-.speedbox-infrastructure .entity-card-node-tools{display:grid;justify-items:center;gap:8px;flex:0 0 auto}
+.speedbox-infrastructure .entity-card-node-identity .entity{justify-content:flex-end;text-align:left}
+.speedbox-infrastructure .entity-card-node-identity .entity small{text-align:left}
+.speedbox-infrastructure .entity-card-node-tools{display:grid;align-items:center;justify-items:center;gap:4px;flex:0 0 auto}
 .speedbox-infrastructure .entity-card-meta .node-number{justify-content:center}
-.speedbox-infrastructure .entity-card-meta .node-id-badge{margin:0}
-.speedbox-infrastructure .entity-mobile-card .node-order-controls button{min-width:30px;min-height:28px;border-radius:6px;background:rgba(255,255,255,.06)}
+.speedbox-infrastructure .entity-card-meta .node-id-badge{margin:0;min-width:24px;height:24px;padding:0 6px}
+.speedbox-infrastructure .entity-mobile-card .node-order-controls button{display:flex;align-items:center;justify-content:center;min-width:0;min-height:0;width:26px;height:24px;padding:0;line-height:1;border:1px solid rgba(255,255,255,.15);border-radius:7px;background:rgba(255,255,255,.06)}
 .speedbox-infrastructure .entity-card-loading{grid-column:1/-1;min-height:82px;border:0;background:transparent}
 
 }
@@ -546,3 +546,13 @@
 @media(max-width:540px){.speedbox-infrastructure-overlay .certificate-dns-field>.certificate-dns-hint{grid-column:1/-1}}
 
 .speedbox-infrastructure-overlay [data-deployment-log][data-error]::before{content:attr(data-error);display:block;color:#f0b98d;margin-bottom:12px}
+
+/* Reuse the tariff ordering pattern: compact rows, then explicit confirmation. */
+.speedbox-infrastructure .node-sort-toggle{color:#c4b5fd;border-color:rgba(167,139,250,.5);background:rgba(139,92,246,.08);margin:0;min-height:38px;padding:8px 14px}
+.speedbox-infrastructure .node-sort-toggle.success{color:#fff}
+.speedbox-infrastructure .node-sort-cancel[hidden]{display:none!important}
+.speedbox-infrastructure .node-sort-cancel{min-height:38px}
+.speedbox-infrastructure .node-sort-mode .entity-card-body,.speedbox-infrastructure .node-sort-mode .entity-card-actions{display:none}
+.speedbox-infrastructure .node-sort-mode .entity-card-heading{margin-bottom:0;padding-bottom:0;border-bottom:0}
+.speedbox-infrastructure .node-sort-mode .node-table :is(th,td):nth-child(n+4){display:none}
+@media(max-width:540px){.speedbox-infrastructure .entity-toolbar .node-sort-toggle{flex:1 1 auto}.speedbox-infrastructure .entity-toolbar .node-sort-cancel{flex:0 0 auto}}
