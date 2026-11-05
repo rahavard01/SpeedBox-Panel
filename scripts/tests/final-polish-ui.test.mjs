@@ -112,8 +112,9 @@ for (const view of ['overview','servers','nodes','plans','routing']) {
     assert.equal(content.querySelectorAll('.rank-list').length, 2);
   } else if (view === 'routing') assert.equal(content.querySelectorAll('h2').length, 2);
   else {
-    assert.ok(content.querySelector('thead th'), view + ' preserves table headings while loading');
-    assert.ok(content.querySelector('tbody td').textContent.includes('در حال'));
+    assert.ok(content.querySelector('.entity-card-list .entity-card-loading'), view + ' renders a mobile loading card');
+    assert.ok(content.querySelector('.entity-card-loading').textContent.includes('در حال'));
+    assert.equal(content.querySelector('table'), null, view + ' mobile loading does not depend on table layout');
   }
   await new Promise(resolve => setTimeout(resolve, 0));
   if (view === 'overview') {
