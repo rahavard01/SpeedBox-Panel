@@ -1,7 +1,7 @@
 {
   "edition": "public",
   "managed_by": "speedbox-public-release-v1",
-  "source_commit": "64f51d1159f57d9863a3307c00d00eea98c1402a",
+  "source_commit": "48f6fdef8f9d455f2de04b56f6fe0c276cbf1264",
   "panel_version": "3.0",
   "frontend_sources": false
 }

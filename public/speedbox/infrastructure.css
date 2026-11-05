@@ -291,10 +291,6 @@
 
 /* Keep row actions together and give the visibility switch only its own space. */
 .speedbox-infrastructure .node-table th,.speedbox-infrastructure .node-table td{padding:8px 6px!important}
-.speedbox-infrastructure .node-table th:nth-child(1),.speedbox-infrastructure .node-table td:nth-child(1){width:48px}
-.speedbox-infrastructure .node-table th:nth-child(4),.speedbox-infrastructure .node-table td:nth-child(4){width:62px}
-.speedbox-infrastructure .node-table th:nth-child(8),.speedbox-infrastructure .node-table td:nth-child(8),.speedbox-infrastructure .node-table th:nth-child(9),.speedbox-infrastructure .node-table td:nth-child(9){width:70px}
-.speedbox-infrastructure .node-table th:last-child,.speedbox-infrastructure .node-table td:last-child{width:186px;min-width:186px}
 .speedbox-infrastructure .node-table .actions,.speedbox-infrastructure .plan-table .actions{flex-wrap:nowrap;white-space:nowrap}
 .speedbox-infrastructure .node-table .actions .button,.speedbox-infrastructure .plan-table .actions .button{flex-shrink:0}
 .speedbox-infrastructure .plan-table th{white-space:nowrap}
@@ -547,27 +543,11 @@
 
 .speedbox-infrastructure-overlay [data-deployment-log][data-error]::before{content:attr(data-error);display:block;color:#f0b98d;margin-bottom:12px}
 
-/* Reuse the tariff ordering pattern: compact rows, then explicit confirmation. */
-.speedbox-infrastructure .node-sort-toggle{color:#c4b5fd;border-color:rgba(167,139,250,.5);background:rgba(139,92,246,.08);margin:0;min-height:38px;padding:8px 14px}
-.speedbox-infrastructure .node-sort-toggle.success{color:#fff}
-.speedbox-infrastructure .node-sort-cancel[hidden]{display:none!important}
-.speedbox-infrastructure .node-sort-cancel{min-height:38px}
-.speedbox-infrastructure .node-sort-mode .entity-card-body,.speedbox-infrastructure .node-sort-mode .entity-card-actions{display:none}
-.speedbox-infrastructure .node-sort-mode .entity-card-heading{margin-bottom:0;padding-bottom:0;border-bottom:0}
-.speedbox-infrastructure .node-sort-mode .node-table :is(th,td):nth-child(n+4){display:none}
-@media(max-width:540px){.speedbox-infrastructure .entity-toolbar .node-sort-toggle{flex:1 1 auto}.speedbox-infrastructure .entity-toolbar .node-sort-cancel{flex:0 0 auto}}
-
-/* Ordering is a separate row below search; arrows only belong to the draft. */
-.speedbox-infrastructure .node-toolbar{display:grid;grid-template-columns:auto minmax(0,1fr)}
-.speedbox-infrastructure .node-sort-actions{grid-column:1/-1;display:flex;align-items:center;justify-content:center;gap:10px}
-.speedbox-infrastructure .node-sort-actions .button{margin:0}
-.speedbox-infrastructure .node-order-controls{display:none}
-.speedbox-infrastructure .node-sort-mode .node-order-controls{display:flex}
+/* Direct ordering retains the original controls, using centred SVG arrows. */
+.speedbox-infrastructure .node-order-controls{display:flex;align-items:center;justify-content:center;gap:5px}
+.speedbox-infrastructure .node-order-controls>span{display:flex;flex-direction:row;gap:3px}
 .speedbox-infrastructure .node-order-controls button:not(.node-drag){display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;padding:0;line-height:1;width:26px;height:28px;min-width:0;min-height:0;border:1px solid rgba(255,255,255,.15);border-radius:7px;background:rgba(255,255,255,.06)}
 .speedbox-infrastructure .node-order-controls svg{display:block;flex-shrink:0;width:16px;height:16px;margin:0}
-@media(max-width:760px){.speedbox-infrastructure .node-toolbar{grid-template-columns:minmax(0,1fr)}.speedbox-infrastructure .node-toolbar .button{width:auto}.speedbox-infrastructure .node-sort-actions .node-sort-toggle{flex:0 1 auto}}
-
-.speedbox-infrastructure .node-order-controls>span{flex-direction:row;gap:3px}
 
 /* Management lists use the same table surface and spacing as representatives. */
 .speedbox-infrastructure .panel-card.entity-list-shell{padding:0;border:0;background:transparent;box-shadow:none;backdrop-filter:none;-webkit-backdrop-filter:none}
@@ -581,10 +561,14 @@
 .speedbox-infrastructure .entity-list-shell tbody tr td{background:transparent}
 .speedbox-infrastructure .entity-list-shell .entity{white-space:nowrap}
 .speedbox-infrastructure .entity-list-shell .entity small{white-space:nowrap;overflow-wrap:normal;word-break:normal}
-.speedbox-infrastructure .node-table :is(th,td):first-child{display:none}
-.speedbox-infrastructure .node-sort-mode .node-table :is(th,td):first-child{display:table-cell}
-.speedbox-infrastructure .node-table :is(th,td):nth-child(3){min-width:190px}
 .speedbox-infrastructure .node-table .node-name-line{white-space:nowrap;flex-wrap:nowrap}
-.speedbox-infrastructure .node-sort-actions{width:100%}
-#app .speedbox-infrastructure .node-sort-actions .node-sort-toggle{flex:0 1 260px;min-width:min(260px,100%);height:var(--speedbox-list-control-height);min-height:var(--speedbox-list-control-height);box-sizing:border-box;padding:0 24px;line-height:20px}
-@media(max-width:767px){#app .speedbox-infrastructure .node-sort-actions .node-sort-toggle{flex:1 1 auto}}
+
+.speedbox-infrastructure .panel-managed-table{direction:ltr}
+.speedbox-infrastructure .entity-list-shell .table-scroll-rtl{direction:rtl;overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch}
+.speedbox-infrastructure .node-table [data-panel-col="0"]{width:96px;min-width:96px}
+.speedbox-infrastructure .node-table [data-panel-col="1"]{min-width:110px}
+.speedbox-infrastructure .node-table [data-panel-col="2"]{min-width:190px}
+.speedbox-infrastructure .node-table [data-panel-col="9"]{min-width:186px}
+.speedbox-infrastructure .panel-managed-table .actions{direction:rtl}
+
+.speedbox-infrastructure .panel-managed-table .node-name-line b{order:0}

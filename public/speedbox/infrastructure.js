@@ -20,7 +20,7 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
   let tunnelSession = null;
   let modalCloseHandler = null;
   let draggingNode = null;
-  let nodeSortMode = false, nodeSortSaving = false, nodeSortOriginal = [], nodeSortQuery = "";
+  let nodeOrderSaving = false;
   const later = (callback, delay) => { const id = setTimeout(() => { timers.delete(id); if (!disposed) callback(); }, delay); timers.add(id); return id; };
   const apiBase = '/api/admin/infrastructure';
   const token = localStorage.getItem('token');
@@ -452,7 +452,23 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
     }).join('')}</div>`;
   }
   function entityCardLayout(markup, kind) {
-    if (!mobileMedia.matches) return markup;
+    if (!mobileMedia.matches) {
+      const desktop = document.createElement('template');
+      desktop.innerHTML = markup;
+      const table = desktop.content.querySelector('table');
+      if (!table) return markup;
+      table.classList.add('billing-table', 'panel-managed-table');
+      table.setAttribute('dir', 'ltr');
+      table.parentElement.classList.add('table-scroll-rtl');
+      // Match representative tables: LTR cells inside an RTL scroll viewport.
+      // Reversing the DOM preserves the existing physical column positions.
+      for (const row of table.rows) {
+        const cells = [...row.cells];
+        cells.forEach((cell, index) => cell.dataset.panelCol = index);
+        row.replaceChildren(...cells.reverse());
+      }
+      return desktop.innerHTML;
+    }
     const template = document.createElement('template');
     template.innerHTML = markup;
     const table = template.content.querySelector('table');
@@ -624,27 +640,25 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
 
   function cancelNodeRefresh(){if(nodePollTimer!==null){clearTimeout(nodePollTimer);timers.delete(nodePollTimer);nodePollTimer=null;}}
   function scheduleNodeRefresh(){
-    cancelNodeRefresh();if(state.view!=='nodes'||nodeSortMode)return;
-    nodePollTimer=later(async()=>{nodePollTimer=null;if(state.view!=='nodes')return;if(savingCount||draggingNode!==null){scheduleNodeRefresh();return;}try{await loadNodes(true);}catch(e){if(e.name!=='AbortError'&&state.view==='nodes')scheduleNodeRefresh();}},5000);
+    cancelNodeRefresh();if(state.view!=='nodes')return;
+    nodePollTimer=later(async()=>{nodePollTimer=null;if(state.view!=='nodes')return;if(savingCount||nodeOrderSaving||draggingNode!==null){scheduleNodeRefresh();return;}try{await loadNodes(true);}catch(e){if(e.name!=='AbortError'&&state.view==='nodes')scheduleNodeRefresh();}},5000);
   }
   async function loadNodes(background=false){
-    if(background && nodeSortMode)return;
+    if(background && nodeOrderSaving)return;
     cancelNodeRefresh();const version=++nodeFetchVersion;
     if(!background||!scope.getElementById('nodeSearch')){
       const query=scope.getElementById('nodeSearch')?.value||'';
-      content.innerHTML=`<div class="toolbar entity-toolbar node-toolbar"><button class="button primary" id="addNode"><i class="fas fa-plus" aria-hidden="true"></i> ساخت نود</button><input class="search" id="nodeSearch" placeholder="جستجو"><div class="node-sort-actions"><button class="button node-sort-toggle" id="nodeSortToggle" type="button" disabled>مرتب‌سازی نودها</button><button class="button cancel node-sort-cancel" id="nodeSortCancel" type="button" hidden>لغو</button></div></div><article class="panel-card entity-list-shell"></article>`;
+      content.innerHTML=`<div class="toolbar entity-toolbar"><button class="button primary" id="addNode"><i class="fas fa-plus" aria-hidden="true"></i> ساخت نود</button><input class="search" id="nodeSearch" placeholder="جستجو"></div><article class="panel-card entity-list-shell"></article>`;
       content.querySelector('.panel-card').innerHTML=loadingTable(['ترتیب','شماره نود','نود','نمایش','کاربران آنلاین','سرور مقصد','هسته','پورت','ترافیک مصرفی','عملیات'],'nodes');
       scope.getElementById('nodeSearch').value=query;
       scope.getElementById('addNode').disabled=true;
       scope.getElementById('addNode').onclick=()=>nodeForm();scope.getElementById('nodeSearch').oninput=renderNodeRows;
-      scope.getElementById('nodeSortToggle').onclick=()=>nodeSortMode?confirmNodeSort():beginNodeSort();
-      scope.getElementById('nodeSortCancel').onclick=()=>cancelNodeSort();
     }
     const results=background?[await api('/nodes')]:await Promise.all([api('/nodes'),api('/machines'),api('/groups'),api('/routes')]);
     if(version!==nodeFetchVersion||state.view!=='nodes')return;
     state.nodes=results[0].data;state.kernelCapabilities=results[0].meta?.kernel_capabilities;
     if(!background){state.machines=results[1].data;state.groups=results[2].data;state.routes=results[3].data;scope.getElementById('addNode').disabled=false;}
-    if(draggingNode===null){hideEntityTooltip();renderNodeRows();}updateNodeSortControls();scheduleNodeRefresh();
+    if(draggingNode===null){hideEntityTooltip();renderNodeRows();}scheduleNodeRefresh();
   }
   function nodeTraffic(node){
     const usage=node.traffic_usage||{total:Number(node.u||0)+Number(node.d||0),limit:Number(node.transfer_enable||0)};
@@ -671,50 +685,36 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
     const q=(scope.getElementById('nodeSearch')?.value||'').toLowerCase();
     content.querySelector('.panel-card').innerHTML=nodeTable(state.nodes.filter(n=>`${n.id} ${n.name} ${n.host} ${n.type} ${n.kernel} ${n.machine?.name}`.toLowerCase().includes(q)));bindNodeRows();
   }
-  function updateNodeSortControls(){
-    content.classList.toggle('node-sort-mode',nodeSortMode);
-    const toggle=scope.getElementById('nodeSortToggle'),cancel=scope.getElementById('nodeSortCancel'),search=scope.getElementById('nodeSearch'),add=scope.getElementById('addNode');
-    if(toggle){toggle.textContent=nodeSortMode?'تأیید ترتیب':'مرتب‌سازی نودها';toggle.disabled=nodeSortSaving||state.nodes.length<2;toggle.classList.toggle('success',nodeSortMode);toggle.setAttribute('aria-pressed',String(nodeSortMode));}
-    if(cancel){cancel.hidden=!nodeSortMode;cancel.disabled=nodeSortSaving;}
-    if(search)search.disabled=nodeSortMode;
-    if(add)add.disabled=nodeSortMode;
-  }
-  function beginNodeSort(render=true){
-    if(nodeSortMode||state.nodes.length<2)return;
-    nodeSortMode=true;nodeSortOriginal=state.nodes.map(node=>Number(node.id));
-    nodeSortQuery=scope.getElementById('nodeSearch')?.value||'';
-    scope.getElementById('nodeSearch').value='';cancelNodeRefresh();nodeFetchVersion++;
-    updateNodeSortControls();if(render)renderNodeRows();
-  }
-  function cancelNodeSort(){
-    if(!nodeSortMode||nodeSortSaving)return;
+  async function saveNodeOrder(ids){
+    if(nodeOrderSaving)return;
+    const original=state.nodes.map(node=>Number(node.id));
     const nodes=new Map(state.nodes.map(node=>[Number(node.id),node]));
-    state.nodes=nodeSortOriginal.map(id=>nodes.get(id)).filter(Boolean);
-    nodeSortMode=false;nodeSortOriginal=[];draggingNode=null;
-    scope.getElementById('nodeSearch').value=nodeSortQuery;
-    updateNodeSortControls();renderNodeRows();scheduleNodeRefresh();
-  }
-  async function confirmNodeSort(){
-    if(!nodeSortMode||nodeSortSaving)return;
-    nodeSortSaving=true;updateNodeSortControls();
+    nodeOrderSaving=true;cancelNodeRefresh();nodeFetchVersion++;
+    state.nodes=ids.map(id=>nodes.get(id));renderNodeRows();
     content.querySelectorAll('[data-node-move],[data-drag-node]').forEach(button=>button.disabled=true);
     try{
-      const r=await api('/nodes/order',{method:'PUT',body:JSON.stringify({ids:state.nodes.map(node=>Number(node.id))})});
-      if(disposed||state.view!=='nodes')return;
-      nodeSortMode=false;nodeSortOriginal=[];scope.getElementById('nodeSearch').value=nodeSortQuery;
-      toast(r.message);await loadNodes(true);
-    }catch(error){if(error.name!=='AbortError')toast(error.message,'error');}
-    finally{nodeSortSaving=false;if(!disposed&&state.view==='nodes'){updateNodeSortControls();renderNodeRows();scheduleNodeRefresh();}}
+      const result=await api('/nodes/order',{method:'PUT',body:JSON.stringify({ids})});
+      if(!disposed&&state.view==='nodes')toast(result.message);
+    }catch(error){
+      if(!disposed&&state.view==='nodes'){
+        state.nodes=original.map(id=>nodes.get(id));
+        if(error.name!=='AbortError')toast(error.message,'error');
+      }
+    }finally{
+      nodeOrderSaving=false;
+      if(!disposed&&state.view==='nodes'){
+        renderNodeRows();
+        await loadNodes(true).catch(()=>scheduleNodeRefresh());
+      }
+    }
   }
   function moveNode(id,target,after=false){
-    if(nodeSortSaving)return;
-    if(!nodeSortMode)beginNodeSort(false);
+    if(nodeOrderSaving)return;
     const ids=state.nodes.map(node=>Number(node.id)),from=ids.indexOf(Number(id));
     if(from<0||Number(id)===Number(target))return;
     ids.splice(from,1);const to=ids.indexOf(Number(target));if(to<0)return;
     ids.splice(to+(after?1:0),0,Number(id));
-    const nodes=new Map(state.nodes.map(node=>[Number(node.id),node]));
-    state.nodes=ids.map(key=>nodes.get(key));renderNodeRows();
+    saveNodeOrder(ids);
   }
   function bindNodeRows(){
     content.querySelectorAll('[data-node-edit]').forEach(b=>b.onclick=()=>nodeForm(state.nodes.find(n=>n.id==b.dataset.nodeEdit)));
@@ -723,7 +723,7 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
     content.querySelectorAll('[data-node-show]').forEach(input=>input.onchange=async()=>{const id=input.dataset.nodeShow,value=input.checked;input.disabled=true;try{const r=await api(`/nodes/${id}/flags`,{method:'PATCH',body:JSON.stringify({show:value})});const node=state.nodes.find(n=>n.id==id);if(node)node.show=value;toast(r.message);}catch(e){input.checked=!value;if(e.name!=='AbortError')toast(e.message,'error');}finally{input.disabled=false;}});
     content.querySelectorAll('[data-node-move]').forEach(b=>b.onclick=()=>{const index=state.nodes.findIndex(n=>n.id==b.dataset.nodeMove),step=Number(b.dataset.step),target=state.nodes[index+step];if(target)moveNode(b.dataset.nodeMove,target.id,step>0);});
     content.querySelectorAll('[data-drag-node]').forEach(handle=>{
-      handle.ondragstart=e=>{if(savingCount||nodeSortSaving){e.preventDefault();return;}if(!nodeSortMode)beginNodeSort(false);draggingNode=Number(handle.dataset.dragNode);cancelNodeRefresh();nodeFetchVersion++;e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/plain',String(draggingNode));handle.closest('[data-node-row]').classList.add('is-dragging');};
+      handle.ondragstart=e=>{if(savingCount||nodeOrderSaving){e.preventDefault();return;}draggingNode=Number(handle.dataset.dragNode);cancelNodeRefresh();nodeFetchVersion++;e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/plain',String(draggingNode));handle.closest('[data-node-row]').classList.add('is-dragging');};
       handle.ondragend=()=>{draggingNode=null;content.querySelectorAll('.is-dragging,.node-drop-target').forEach(row=>row.classList.remove('is-dragging','node-drop-target'));scheduleNodeRefresh();};
     });
     content.querySelectorAll('[data-node-row]').forEach(row=>{
@@ -1063,7 +1063,6 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
   function showView(view) {
     if (disposed) return;
     const selected = titles[view] ? view : 'overview';
-    if(state.view==='nodes' && selected!=='nodes' && nodeSortMode){nodeSortSaving=false;cancelNodeSort();}
     emergencySession?.dispose(); emergencySession=null;
     tunnelSession?.dispose(); tunnelSession=null;
     cancelServerRefresh(); serverFetchVersion++;cancelNodeRefresh();nodeFetchVersion++;
