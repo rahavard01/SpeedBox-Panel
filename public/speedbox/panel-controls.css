@@ -402,3 +402,12 @@ body:has(#app .topbar-holder) .side-drawer{right:0!important;max-width:100vw;box
   :root body :is(input:not([type=checkbox],[type=radio],[type=range],[type=color],[type=hidden],[type=button],[type=submit],[type=reset],[type=image],[type=file]),textarea,select){font-size:16px!important}
  }
 }
+
+/* List controls share one explicit height, including native Safari search fields. */
+:root{--speedbox-list-control-height:38px}
+@media(max-width:767px){:root{--speedbox-list-control-height:42px}}
+@media(min-width:1367px){:root{--speedbox-list-control-height:2.781845vw}}
+#app .table-toolbar :is(input.form-control,button.btn-create-user,button.invoice-custom-select__trigger),
+#app .speedbox-infrastructure .entity-toolbar :is(input.search,button.primary){box-sizing:border-box!important;height:var(--speedbox-list-control-height)!important;min-height:var(--speedbox-list-control-height)!important;line-height:20px!important;padding-block:0!important}
+#app .table-toolbar input.form-control,#app .speedbox-infrastructure .entity-toolbar input.search{appearance:none;-webkit-appearance:none}
+#app .table-toolbar:not(.invoice-billing-toolbar){align-items:flex-start}

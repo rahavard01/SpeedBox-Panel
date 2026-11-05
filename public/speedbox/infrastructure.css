@@ -568,3 +568,23 @@
 @media(max-width:760px){.speedbox-infrastructure .node-toolbar{grid-template-columns:minmax(0,1fr)}.speedbox-infrastructure .node-toolbar .button{width:auto}.speedbox-infrastructure .node-sort-actions .node-sort-toggle{flex:0 1 auto}}
 
 .speedbox-infrastructure .node-order-controls>span{flex-direction:row;gap:3px}
+
+/* Management lists use the same table surface and spacing as representatives. */
+.speedbox-infrastructure .panel-card.entity-list-shell{padding:0;border:0;background:transparent;box-shadow:none;backdrop-filter:none;-webkit-backdrop-filter:none}
+.speedbox-infrastructure .entity-list-shell .table-wrap{border:0;border-radius:12px;background:transparent}
+.speedbox-infrastructure .entity-list-shell table{width:max-content;min-width:max(100%,1070px);max-width:none;font:600 12px/1.5 "Vazirmatn Variable",Vazirmatn,ui-sans-serif,system-ui,sans-serif}
+.speedbox-infrastructure .entity-list-shell thead{background:transparent;backdrop-filter:none;-webkit-backdrop-filter:none}
+.speedbox-infrastructure .entity-list-shell th{height:45px;padding:5px 8px!important;background:rgba(255,255,255,.10);white-space:nowrap;font-size:14px}
+.speedbox-infrastructure .entity-list-shell td{height:40px;padding:12px 8px!important;white-space:nowrap}
+.speedbox-infrastructure .entity-list-shell tbody tr:nth-child(odd){background:rgba(0,238,255,.04)}
+.speedbox-infrastructure .entity-list-shell tbody tr:hover{background:rgba(255,255,255,.06)}
+.speedbox-infrastructure .entity-list-shell tbody tr td{background:transparent}
+.speedbox-infrastructure .entity-list-shell .entity{white-space:nowrap}
+.speedbox-infrastructure .entity-list-shell .entity small{white-space:nowrap;overflow-wrap:normal;word-break:normal}
+.speedbox-infrastructure .node-table :is(th,td):first-child{display:none}
+.speedbox-infrastructure .node-sort-mode .node-table :is(th,td):first-child{display:table-cell}
+.speedbox-infrastructure .node-table :is(th,td):nth-child(3){min-width:190px}
+.speedbox-infrastructure .node-table .node-name-line{white-space:nowrap;flex-wrap:nowrap}
+.speedbox-infrastructure .node-sort-actions{width:100%}
+#app .speedbox-infrastructure .node-sort-actions .node-sort-toggle{flex:0 1 260px;min-width:min(260px,100%);height:var(--speedbox-list-control-height);min-height:var(--speedbox-list-control-height);box-sizing:border-box;padding:0 24px;line-height:20px}
+@media(max-width:767px){#app .speedbox-infrastructure .node-sort-actions .node-sort-toggle{flex:1 1 auto}}
