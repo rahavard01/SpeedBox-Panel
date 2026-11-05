@@ -489,7 +489,7 @@
 .speedbox-infrastructure .entity-card-actions .actions{gap:8px;flex-wrap:wrap}
 .speedbox-infrastructure .entity-card-actions .button{flex:1 1 auto;min-width:0;min-height:36px;margin:0;padding:8px 10px;font-size:11px;line-height:1.6;white-space:normal}
 .speedbox-infrastructure .entity-mobile-card :is(.server-resources,.deployment-progress,.node-traffic){width:100%;min-width:0;max-width:none}
-.speedbox-infrastructure .entity-mobile-card .node-order-controls{justify-content:center;gap:0}
+.speedbox-infrastructure .entity-mobile-card .node-order-controls{justify-content:center;gap:6px}
 .speedbox-infrastructure .entity-mobile-card .node-order-controls>span{flex-direction:row;gap:6px}
 .speedbox-infrastructure .entity-card-heading--node{display:flex;flex-direction:row-reverse;align-items:center;justify-content:space-between;gap:12px;text-align:right}
 .speedbox-infrastructure .entity-card-node-identity{flex:1;min-width:0}
@@ -498,7 +498,7 @@
 .speedbox-infrastructure .entity-card-node-tools{display:grid;align-items:center;justify-items:center;gap:4px;flex:0 0 auto}
 .speedbox-infrastructure .entity-card-meta .node-number{justify-content:center}
 .speedbox-infrastructure .entity-card-meta .node-id-badge{margin:0;min-width:24px;height:24px;padding:0 6px}
-.speedbox-infrastructure .entity-mobile-card .node-order-controls button{display:flex;align-items:center;justify-content:center;min-width:0;min-height:0;width:26px;height:24px;padding:0;line-height:1;border:1px solid rgba(255,255,255,.15);border-radius:7px;background:rgba(255,255,255,.06)}
+.speedbox-infrastructure .entity-mobile-card .node-order-controls button{display:flex;align-items:center;justify-content:center;min-width:0;min-height:0;width:26px;height:28px;padding:0;line-height:1;border:1px solid rgba(255,255,255,.15);border-radius:7px;background:rgba(255,255,255,.06)}
 .speedbox-infrastructure .entity-card-loading{grid-column:1/-1;min-height:82px;border:0;background:transparent}
 
 }
