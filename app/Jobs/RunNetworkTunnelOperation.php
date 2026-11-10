@@ -13,6 +13,8 @@ use Throwable;
 class RunNetworkTunnelOperation implements ShouldQueue,ShouldBeEncrypted
 {
     use Dispatchable,InteractsWithQueue,Queueable,SerializesModels;
+    use \App\Jobs\Concerns\ContinuesTunnelOperation;
+
     public int $tries=1;
     public int $timeout=600;
     public function __construct(public readonly int $operationId){$this->onQueue('deployments');}
@@ -22,6 +24,7 @@ class RunNetworkTunnelOperation implements ShouldQueue,ShouldBeEncrypted
     {
         $lock=Cache::lock('speedbox-network-operation-'.$this->operationId,630);
         if(!$lock->get())return;
+        $this->deferContinuation = true;
         try {
             $op=TunnelOperation::findOrFail($this->operationId);
             if(!in_array($op->status,['queued','running']))return;
@@ -157,9 +160,9 @@ class RunNetworkTunnelOperation implements ShouldQueue,ShouldBeEncrypted
                 }
                 $manager->finish($op,'failed',$tunnel->message,['error'=>$state['error']??'operation failed','rollback_errors'=>$state['rollback_errors']??[],'hosts'=>$state['hosts']??[]]);
             } else {
-                $op->update(['payload'=>$state]);self::dispatch($op->id)->delay(now()->addSeconds(1));
+                $op->update(['payload'=>$state]);$this->continueOperation($state['phase']==='verify'?1:0);
             }
-        } finally {$lock->release();}
+        } finally {$lock->release();$this->flushContinuation();}
     }
 
     private function advance(array &$state,string $next): void
@@ -175,10 +178,10 @@ class RunNetworkTunnelOperation implements ShouldQueue,ShouldBeEncrypted
         $state=$op->payload??[];
         if(($state['recovery_attempts']??0)>=2){app(TunnelManager::class)->finish($op,'failed','بازیابی کامل نشد؛ سرورها را بررسی کنید.',['phase'=>$state['phase']??null]);return;}
         $state['recovery_attempts']=($state['recovery_attempts']??0)+1;
-        if(in_array($state['phase']??'', ['commit','done'],true)){$op->update(['payload'=>$state]);self::dispatch($op->id)->delay(now()->addSeconds(5));return;}
+        if(in_array($state['phase']??'', ['commit','done'],true)){$op->update(['payload'=>$state]);$this->continueOperation(5);return;}
         $state['error']='اجرای پردازش قطع شد؛ بازیابی تنظیمات درخواست شد.';$state['phase']='rollback';$state['side']=0;
         $op->update(['payload'=>$state,'deadline'=>now()->addMinutes(10)]);
-        self::dispatch($op->id)->delay(now()->addSeconds(5));
+        $this->continueOperation(5);
     }
 }
 

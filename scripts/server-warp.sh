@@ -20,6 +20,7 @@ command -v flock >/dev/null 2>&1 || fail flock_missing
 exec 9>/run/lock/speedbox-warp.lock
 flock -n 9 || fail busy
 cli() { timeout 40 warp-cli --accept-tos "$@" 2>/dev/null; }
+progress() { if [[ "${SPEEDBOX_WARP_PROGRESS:-0}" == 1 ]]; then printf 'SPEEDBOX_WARP_PHASE:%s\n' "$1" >&2; fi; }
 proxy_mode() { grep -Eiq 'Mode:.*(WarpProxy|Proxy)|mode.*proxy' <<< "$1"; }
 registration=''
 if [[ "$installed" == true ]]; then
@@ -31,14 +32,22 @@ if [[ "$installed" == true ]]; then
     fi
 fi
 if [[ "$action" == prepare ]]; then
+    progress prerequisites
     if [[ "$installed" == false ]]; then
         [[ -r /etc/os-release ]] || fail unsupported_os
         . /etc/os-release
         case "${ID:-}" in
             ubuntu|debian)
                 case "${VERSION_CODENAME:-}" in jammy|noble|resolute|bookworm|trixie) ;; *) fail unsupported_os ;; esac
-                apt-get update -qq >/dev/null 2>&1
-                apt-get install -y -qq ca-certificates curl gnupg iproute2 >/dev/null 2>&1
+                missing=()
+                [[ -s /etc/ssl/certs/ca-certificates.crt ]] || missing+=(ca-certificates)
+                command -v curl >/dev/null 2>&1 || missing+=(curl)
+                command -v gpg >/dev/null 2>&1 || missing+=(gnupg)
+                command -v ss >/dev/null 2>&1 || missing+=(iproute2)
+                if (( ${#missing[@]} )); then
+                    apt-get update -qq >/dev/null 2>&1
+                    apt-get install -y -qq "${missing[@]}" >/dev/null 2>&1
+                fi
                 key_tmp="$(mktemp)"
                 curl --fail --silent --show-error --connect-timeout 15 --max-time 90 https://pkg.cloudflareclient.com/pubkey.gpg -o "$key_tmp" 2>/dev/null
                 gpg --batch --yes --dearmor --output /usr/share/keyrings/cloudflare-warp-archive-keyring.gpg "$key_tmp" 2>/dev/null
@@ -46,6 +55,7 @@ if [[ "$action" == prepare ]]; then
                 chmod 644 /usr/share/keyrings/cloudflare-warp-archive-keyring.gpg
                 printf 'deb [signed-by=/usr/share/keyrings/cloudflare-warp-archive-keyring.gpg] https://pkg.cloudflareclient.com/ %s main\n' "$VERSION_CODENAME" > /etc/apt/sources.list.d/cloudflare-client.list
                 chmod 644 /etc/apt/sources.list.d/cloudflare-client.list
+                progress install
                 apt-get update -qq >/dev/null 2>&1
                 apt-get install -y -qq cloudflare-warp >/dev/null 2>&1
                 ;;
@@ -54,6 +64,7 @@ if [[ "$action" == prepare ]]; then
                 "$manager" install -y curl ca-certificates iproute >/dev/null 2>&1
                 curl --fail --silent --show-error --connect-timeout 15 --max-time 90 https://pkg.cloudflareclient.com/cloudflare-warp-ascii.repo -o /etc/yum.repos.d/cloudflare-warp.repo 2>/dev/null
                 chmod 644 /etc/yum.repos.d/cloudflare-warp.repo
+                progress install
                 "$manager" install -y cloudflare-warp >/dev/null 2>&1
                 ;;
             *) fail unsupported_os ;;
@@ -64,9 +75,11 @@ if [[ "$action" == prepare ]]; then
     command -v ss >/dev/null 2>&1 || fail ss_missing
     listeners="$(ss -H -lntp 'sport = :40000' 2>/dev/null)"
     if [[ -n "$listeners" ]] && grep -v 'warp-svc' <<< "$listeners" >/dev/null; then fail port_in_use; fi
+    progress service
     systemctl enable --now warp-svc >/dev/null 2>&1
     # A newly started service may need a moment before its IPC socket is ready.
     for attempt in 1 2 3 4 5; do cli status >/dev/null && break || sleep 1; done
+    progress account
     if ! cli registration show >/dev/null; then cli registration new >/dev/null || fail registration_failed; fi
     registration="$(cli registration show)"
     grep -Eiq 'Account type:.*Team' <<< "$registration" && fail existing_team
@@ -89,6 +102,7 @@ if [[ "$action" == prepare ]]; then
         registration="$(cli registration show)"
         grep -Eiq 'Account type:.*(Unlimited|Limited|Plus)' <<< "$registration" || fail license_invalid
     fi
+    progress connect
     cli connect >/dev/null || fail connect_failed
 fi
 [[ "$installed" == true ]] || fail not_installed
@@ -101,6 +115,7 @@ actual_account=unknown
 grep -Eiq 'Account type:.*Free' <<< "$registration" && actual_account=free
 grep -Eiq 'Account type:.*(Unlimited|Limited|Plus)' <<< "$registration" && actual_account=plus
 trace=''
+progress verify
 for attempt in 1 2 3; do
     # Reject non-loopback listeners; this integration never exposes a public proxy.
     listeners="$(ss -H -lntp 'sport = :40000' 2>/dev/null)"

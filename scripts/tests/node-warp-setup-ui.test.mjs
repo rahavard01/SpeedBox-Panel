@@ -5,11 +5,11 @@ const code=readFileSync(new URL('../../public/speedbox/node-editor.js',import.me
 let checks=0;
 const check=(condition,label)=>{assert.ok(condition,label);checks++;};
 const tick=()=>new Promise(resolve=>setImmediate(resolve));
-async function mount({status={installed:true,ready:true,account:'free'},supported=true,fail=false}={}){
+async function mount({status={installed:true,ready:true,account:'free'},supported=true,fail=false,operation=null}={}){
  const dom=new JSDOM('<section class="infrastructure-modal"><div id="body"></div></section>',{runScripts:'outside-only',url:'http://localhost/'});
  const w=dom.window,calls=[],messages=[];
  w.eval(code);
- const data={supported,agent_state:supported?'supported':'unsupported',status,operation:null};
+ const data={supported,agent_state:supported?'supported':'unsupported',status,operation};
  const api=async(url,opts={})=>{const body=opts.body?JSON.parse(opts.body):null;calls.push({url,body,method:opts.method||'GET'});if(opts.method==='POST'){if(fail)throw Error('operation failed');return {message:'queued'};}return {data};};
  const dispose=w.SpeedboxNodeEditor.mount({node:{id:7,name:'Test',type:'vless',machine_id:1,kernel:'xray',host:'node.test',port:'443',server_port:443,warp_enabled:true},state:{nodes:[],groups:[],routes:[],machines:[{id:1,name:'First'},{id:2,name:'Second'}]},api,openModal:(title,body)=>w.document.getElementById('body').innerHTML=body,closeModal(){},toast:message=>messages.push(message),reload(){},enhanceControls:root=>root.querySelectorAll('input').forEach(e=>e.classList.add('form-input')),isSaving:()=>false});
  await tick();const q=s=>w.document.querySelector(s);
@@ -77,5 +77,30 @@ async function mount({status={installed:true,ready:true,account:'free'},supporte
 {
  const t=await mount({status:{installed:false,ready:false,account:'unknown',error:'setup failed',error_code:'operation_failed'}});
  check(t.q('[role="alert"]').textContent==='setup failed','real setup failure remains visible before installation');t.close();
+}
+{
+ const t=await mount({operation:{status:'running',action:'warp_prepare',progress:75,log:'در حال بررسی حساب WARP…'}});
+ check(t.q('[role="progressbar"]').getAttribute('aria-valuenow')==='75','reported phase progress is shown');
+ check(t.q('.node-warp-progress-heading').textContent.includes('۷۵'),'percentage uses Persian digits');
+ check(t.q('.node-warp-note[aria-live]').textContent.includes('بررسی حساب'),'current phase accompanies the percentage');
+ check(t.q('[data-warp-action="test"]').disabled,'progress does not unlock an active operation');t.close();
+}
+{
+ const t=await mount({operation:{status:'succeeded',action:'warp_prepare',progress:100}});
+ check(t.q('[role="progressbar"]').getAttribute('aria-valuenow')==='100','only completed success shows 100 percent');t.close();
+}
+{
+ const t=await mount({operation:{status:'failed',action:'warp_prepare',progress:100}});
+ check(t.q('[role="progressbar"]').getAttribute('aria-valuenow')==='99','failed operation cannot appear as successful completion');
+ check(t.q('.node-warp-progress').classList.contains('failed'),'failed progress has the failure appearance');t.close();
+}
+{
+ const t=await mount({operation:{status:'queued',action:'warp_prepare',progress:0}});
+ check(t.q('[role="progressbar"]').getAttribute('aria-valuenow')==='0','queued progress stays at the reported zero');
+ check(t.q('.node-warp-progress-heading').textContent.includes('در صف'),'queued operation is labeled');t.close();
+}
+{
+ const t=await mount({status:null,supported:false,operation:{status:'succeeded',action:'upgrade',progress:100}});
+ check(!t.q('[role="progressbar"]'),'an old agent upgrade cannot look like completed WARP setup');t.close();
 }
 console.log(`WARP setup form: PASS (${checks} checks; simulated API, no host operations)`);

@@ -54,6 +54,8 @@ jobs:
         run: |
           php artisan test --filter=NodeWarpTest
           python3 scripts/tests/node-warp-host.test.py
+          php scripts/tests/operation-progress.test.php
+          python3 scripts/tests/remote-operation-transport.test.py
       - name: Tunnel API, paired rollback and artifact verification
         run: |
           php artisan test --filter='TunnelManagementTest|TrustedTunnelOriginTest|AccountTopupParityTest'
@@ -114,6 +116,7 @@ jobs:
           node scripts/tests/removal-ui.test.mjs
           node scripts/tests/certificate-dns.test.mjs
           node scripts/tests/subscription-guide.test.mjs
+          node scripts/tests/node-warp-setup-ui.test.mjs
       - name: Build tunnel UI fixtures
         if: hashFiles('.speedbox-public-edition.json') == ''
         timeout-minutes: 4
@@ -144,6 +147,8 @@ jobs:
           node scripts/tests/tunnel-navigation.test.mjs
           node scripts/tests/tunnel-cdn-ui.test.mjs
           node scripts/tests/tunnel-management-ui.test.mjs
+          node scripts/tests/node-warp-ui.test.mjs
+          node scripts/tests/warp-progress-browser.test.mjs
       - name: Admin filters and mobile infrastructure cards
         timeout-minutes: 4
         run: |

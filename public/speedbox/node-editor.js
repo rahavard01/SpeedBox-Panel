@@ -161,6 +161,10 @@ window.SpeedboxNodeEditor = (() => {
         ${selected==='plus'?`<div class="field"><label for="nodeWarpLicense">کد لایسنس WARP+</label><input id="nodeWarpLicense" type="password" dir="ltr" autocomplete="new-password" value="${esc(warpState.license)}" placeholder="${installed&&status?.account==='plus'?'برای حفظ لایسنس فعلی، این کادر را خالی بگذارید':'کد لایسنس را وارد کنید'}" ${disabled?'disabled':''}></div>`:''}`;
       const notInstalledError=fresh&&(status?.error_code==='not_installed'||/^WARP روی (?:این )?سرور نصب نیست[؛.]/.test(status?.error||''));
       const message=warpState.error||(!notInstalledError&&status?.error)||'';
+      const rawProgress=Number(operation?.progress);
+      const percent=Number.isFinite(rawProgress)?Math.max(0,Math.min(operation?.status==='succeeded'?100:99,Math.round(rawProgress))):0;
+      const showProgress=!!operation&&(busy||(['warp_prepare','warp_test'].includes(operation.action)&&['succeeded','failed'].includes(operation.status)));
+      const progressLabel=operation?.status==='queued'?'در صف عملیات':operation?.status==='succeeded'?'عملیات کامل شد':operation?.status==='failed'?'عملیات ناموفق بود':'پیشرفت عملیات WARP';
       target.innerHTML=`<section class="node-warp-card">${toggle('warp_enabled','WARP',!!draft.warp_enabled)}
         ${parent?'<p class="node-warp-note">تنظیم WARP از نود والد گرفته می‌شود.</p>':draft.warp_enabled?`<div class="node-warp-content"><p class="node-warp-note">اتصال‌های TCP این نود از WARP عبور می‌کنند. ترافیک UDP از اتصال مستقیم سرور استفاده می‌کند.</p>
         <div class="node-warp-status"><span role="status">${esc(label)}</span>${installed?`<span>حساب سرور: <strong>${status.account==='plus'?'WARP+':status.account==='free'?'رایگان':'نامشخص'}</strong></span>`:''}</div>
@@ -171,6 +175,7 @@ window.SpeedboxNodeEditor = (() => {
         <div class="node-warp-actions"><button type="button" class="button secondary small" data-warp-action="change" ${disabled?'disabled':''}>اعمال تغییر حساب</button></div></details>`:`${fresh?'<p class="node-warp-note">WARP روی این سرور نصب نیست. برای فعال‌سازی، از گزینهٔ «نصب و راه‌اندازی» استفاده کنید.</p>':''}${accountFields()}<p class="node-warp-note">حساب WARP بین نودهای این سرور مشترک است؛ حساب موجود هنگام راه‌اندازی حفظ می‌شود.</p>`}
         <div class="node-warp-actions">${!ready?`<button type="button" class="button primary small node-warp-main" data-warp-action="${installed?'prepare':'install'}" ${disabled?'disabled':''}>${installed?'راه‌اندازی مجدد':'نصب و راه‌اندازی'}</button>`:''}<button type="button" class="button secondary small" data-warp-action="test" ${disabled?'disabled':''}>تست اتصال</button></div>
         ${!draft.machine_id?'<p class="node-warp-message">ابتدا سرور مقصد را انتخاب کنید.</p>':''}
+        ${showProgress?`<div class="node-warp-progress deployment-progress ${operation.status==='failed'?'failed':''}"><div class="node-warp-progress-heading"><span>${esc(progressLabel)}</span><bdi>${percent.toLocaleString('fa-IR')}٪</bdi></div><div class="progress" role="progressbar" aria-label="پیشرفت عملیات WARP" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${percent}"><span style="width:${percent}%"></span></div></div>`:''}
         ${busy?`<p class="node-warp-note" aria-live="polite">${esc(operation?.action==='upgrade'?'در حال به‌روزرسانی نرم‌افزار سرور…':operation?.log||'در حال ارسال درخواست…')}</p>`:''}</div>`:''}</section>`;
       const enabled=target.querySelector('[data-path="warp_enabled"]');
       enabled.disabled=!!parent;

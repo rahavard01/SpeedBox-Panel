@@ -14,6 +14,8 @@ use Throwable;
 class RunTunnelReconfigure implements ShouldQueue,ShouldBeEncrypted
 {
     use Dispatchable,InteractsWithQueue,Queueable,SerializesModels;
+    use \App\Jobs\Concerns\ContinuesTunnelOperation;
+
     public int $tries=1;
     public int $timeout=600;
     public function __construct(public readonly int $operationId){$this->onQueue('deployments');}
@@ -22,6 +24,7 @@ class RunTunnelReconfigure implements ShouldQueue,ShouldBeEncrypted
     {
         $lock=Cache::lock('speedbox-tunnel-operation-'.$this->operationId,630);
         if(!$lock->get()){self::dispatch($this->operationId)->delay(now()->addSeconds(10));return;}
+        $this->deferContinuation = true;
         try {
             $op=TunnelOperation::findOrFail($this->operationId);
             if(!in_array($op->status,['queued','running'],true))return;
@@ -29,7 +32,7 @@ class RunTunnelReconfigure implements ShouldQueue,ShouldBeEncrypted
             $this->step($op,$remote,$manager);
         } catch(Throwable) {
             if(isset($op))$this->recover($op);
-        } finally {$lock->release();}
+        } finally {$lock->release();$this->flushContinuation();}
     }
 
     private function step(TunnelOperation $op,BackpackRemote $remote,TunnelManager $manager): void
@@ -201,9 +204,9 @@ class RunTunnelReconfigure implements ShouldQueue,ShouldBeEncrypted
         return true;
     }
 
-    private function next(TunnelOperation $op,array $p,string $message,int $progress,int $delay=1): void
+    private function next(TunnelOperation $op,array $p,string $message,int $progress,int $delay=0): void
     {
-        $op->update(['payload'=>$p,'message'=>$message,'progress'=>$progress]);self::dispatch($op->id)->delay(now()->addSeconds($delay));
+        $op->update(['payload'=>$p,'message'=>$message,'progress'=>$progress]);$this->continueOperation($delay);
     }
     private function recover(TunnelOperation $op): void
     {

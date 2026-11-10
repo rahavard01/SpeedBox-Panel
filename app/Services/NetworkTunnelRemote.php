@@ -91,6 +91,27 @@ PY;
     /** Test helper and immutable engine artifacts only: never restart the tunnel daemon. */
     public function ensureProbe(ManagedServer $server,string $engine): void
     {
+        $source=base_path('scripts/network-tunnels/probe.py');$hash=hash_file('sha256',$source);
+        $watHash=hash_file('sha256',base_path('scripts/network-tunnels/wat.py'));
+        $target='/opt/speedbox-network-tests/'.$hash.'-'.substr($watHash,0,16);
+        $files=[$target.'/probe.py'=>['sha256'=>$hash],$target.'/wat.py'=>['sha256'=>$watHash]];
+        if(in_array($engine,['gost','wattunnel'],true)) {
+            $manifest=json_decode(file_get_contents(base_path(($engine==='wattunnel'?'wattunnel':'gost').'-dist/manifest.json')),true,32,JSON_THROW_ON_ERROR);
+            $versions=$engine==='gost'?\App\Support\NetworkTunnelRules::VERSIONS:[\App\Support\WatTunnelRules::VERSION];
+            foreach($versions as $version) {
+                $entries=$engine==='wattunnel'?$manifest['archives']:$manifest['artifacts'][$version];$hashes=[];
+                foreach($entries as $arch=>$entry) {
+                    $archive=base_path(($engine==='wattunnel'?'wattunnel':'gost').'-dist/'.$entry['file']);
+                    if(!hash_equals($entry['sha256'],hash_file('sha256',$archive)))throw new RuntimeException('صحت بستهٔ موتور تأیید نشد.');
+                    $hashes[$arch]=$entry['binary_sha256'];
+                }
+                $files['/opt/speedbox-network/'.($engine==='wattunnel'?'wattun-':'gost-').$version]=['sha256'=>$hashes,'executable'=>true];
+            }
+        }
+        if((new RemoteScriptRunner($this->ssh))->filesCurrent($server,$files,['systemd-run','systemctl'],['/run/systemd/system'])) {
+            $this->probe($server,['action'=>'recover']);
+            return;
+        }
         $sudo=$server->ssh_user==='root'?'':'sudo -n ';
         $this->temporary($server,function($dir)use($server,$sudo,$engine){
             $source=base_path('scripts/network-tunnels/probe.py');$hash=hash_file('sha256',$source);
@@ -122,7 +143,6 @@ PY;
 
     public function call(ManagedServer $server,array $request): array
     {
-        if (!in_array($request['action']??'', ['delete','status'], true)) return $this->callUnbounded($server,$request);
         // One authenticated connection; compatibility with hosts without SFTP is retained.
         $script=<<<'PY'
 import json,subprocess,sys,tempfile
@@ -136,28 +156,18 @@ with tempfile.NamedTemporaryFile(mode='w',prefix='speedbox-request-',suffix='.js
     sys.exit(result.returncode)
 PY;
         $command=($server->ssh_user==='root'?'':'sudo -n ').'python3 -c '.escapeshellarg($script);
-        $raw=$this->ssh->withinBudget(30,fn()=>$this->ssh->run($server,$command,30,json_encode($request,JSON_THROW_ON_ERROR)));
+        $bounded=in_array($request['action']??'', ['delete','status'],true);
+        $timeout=$bounded?30:150;
+        $invoke=fn()=>$this->ssh->run($server,$command,$timeout,json_encode($request,JSON_THROW_ON_ERROR));
+        try {
+            $raw=$bounded?$this->ssh->withinBudget(30,$invoke):$invoke();
+        } catch(RuntimeException $error) {
+            $raw=$error->getMessage();
+            if(!is_array(json_decode($raw,true)))throw $error;
+        }
         $answer=json_decode($raw,true,64,JSON_THROW_ON_ERROR);
         if (($answer['ok']??false)!==true || !is_array($answer['data']??null)) throw new RuntimeException('پاسخ ابزار شبکه معتبر نیست.');
         return $answer['data'];
-    }
-
-    private function callUnbounded(ManagedServer $server,array $request): array
-    {
-        return $this->temporary($server,function($dir)use($server,$request){
-            $local=tempnam(storage_path('app/private'),'network-');
-            if($local===false)throw new RuntimeException('ساخت فایل موقت کامل نشد.');
-            try {
-                chmod($local,0600);file_put_contents($local,json_encode($request,JSON_THROW_ON_ERROR),LOCK_EX);
-                $this->ssh->upload($server,$local,$dir.'/request.json');
-                $script='if [ -x /opt/speedbox-origin/host.py ]; then python3 /opt/speedbox-origin/host.py network '.escapeshellarg($dir.'/request.json').'; else python3 /opt/speedbox-network/host.py '.escapeshellarg($dir.'/request.json').'; fi';
-                $command=($server->ssh_user==='root'?'':'sudo -n ').'sh -c '.escapeshellarg($script);
-                try{$raw=$this->ssh->run($server,$command,150);}catch(RuntimeException $e){$raw=$e->getMessage();if(!is_array(json_decode($raw,true)))throw $e;}
-                $reply=json_decode($raw,true,64);
-                if(!is_array($reply)||($reply['ok']??false)!==true)throw new RuntimeException($reply['error']??'پاسخ ابزار شبکه معتبر نیست؛ Python 3، systemd و دسترسی SSH را بررسی کنید.');
-                return $reply['data'];
-            } finally {@unlink($local);}
-        });
     }
 
     private function temporary(ManagedServer $server,callable $callback): mixed

@@ -13,6 +13,19 @@ class TunnelCdnRemote
     public function ensure(ManagedServer $server): void
     {
         if(isset($this->ready[$server->id]))return;
+        $manifest=json_decode(file_get_contents(base_path('tunnel-cdn-dist/manifest.json')),true,32,JSON_THROW_ON_ERROR);
+        $hashes=[];
+        foreach($manifest['archives'] as $arch=>$artifact) {
+            $archive=base_path('tunnel-cdn-dist/'.$artifact['file']);
+            if(!hash_equals($artifact['sha256'],hash_file('sha256',$archive)))throw new RuntimeException('صحت بستهٔ گواهی تأیید نشد.');
+            $hashes[$arch]=$artifact['binary_sha256'];
+        }
+        $files=['/opt/speedbox-tunnel-cdn/host.py'=>['sha256'=>hash_file('sha256',base_path('scripts/tunnel-cdn/host.py'))],
+            '/opt/speedbox-tunnel-cdn/certificate'=>['sha256'=>$hashes,'executable'=>true]];
+        if((new RemoteScriptRunner($this->ssh))->filesCurrent($server,$files,['openssl','ss','systemctl'],['/run/systemd/system'])) {
+            $this->ready[$server->id]=true;
+            return;
+        }
         $sudo=$server->ssh_user==='root'?'':'sudo -n ';
         $arch=match(trim($this->ssh->run($server,'uname -m',20))){'x86_64'=>'amd64','aarch64','arm64'=>'arm64',default=>throw new RuntimeException('معماری سرور پشتیبانی نمی‌شود.')};
         $manifest=json_decode(file_get_contents(base_path('tunnel-cdn-dist/manifest.json')),true,32,JSON_THROW_ON_ERROR);

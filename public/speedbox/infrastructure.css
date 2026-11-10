@@ -358,6 +358,10 @@
 .speedbox-infrastructure-overlay .node-warp-account .field{margin-top:14px}
 .speedbox-infrastructure-overlay .node-warp-account .node-warp-note{margin-top:12px}
 .speedbox-infrastructure-overlay .node-warp-message{margin:0;color:#e9bf90;font-size:11px;line-height:1.9}
+.speedbox-infrastructure-overlay .node-warp-progress{grid-column:1/-1;min-width:0}
+.speedbox-infrastructure-overlay .node-warp-progress-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:11px;color:#c2baca}
+.speedbox-infrastructure-overlay .node-warp-progress-heading bdi{color:#f8fafc;font-variant-numeric:tabular-nums}
+.speedbox-infrastructure-overlay .node-warp-progress .progress{direction:ltr}
 .speedbox-infrastructure-overlay .infrastructure-modal.node-modal{width:min(576px,94vw);max-width:576px;padding:18px;overflow:visible}
 .speedbox-infrastructure-overlay .node-modal .announcement-modal-heading{margin-bottom:22px}
 .speedbox-infrastructure-overlay .node-modal .node-protocol-head{display:flex;justify-content:center;align-items:center;margin-bottom:22px}

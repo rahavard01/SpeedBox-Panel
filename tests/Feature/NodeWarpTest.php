@@ -211,7 +211,7 @@ class NodeWarpTest extends TestCase
             if (str_ends_with($remote, '/license')) $this->assertSame('secret-license-123', file_get_contents($local));
             return true;
         });
-        $ssh->shouldReceive('run')->once()->withArgs(fn ($s, $cmd, $timeout) => str_starts_with($cmd, 'bash ') && !str_contains($cmd, 'secret-license-123'))
+        $ssh->shouldReceive('run')->once()->withArgs(fn ($s, $cmd, $timeout) => str_starts_with($cmd, 'env SPEEDBOX_WARP_PROGRESS=1 bash ') && !str_contains($cmd, 'secret-license-123'))
             ->andReturn('{"installed":true,"ready":true,"account":"plus","ip":"203.0.113.2","license":"secret-license-123"}');
         $ssh->shouldReceive('run')->once()->withArgs(fn ($s, $cmd, $timeout) => str_starts_with($cmd, 'rm -f'))->andReturn('');
         (new ConfigureMachineWarp($deployment->id, 'plus', 'secret-license-123'))->handle($ssh);

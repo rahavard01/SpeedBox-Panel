@@ -13,6 +13,8 @@ use Throwable;
 class RunNetworkTunnelTest implements ShouldQueue,ShouldBeEncrypted
 {
     use Dispatchable,InteractsWithQueue,Queueable,SerializesModels;
+    use \App\Jobs\Concerns\ContinuesTunnelOperation;
+
     public int $tries=1;
     public int $timeout=300;
     public function __construct(public readonly int $operationId){$this->onQueue('deployments');}
@@ -21,6 +23,7 @@ class RunNetworkTunnelTest implements ShouldQueue,ShouldBeEncrypted
     {
         $lock=Cache::lock('speedbox-network-test-'.$this->operationId,330);
         if(!$lock->get())return;
+        $this->deferContinuation = true;
         try {
             $op=TunnelOperation::findOrFail($this->operationId);
             if(!in_array($op->status,['queued','running'],true))return;
@@ -105,8 +108,8 @@ class RunNetworkTunnelTest implements ShouldQueue,ShouldBeEncrypted
                 $message=$s['fatal']??(!empty($s['cancelled'])?'تست متوقف و تنظیمات موقت جمع‌آوری شد.':'تست تمام شد؛ نتیجهٔ قابل استفاده را انتخاب کنید.');
                 $test->update(['status'=>$status,'message'=>$message,'results'=>$rows]);
                 $manager->finish($op,$status==='completed'?'succeeded':$status,$message,['cleanup_error'=>$s['cleanup_error']??null,'timings'=>$s['timings']??[]]);
-            } else self::dispatch($op->id)->delay(now()->addSeconds(1));
-        } finally {$lock->release();}
+            } else $this->continueOperation($s['phase']==='measuring'||$s['phase']==='cleanup'?1:0);
+        } finally {$lock->release();$this->flushContinuation();}
     }
 
     private function publishRow(TunnelConnectionTest $test,array $row): void
@@ -145,6 +148,6 @@ class RunNetworkTunnelTest implements ShouldQueue,ShouldBeEncrypted
         $op=TunnelOperation::find($this->operationId);
         if(!$op||!in_array($op->status,['queued','running'],true))return;
         $s=$op->payload;$s['phase']='cleanup';$s['side']=0;$s['fatal']='اجرای تست قطع شد؛ پاک‌سازی درخواست شد.';
-        $op->update(['payload'=>$s]);self::dispatch($op->id)->delay(now()->addSeconds(5));
+        $op->update(['payload'=>$s]);$this->continueOperation(5);
     }
 }

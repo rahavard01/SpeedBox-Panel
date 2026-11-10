@@ -14,6 +14,8 @@ use Throwable;
 class RunTunnelCdnTest implements ShouldQueue,ShouldBeEncrypted
 {
     use Dispatchable,InteractsWithQueue,Queueable,SerializesModels;
+    use \App\Jobs\Concerns\ContinuesTunnelOperation;
+
     public int $tries=1;
     public int $timeout=600;
     public function __construct(public readonly int $operationId){$this->onQueue('deployments');}
@@ -21,6 +23,7 @@ class RunTunnelCdnTest implements ShouldQueue,ShouldBeEncrypted
     public function handle(TunnelCdnRemote $cdn,BackpackRemote $bp,NetworkTunnelRemote $wat,NetworkTunnelManager $network,TunnelManager $manager): void
     {
         $lock=Cache::lock('speedbox-cdn-test-'.$this->operationId,630);if(!$lock->get())return;
+        $this->deferContinuation = true;
         try {
             $op=TunnelOperation::findOrFail($this->operationId);if(!in_array($op->status,['queued','running']))return;
             $test=TunnelConnectionTest::findOrFail($op->test_id);$p=$op->payload;$method=$p['method'];
@@ -93,8 +96,8 @@ class RunTunnelCdnTest implements ShouldQueue,ShouldBeEncrypted
                 unset($result['certificate']['cert_file'],$result['certificate']['key_file']);
                 $message=$ok?'اتصال موتور و انتقال داده از مسیر CDN تأیید شد.':($p['error']??'آزمون CDN تأیید نشد.');
                 $test->update(['status'=>$ok?'completed':'failed','results'=>[$result],'message'=>$message]);$manager->finish($op,$ok?'succeeded':'failed',$message,$result);
-            } else self::dispatch($op->id)->delay(now()->addSeconds($p['phase']==='verify'?2:1));
-        } finally {$lock->release();}
+            } else $this->continueOperation($p['phase']==='verify'?2:($p['phase']==='cleanup'?1:0));
+        } finally {$lock->release();$this->flushContinuation();}
     }
 
     private function settings(array $p,ServerTunnel $t): array
@@ -108,6 +111,6 @@ class RunTunnelCdnTest implements ShouldQueue,ShouldBeEncrypted
     {
         $op=TunnelOperation::find($this->operationId);if(!$op||!in_array($op->status,['queued','running']))return;
         $p=$op->payload;$p['phase']='cleanup';$p['error']='پردازش آزمون قطع شد؛ پاک‌سازی درخواست شد.';
-        $op->update(['payload'=>$p,'deadline'=>now()->addMinutes(10)]);self::dispatch($op->id)->delay(now()->addSeconds(5));
+        $op->update(['payload'=>$p,'deadline'=>now()->addMinutes(10)]);$this->continueOperation(5);
     }
 }

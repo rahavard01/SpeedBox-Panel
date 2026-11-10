@@ -6,6 +6,7 @@ use App\Models\ManagedServer;
 use App\Models\ServerDeployment;
 use App\Services\SshExecutor;
 use App\Services\EnsureMachineWarpSupport;
+use App\Services\WarpProgressStream;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldBeEncrypted;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -68,9 +69,10 @@ class ConfigureMachineWarp implements ShouldQueue, ShouldBeEncrypted
             }
             $deployment->update(['progress' => 40, 'log' => $deployment->action === 'warp_prepare' ? 'در حال نصب و راه‌اندازی WARP و بررسی اتصال…' : 'در حال تست اتصال WARP…']);
             $action = $deployment->action === 'warp_prepare' ? 'prepare' : 'test';
-            $command = $sudo.'bash '.escapeshellarg($remoteDir.'/warp.sh').' '.escapeshellarg($action)
+            $command = $sudo.'env SPEEDBOX_WARP_PROGRESS=1 bash '.escapeshellarg($remoteDir.'/warp.sh').' '.escapeshellarg($action)
                 .' '.escapeshellarg($this->account ?? 'keep').' '.escapeshellarg($remoteDir.'/license');
-            $result = json_decode($ssh->run($server, $command, 1000), true, 32, JSON_THROW_ON_ERROR);
+            $stream = new WarpProgressStream($deployment);
+            $result = json_decode($ssh->run($server, $command, 1000, null, $stream->append(...)), true, 32, JSON_THROW_ON_ERROR);
             if (!is_array($result) || !is_bool($result['ready'] ?? null)) throw new \RuntimeException('Invalid WARP response');
             // Only known, non-secret fields can enter the database or API.
             $status = [

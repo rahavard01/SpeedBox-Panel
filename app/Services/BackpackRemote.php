@@ -81,20 +81,11 @@ class BackpackRemote
     {
         $binary=in_array($request['action']??'',['test-ready','spawn-host','spawn-peer','test-state','test-stop'],true)?$this->testBinary($server):'/opt/speedbox-backpack/backpack';
         if ($binary==='/opt/speedbox-backpack/backpack') {
-        return $this->temporary($server, function ($dir) use ($server, $request,$binary) {
-            $local = tempnam(storage_path('app/private'), 'bp-');
-            if ($local === false) throw new RuntimeException('temporary_file');
-            try {
-                chmod($local, 0600);
-                file_put_contents($local, json_encode($request, JSON_THROW_ON_ERROR), LOCK_EX);
-                $this->ssh->upload($server, $local, $dir.'/request');
-                $command='if [ -x /opt/speedbox-origin/host.py ]; then python3 /opt/speedbox-origin/host.py backpack '.escapeshellarg($dir.'/request').'; else '.escapeshellarg($binary).' speedbox-json '.escapeshellarg($dir.'/request').'; fi';
-                $raw = $this->ssh->run($server, $this->sudo($server).'sh -c '.escapeshellarg($command), 150);
-                $answer = json_decode($raw, true, 64, JSON_THROW_ON_ERROR);
-                if (($answer['ok'] ?? false) !== true || !is_array($answer['data'] ?? null)) throw new RuntimeException('invalid_response');
-                return $answer['data'];
-            } finally { @unlink($local); }
-        });
+            $command='if [ -x /opt/speedbox-origin/host.py ]; then python3 /opt/speedbox-origin/host.py backpack -; else /opt/speedbox-backpack/backpack speedbox-json -; fi';
+            $raw=$this->ssh->run($server,$this->sudo($server).'sh -c '.escapeshellarg($command),150,json_encode($request,JSON_THROW_ON_ERROR));
+            $answer=json_decode($raw,true,64,JSON_THROW_ON_ERROR);
+            if (($answer['ok']??false)!==true || !is_array($answer['data']??null)) throw new RuntimeException('invalid_response');
+            return $answer['data'];
         }
         $raw=$this->ssh->run($server,$this->sudo($server).escapeshellarg($binary).' speedbox-json -',100,json_encode($request,JSON_THROW_ON_ERROR));
         $answer=json_decode($raw,true,64,JSON_THROW_ON_ERROR);
@@ -108,6 +99,21 @@ class BackpackRemote
     public function maintenance(ManagedServer $server, string $action, array $ports = [], ?string $revision = null): array
     {
         $manifest = json_decode(file_get_contents(base_path('backpack-dist/manifest.json')), true, 16, JSON_THROW_ON_ERROR);
+        if ($action !== 'stage') {
+            $expected=[];
+            foreach($manifest['archives'] as $architecture=>$artifact) {
+                $archive=base_path('backpack-dist/backpack-linux-'.$architecture.'.gz');
+                if(!is_file($archive)||!hash_equals($artifact['sha256'],hash_file('sha256',$archive)))throw new RuntimeException('صحت بستهٔ موتور تأیید نشد.');
+                $expected[$architecture]=['version'=>$manifest['upstream_version'],'protocol'=>$manifest['protocol'],
+                    'binary_sha256'=>$artifact['binary_sha256'],'archive_sha256'=>$artifact['sha256']];
+            }
+            $request=['action'=>$action,'ports'=>array_values(array_unique(array_map('intval',$ports))),'revision'=>$revision,
+                'tuning'=>json_decode(file_get_contents(base_path('scripts/backpack/tuning.json')),true,16,JSON_THROW_ON_ERROR)];
+            $answer=(new RemoteScriptRunner($this->ssh))->run($server,'scripts/backpack/host-maintenance.py',$request,180,['expected'=>$expected]);
+            if(($answer['ok']??false)!==true)throw new RuntimeException($answer['error']??'اجرای نگه‌داری سرور کامل نشد.');
+            if(!is_array($answer['data']??null))throw new RuntimeException('پاسخ نگه‌داری سرور معتبر نیست.');
+            return $answer['data'];
+        }
         $machine = trim($this->ssh->run($server, 'uname -m', 20));
         $arch = match ($machine) { 'x86_64' => 'amd64', 'aarch64', 'arm64' => 'arm64', default => throw new RuntimeException('معماری این سرور پشتیبانی نمی‌شود.') };
         $entry = $manifest['archives'][$arch];
