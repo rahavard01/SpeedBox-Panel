@@ -76,6 +76,9 @@ pnpm-lock.yaml
 *.rar
 *.7z
 
+# Generated, verified Xray dependency copy for SS2022 builds
+/.speedbox-build/
+
 # Frontend sources stay in the private repository; deploy public/build.
 /resources/js/
 /resources/css/

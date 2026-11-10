@@ -4,76 +4,76 @@
       "binaries": {
         "xbctl-linux-amd64": {
           "bytes": 7155874,
-          "sha256": "3261629b551f8d9eb39e31ec35a7f9e29438d636ad7a4134968ad67d4c03b284"
+          "sha256": "9bc079f4374bf521c54e16fc58ddfb8b623b332492a45505c60c8abbe42de4d3"
         },
         "xboard-node-linux-amd64": {
-          "bytes": 66994338,
-          "sha256": "5d971d7a2c7860918994549c653f9e8191ba51a4866b83b6fc05e9dcc7bdf253"
+          "bytes": 67002530,
+          "sha256": "f829f47e4260bea870ffa9fc6eff1a726b8f142a9506863356f6dace96c76af1"
         }
       },
-      "bytes": 26007120,
+      "bytes": 26007563,
       "parts": [
         {
           "bytes": 8388608,
           "file": "linux-amd64.tar.gz.part-000",
-          "sha256": "69a144fbe9b4a9a711cedbf322ba46b7b6800682f7c32fa897af6c3c4bf5bcef"
+          "sha256": "8f5d8e21d603b4e5ac467a0f944220bbfdb9759eb6a035011bf880b277158c13"
         },
         {
           "bytes": 8388608,
           "file": "linux-amd64.tar.gz.part-001",
-          "sha256": "f156633fe438954e9779a9a866b76719d9ed79170b0222b36b44ab564fb9cec7"
+          "sha256": "c0399202457ccd7d8bc6389a3c4b0a6103a60a5c8f6aaaef0265ff6025360c1a"
         },
         {
           "bytes": 8388608,
           "file": "linux-amd64.tar.gz.part-002",
-          "sha256": "6d1854fd84ac4884c9f8a7af498e1f023c9e765795c7571303b016b00b2fea2e"
+          "sha256": "f6d5412407ef7f6a3a574aae03ada604501dcfe8f4b4302c35ee41baace146ca"
         },
         {
-          "bytes": 841296,
+          "bytes": 841739,
           "file": "linux-amd64.tar.gz.part-003",
-          "sha256": "d339458582bdf4094ccde56045b707ab6d8e190200efe4ceca600338837050ea"
+          "sha256": "b207385813669ee9834cd8d414822e695ed27de4869724e5db178300692a3526"
         }
       ],
-      "sha256": "aad588a6e6e9d722e8f2bc4153da2640a702ee64f9f63284b4a9383109c6f167"
+      "sha256": "552e2c9b37798cd3bc60f638de100948a6d1dad60661e8a0eb3ff693c5350858"
     },
     "arm64": {
       "binaries": {
         "xbctl-linux-arm64": {
           "bytes": 6619298,
-          "sha256": "2498730c44ac5b858d5e7a3928ebef09ec1b136cc2951b462e36e5c882cbd555"
+          "sha256": "80488316aeb911efd5f6fe12b5ee1e809f0eae419053f2cb422786f1011bdbdf"
         },
         "xboard-node-linux-arm64": {
           "bytes": 61931682,
-          "sha256": "b1da57e92edceffe642f2b150999d89e45cf89cd48ddc9f2bb78f22c001c37ba"
+          "sha256": "0cedfe5b3adf4bbc6a00e773ae393444f347965ba085e94f852d045749c7759b"
         }
       },
-      "bytes": 23426937,
+      "bytes": 23426873,
       "parts": [
         {
           "bytes": 8388608,
           "file": "linux-arm64.tar.gz.part-000",
-          "sha256": "47808eed2e6b3308d48e6c62ce8119a23b4b3f05bce1c4a50f39e54018897d9f"
+          "sha256": "67876fdb9099c302d17b41fc08df9e94e2e7e89de0c959654d2bb21e60a844cf"
         },
         {
           "bytes": 8388608,
           "file": "linux-arm64.tar.gz.part-001",
-          "sha256": "61046d1f7386b720324815566d0b8659ca5a7a347314c573d139acd28272f3e6"
+          "sha256": "faa1959f7412e26438c9c6246709b5d24d2a29ff781ac337664616d61922a1fa"
         },
         {
-          "bytes": 6649721,
+          "bytes": 6649657,
           "file": "linux-arm64.tar.gz.part-002",
-          "sha256": "c9e390164a3df388d3b156c908b1cd7411abc0ca4a25cfc162c86590c59c8dd7"
+          "sha256": "62d615a0b89344ca2486013a80e35088fa59b7474554b1a3062c2be33746e0d4"
         }
       ],
-      "sha256": "ec87a804dc5286b5afa027c041798574e8d8ebf6c837421f568ff92e03d56fd7"
+      "sha256": "c5300bbdafbb051e84feaae0e085b89a99f2d13f474ac3a0cee46ddd6d83280c"
     }
   },
   "format": 1,
   "source_files": {
     "agent/.github/workflows/ci.yml": "5d2486d23a53f2a9320e6b819683f34a262fc7e0fb3718e4985b693da3ebe34c",
     "agent/.gitignore": "69b7f5629d4efc375f8430b03e923044d83cc1f4a10f32c706aa08b7f132f97d",
-    "agent/Dockerfile": "3abea0b53f5fbdda55843973c7588b7ca11b03013bb39bb4f2fa3a6409c27d76",
-    "agent/Makefile": "993e904ed55a1e3e7e7699e86eb05327494ea9972c518e87273352036f710fb0",
+    "agent/Dockerfile": "0225651d247a1fc585210f90e5f2962d3bc43102558be67811f3cf08f1c01b95",
+    "agent/Makefile": "db76af26d701df238c5de24140d4ad554e630b9f6a716f431b1f9b3ecefc1943",
     "agent/README.md": "4997ba860cfd14230e979e85e9f22c252d6b5571c59d7210a352abd6def487f1",
     "agent/cmd/xbctl/main.go": "e2dbf1be7405ec6269ccb4843b8699d7487d5bdbc52427c3a70cd0791ad3002e",
     "agent/cmd/xbctl/node_tools.go": "57e6a986fba32a3ed0bbbfb002829fd8aefd8cc57aac837da4f3e5a96ef8aaa2",
@@ -85,6 +85,7 @@
     "agent/docs-dns-providers.md": "aabbcb8217d5215278c847ac1ee57775b5833394abdbf05b273682b59dacda11",
     "agent/go.mod": "b2e0334684fe99c1f07d60c92e95d27240bd2e8dab325566bf13f4a76b1eab85",
     "agent/go.sum": "5ff09d3f8858746dbf6fdd8fc46b5a496a9c06c068c2c5ea172a48a6b88cade0",
+    "agent/go_patched.py": "cfb4c42c1578d755103d3d0ffec154bd3fe24bea22690b23582e6af09c9fe894",
     "agent/install.sh": "a448b1f79b1d8610759df94793102c8b68a72e39bfd55f4db33e8ba2500e0689",
     "agent/internal/admission/batch.go": "3abf1f4b532261559c2dab55cd71480808a725156215e6c5e8cb5f6f25b9f393",
     "agent/internal/admission/batch_test.go": "3e0e53318b1557b57edaa394d3d332cd3a64f24d9e272320a16f58cd04859c31",
@@ -154,6 +155,7 @@
     "agent/internal/kernel/xray/config_test.go": "eefed1724fe34ea78f916cc75f0e25058bb17bc5ef6f490a9307ee9082c15fea",
     "agent/internal/kernel/xray/dispatcher.go": "7cc9a3fb333f7c7509a6283d1ba510e6c35d3749b4c1065cb584852ee49c6d66",
     "agent/internal/kernel/xray/dispatcher_test.go": "c040f44cc405f729e9dc441907c39dd883e265f545be9ce690cc32b6d575a8bd",
+    "agent/internal/kernel/xray/ss_cipher_disconnect_test.go": "c65282a54f1094593cf53c6d766f43dd0d957c626d5097c6dc1ba94a284a8691",
     "agent/internal/kernel/xray/tcp_deadline_linux_test.go": "0b12d794a2455f583fb44affa0a6989d62aa69f7ee2ab33127add18403f20dff",
     "agent/internal/kernel/xray/trusted_origin_test.go": "d2aea90fba5fd361b85b4e1ecdb7b744e6bb85bb1cbf98dbeea6ca7a197cdc69",
     "agent/internal/kernel/xray/udp_liveness.go": "21188f7c9ff0cedc4411257ac6b324177c7e01757d9c79dbb908952e7208f3e0",
@@ -217,10 +219,15 @@
     "agent/internal/tracker/generations_test.go": "e9ad36d35436bfd43cae142db21726b723fb096003c174d333239c0b4decf516",
     "agent/internal/tracker/tracker.go": "d1f51c7919e2290d887848b8060b07b2f030f9bca0a76831a08b9bb037b3aa94",
     "agent/internal/tracker/tracker_test.go": "2a05026190894f66ea02f978796f9ad88201edab78b77c8c26a3ae0830d6abd1",
+    "agent/xray-patches/README.md": "89d1c9b2411d352ca9999f41d4132cbe8d47ebdb945adf32bbaaf225d65a9fc9",
+    "agent/xray-patches/manifest.json": "fce6e063c210897fa9bf46f20e95e1ab6130eeaa341c2e146c01a6529abbbb18",
+    "agent/xray-patches/run_repro.sh": "d7ead62d597349a06c36892d9c851fbb2ee124a6cd40eee30a51435ecf22236a",
+    "agent/xray-patches/ss2022-dispatchlink.patch": "08d36c6da2e10b4aa218032b45d5de61ac4227bf10f3603bb2d860d0707d4794",
+    "agent/xray-patches/test_prepare.py": "e72ec26620e4b78b1cef4bba3aeaddd9bbc7ee04e86067bb1145e0bcf640d025",
     "scripts/agent-artifacts.php": "9b510b05570d2439cd23ab23aa514d7e4fb5fc5035b4a6cbf7aab9e5ab6622fa",
-    "scripts/build-agent-from-source.sh": "09712f023d9c9045c64df154dc5006c1f296eee8bc24991c8120a4df16c61dc6",
+    "scripts/build-agent-from-source.sh": "b2fe2222b87dad2b4bc44f1982ef015d31b64ea2dbd3c59558e8bea4a158f735",
     "scripts/build-agent.sh": "a740c3ff5ff2689ca123f5f96b94ef26981d5fb6c89fa97034204cb7790307fe",
-    "scripts/package-agent.py": "cbca0f752d251f9a6daa08271b61d85e8676d81e2f1928c28e8a1ede5201405c"
+    "scripts/package-agent.py": "e3fe778f29d3f2869b2ab1e6abe06d2340b3298e63227ff8dcce172b489d2ea9"
   },
-  "version": "panel-speedbox-http-obfs-uuid-v1-node-sync-v1-subscription-generation-v1-lease-batch-v1-lease-pressure-v1"
+  "version": "panel-speedbox-http-obfs-uuid-v1-node-sync-v1-subscription-generation-v1-lease-batch-v1-lease-pressure-v1-ss2022-dispatchlink-v1"
 }

@@ -1,0 +1,12 @@
+{
+  "module": "github.com/cedar2025/Xray-core",
+  "original_files": {
+    "proxy/shadowsocks_2022/inbound.go": "c0d1e9ce9e66d441e2df76d6375a2e6783c9c1dc135bc1cfe330c568dd633f59",
+    "proxy/shadowsocks_2022/inbound_multi.go": "22492c6f1eca5f507dcc55b50a7397669c65f0603a6658bc42898a52a5b9d82a"
+  },
+  "patched_files": {
+    "proxy/shadowsocks_2022/inbound.go": "c8c5db2cc65affa628b5363bd097fb49b8497644b3bb9ceb3972bc8e5794d936",
+    "proxy/shadowsocks_2022/inbound_multi.go": "04b57baa8cc959b3bab0abce0d8c45f3c43c1e3c17897dda9a14489cfdd3be7b"
+  },
+  "version": "v0.0.0-20260409213332-f47935539965"
+}

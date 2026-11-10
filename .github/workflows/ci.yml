@@ -190,7 +190,7 @@ jobs:
           echo "SPEEDBOX_TEST_WATTUN=$RUNNER_TEMP/speedbox-wattun" >> "$GITHUB_ENV"
       - name: Lease admission and HTTP failure race regressions
         run: go test -race ./internal/admission ./internal/panel ./internal/controlplane -count=1
-      - run: go test ./internal/...
+      - run: python3 go_patched.py test ./internal/...
       - run: make build-all
       - uses: actions/upload-artifact@v4
         # Only release-agent consumes these archives, and it runs on version tags.

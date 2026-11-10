@@ -1,0 +1,35 @@
+diff --git a/proxy/shadowsocks_2022/inbound.go b/proxy/shadowsocks_2022/inbound.go
+--- a/proxy/shadowsocks_2022/inbound.go
++++ b/proxy/shadowsocks_2022/inbound.go
+@@ -22,0 +23 @@
++	"github.com/xtls/xray-core/transport"
+@@ -118,3 +119,3 @@
+-	link, err := dispatcher.Dispatch(ctx, singbridge.ToDestination(metadata.Destination, net.Network_TCP))
+-	if err != nil {
+-		return err
++	destination := singbridge.ToDestination(metadata.Destination, net.Network_TCP)
++	if !destination.IsValid() {
++		return errors.New("invalid destination")
+@@ -122 +123,5 @@
+-	return singbridge.CopyConn(ctx, nil, link, conn)
++	stream := singbridge.NewConn(conn)
++	return dispatcher.DispatchLink(ctx, destination, &transport.Link{
++		Reader: stream,
++		Writer: stream,
++	})
+diff --git a/proxy/shadowsocks_2022/inbound_multi.go b/proxy/shadowsocks_2022/inbound_multi.go
+--- a/proxy/shadowsocks_2022/inbound_multi.go
++++ b/proxy/shadowsocks_2022/inbound_multi.go
+@@ -27,0 +28 @@
++	"github.com/xtls/xray-core/transport"
+@@ -245,5 +246,5 @@
+-	link, err := dispatcher.Dispatch(ctx, destination)
+-	if err != nil {
+-		return err
+-	}
+-	return singbridge.CopyConn(ctx, conn, link, conn)
++	stream := singbridge.NewConn(conn)
++	return dispatcher.DispatchLink(ctx, destination, &transport.Link{
++		Reader: stream,
++		Writer: stream,
++	})

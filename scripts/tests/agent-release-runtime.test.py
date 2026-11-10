@@ -16,6 +16,7 @@ import platform
 import re
 import shutil
 import subprocess
+import sys
 import tarfile
 import tempfile
 import urllib.request
@@ -166,10 +167,10 @@ def main():
         with gzip.open(root / f'wattunnel-dist/wattun-linux-{arch}.gz', 'rb') as source, wattun.open('wb') as output:
             shutil.copyfileobj(source, output)
         wattun.chmod(0o700)
-        env.update(SPEEDBOX_TEST_WATTUN=str(wattun), GOMAXPROCS=os.environ.get('GOMAXPROCS', '2'))
+        env.update(SPEEDBOX_TEST_WATTUN=str(wattun), SPEEDBOX_GO=go, GOMAXPROCS=os.environ.get('GOMAXPROCS', '2'))
         print(subprocess.check_output([go, 'version'], env=env, text=True).strip(), flush=True)
         print('Running real Agent tests; first compilation may take several minutes.', flush=True)
-        result = subprocess.run([go, 'test', '-mod=readonly', '-p', '2', '-count=1', '-timeout', '5m', './internal/...'],
+        result = subprocess.run([sys.executable, str(root / 'agent/go_patched.py'), 'test', '-mod=readonly', '-p', '2', '-count=1', '-timeout', '5m', './internal/...'],
                                 cwd=root / 'agent', env=env)
         if result.returncode:
             raise SystemExit(result.returncode)
