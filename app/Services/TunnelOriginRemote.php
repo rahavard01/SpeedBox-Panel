@@ -166,6 +166,7 @@ PY;
                 .'test "$(sha256sum '.escapeshellarg($dir.'/selftest.gz').' | cut -d " " -f 1)" = '.escapeshellarg($test['sha256']).'; gzip -dc '.escapeshellarg($dir.'/selftest.gz').' > '.escapeshellarg($dir.'/selftest').'; '
                 .'test "$(sha256sum '.escapeshellarg($dir.'/selftest').' | cut -d " " -f 1)" = '.escapeshellarg($test['binary_sha256']).'; chmod 0700 '.escapeshellarg($dir.'/selftest').'; '
                 .'env SPEEDBOX_ORIGIN_REQUIRE_UNIX=1 TMPDIR=/tmp '.escapeshellarg($dir.'/selftest').' -test.v -test.count=1; '
+                .'env SPEEDBOX_ORIGIN_REQUIRE_UNIX=1 SPEEDBOX_ORIGIN_TEST_SECURITY=hmac-stream-v1 TMPDIR=/tmp '.escapeshellarg($dir.'/selftest').' -test.v -test.count=1; '
                 .'test "$(sha256sum '.escapeshellarg($dir.'/host.py').' | cut -d " " -f 1)" = '.escapeshellarg($helperHash).'; '
                 .'install -m 0700 '.escapeshellarg($dir.'/host.py').' /opt/speedbox-origin/host.py.new; mv /opt/speedbox-origin/host.py.new /opt/speedbox-origin/host.py; ';
             if($current!==$entry['binary_sha256'])$script.='test "$(sha256sum '.escapeshellarg($dir.'/binary.gz').' | cut -d " " -f 1)" = '.escapeshellarg($entry['sha256']).'; gzip -dc '.escapeshellarg($dir.'/binary.gz').' > /opt/speedbox-origin/tunnel-origin.new; '

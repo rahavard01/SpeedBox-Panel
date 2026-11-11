@@ -38,18 +38,19 @@ type Route struct {
 	Target int    `json:"target"`
 }
 type Config struct {
-	ReadyFile string   `json:"ready_file,omitempty"`
-	Role      string   `json:"role"`
-	Secret    string   `json:"secret"`
-	Backend   string   `json:"backend"`
-	Listen    string   `json:"listen"`
-	Routes    []Route  `json:"routes"`
-	Targets   []int    `json:"targets"`
-	TCP       bool     `json:"tcp"`
-	UDP       bool     `json:"udp"`
-	Allowed   []string `json:"allowed"`
-	Mark      int      `json:"mark"`
-	Broker    string   `json:"broker,omitempty"`
+	TCPSecurity string   `json:"tcp_security,omitempty"`
+	ReadyFile   string   `json:"ready_file,omitempty"`
+	Role        string   `json:"role"`
+	Secret      string   `json:"secret"`
+	Backend     string   `json:"backend"`
+	Listen      string   `json:"listen"`
+	Routes      []Route  `json:"routes"`
+	Targets     []int    `json:"targets"`
+	TCP         bool     `json:"tcp"`
+	UDP         bool     `json:"udp"`
+	Allowed     []string `json:"allowed"`
+	Mark        int      `json:"mark"`
+	Broker      string   `json:"broker,omitempty"`
 }
 type server struct {
 	brokerDial func() (net.Conn, error)
@@ -73,7 +74,13 @@ func newServer(c Config) (*server, error) {
 	}
 	s := &server{cfg: c, key: key, targets: map[int]bool{}, flows: map[[16]byte]*udpFlow{}, seen: map[[16]byte]time.Time{}, conns: map[net.Conn]bool{}}
 	s.original = addr
-	s.clientTLS, s.serverTLS = s.tlsConfig(false), s.tlsConfig(true)
+	switch c.TCPSecurity {
+	case "", "tls":
+		s.clientTLS, s.serverTLS = s.tlsConfig(false), s.tlsConfig(true)
+	case "hmac-stream-v1": // Experimental: authenticates plaintext, does not encrypt it.
+	default:
+		return nil, errors.New("unsupported TCP security mode")
+	}
 	if s.cfg.Broker == "" {
 		s.cfg.Broker = brokerPath
 	}
@@ -282,9 +289,8 @@ func (s *server) tcp(ctx context.Context, listen string, target int, bound chan<
 					return
 				}
 				defer out.Close()
-				secure := tls.Client(out, s.clientTLS)
-				_ = secure.SetDeadline(time.Now().Add(5 * time.Second))
-				if e = secure.HandshakeContext(ctx); e != nil {
+				secure, e := s.wrapTCP(ctx, out, false)
+				if e != nil {
 					return
 				}
 				out = secure
@@ -295,9 +301,8 @@ func (s *server) tcp(ctx context.Context, listen string, target int, bound chan<
 				}
 				pipe(c, out)
 			} else {
-				secure := tls.Server(c, s.serverTLS)
-				_ = secure.SetDeadline(time.Now().Add(5 * time.Second))
-				if e := secure.HandshakeContext(ctx); e != nil {
+				secure, e := s.wrapTCP(ctx, c, true)
+				if e != nil {
 					return
 				}
 				c = secure

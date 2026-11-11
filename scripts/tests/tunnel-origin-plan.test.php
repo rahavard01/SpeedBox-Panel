@@ -82,5 +82,19 @@ namespace {
     $new->enabled=false;$disabled=Origin::topology($t,$settings);$new->enabled=true;check(Origin::topology($t,$settings)!==$disabled,'enablement changes enrollment signature');
     $before=Origin::topology($t,$settings);$new->type='hysteria';check(Origin::topology($t,$settings)!==$before,'protocol change updates health enrollment');$p=Origin::plan($t,$t->settings,'foreign');check(!in_array(7801,$p['probe_targets'],true),'UDP-only node does not require TCP listener');check(in_array(7801,array_column($p['entries'],'target_port'),true),'UDP-only node retains origin protection');
     $t->engine='gost';$empty=[...$base,'mappings'=>[['public_port'=>8443,'target_port'=>443]]];$up=Origin::upgrade($t,$empty);$p=Origin::plan($t,$up,'foreign');check(!$up['source_identity']&&$p['health_only']&&$p['entries']===[],'unmanaged GOST gets authenticated health without node origin policy');
+    $t->engine='backpack';$t->kind='direct';$t->transport='pck';
+    $t->settings=Origin::upgrade($t,[...$base,'source_identity_tcp_security'=>'tls']);
+    $legacy=$t->settings;unset($legacy['source_identity_tcp_security']);
+    check(Origin::tcpSecurity($legacy)==='tls','legacy plans default to TLS');
+    $t->settings=$legacy;$upgraded=Origin::upgrade($t,$base);check($upgraded['source_identity_tcp_security']==='hmac-stream-v1','legacy tunnel switches during paired apply only');
+    check(Origin::plan($t,$upgraded,'iran')['staged'],'legacy TLS to HMAC transition stages ingress');
+    $t->settings=[...$legacy,'source_identity_tcp_security'=>'tls'];
+    $next=Origin::upgrade($t,[...$t->settings,'source_identity_tcp_security'=>'hmac-stream-v1']);
+    foreach(['iran','foreign'] as $side){$p=Origin::plan($t,$next,$side);check($p['tcp_security']==='hmac-stream-v1',"$side receives the selected security mode");check($p['staged'],'mode change stages ingress before authenticated probe');}
+    $t->settings=$next;
+    $preserved=Origin::upgrade($t,$base);check($preserved['source_identity_tcp_security']==='hmac-stream-v1','ordinary edits preserve the selected mode');
+    $back=Origin::upgrade($t,[...$next,'source_identity_tcp_security'=>'tls']);
+    check(Origin::plan($t,$back,'iran')['staged'],'returning to TLS also stages ingress');
+    foreach(['plain','',null,false,[]] as $bad){$rejected=false;try{Origin::upgrade($t,[...$next,'source_identity_tcp_security'=>$bad]);}catch(\RuntimeException){$rejected=true;}check($rejected,'invalid mode cannot silently downgrade');}
     echo "TUNNEL ORIGIN PLAN: $checks checks passed\n";
 }

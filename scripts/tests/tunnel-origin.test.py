@@ -17,6 +17,20 @@ def config(engine='gost'):
             'settings':{**copy.deepcopy(defaults),'engine':engine,'transport':'gre' if engine=='gre' else 'tcp','peer_host':'192.0.2.2','local_endpoint':'192.0.2.1','public_host':'192.0.2.1','inner_iran':'10.226.0.1/30','inner_foreign':'10.226.0.2/30','protocol':'both','mappings':[{'public_port':7798,'public_end':7798,'target_port':7798,'target_end':7798},{'public_port':8443,'public_end':8443,'target_port':443,'target_end':443}]}}
 
 class Identity(unittest.TestCase):
+    def test_security_mode_reaches_both_runtime_configs_and_legacy_is_tls(self):
+        for side in ('iran','foreign'):
+            self.assertEqual(o.config_for(plan(side),IDENT)['tcp_security'],'tls')
+            for mode in ('tls','hmac-stream-v1'):
+                p={**plan(side),'tcp_security':mode}
+                self.assertEqual(o.config_for(p,IDENT)['tcp_security'],mode)
+                with tempfile.TemporaryDirectory() as d,patch.object(o,'ROOT',Path(d)/'state'),patch.object(o,'ETC',Path(d)/'etc'),patch.object(o,'RUN',Path(d)/'run'),patch.object(o,'UNITS',Path(d)/'units'),patch.object(o,'command',return_value=subprocess.CompletedProcess([],0,'','')):
+                    o.install(IDENT,p,enabled=False)
+                    self.assertEqual(o.read(o.paths(IDENT)['config'])['tcp_security'],mode)
+                    self.assertEqual(o.read(o.paths(IDENT)['state'])['plan']['tcp_security'],mode)
+        for mode in ('plain','',None,False,{},['tls']):
+            with self.subTest(mode=mode),self.assertRaises(ValueError):
+                o.config_for({**plan(),'tcp_security':mode},IDENT)
+
     def test_carrier_readiness_can_recover_after_three_short_attempts(self):
         clock=[0.0];attempts=[]
         def command(argv,timeout):

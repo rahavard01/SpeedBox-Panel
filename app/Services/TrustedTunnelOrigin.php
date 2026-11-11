@@ -13,9 +13,18 @@ final class TrustedTunnelOrigin
     {
         return $tunnel->engine==='backpack'&&($tunnel->kind??'')==='reverse'&&($tunnel->transport??'')==='udp'&&($tunnel->orientation??'')==='normal';
     }
+    public static function tcpSecurity(array $settings): string
+    {
+        $mode=array_key_exists('source_identity_tcp_security',$settings)?$settings['source_identity_tcp_security']:'tls';
+        if(!is_string($mode)||!in_array($mode,['tls','hmac-stream-v1'],true))throw new \RuntimeException('حالت احراز اصالت TCP تونل معتبر نیست.');
+        return $mode;
+    }
+
     public static function upgrade(ServerTunnel $tunnel, array $settings): array
     {
         if ($tunnel->engine !== 'wattunnel') {
+            if(!array_key_exists('source_identity_tcp_security',$settings))$settings['source_identity_tcp_security']=array_key_exists('source_identity_tcp_security',$tunnel->settings)?self::tcpSecurity($tunnel->settings):'hmac-stream-v1';
+            self::tcpSecurity($settings);
             $entries = self::entries($tunnel, $settings);
             $settings['source_identity_policy_version']=3;
             $settings['source_identity'] = $entries !== [];
@@ -115,11 +124,13 @@ final class TrustedTunnelOrigin
         if($tunnel->engine==='gre' && !filter_var($inner,FILTER_VALIDATE_IP))throw new \RuntimeException('آدرس داخلی GRE برای بازیابی مبدأ معتبر نیست.');
         $old=$tunnel->settings;
         $staged=empty($old['source_identity']) || !($old['enabled']??true)
-            || self::ports($old)!==self::ports($settings) || empty($old['source_identity_port']);
+            || self::ports($old)!==self::ports($settings) || empty($old['source_identity_port'])
+            || self::tcpSecurity($old)!==self::tcpSecurity($settings);
         $server=ManagedServer::find($tunnel->foreign_server_id);$probe=[];
         if($server?->machine_id)foreach(ProxyServer::where('machine_id',$server->machine_id)->get() as $node)
             if(empty($node->parent_id)&&$node->enabled&&!in_array($node->type??'',['hysteria','tuic'],true)&&in_array((int)$node->server_port,array_column($entries,'target_port'),true))$probe[]=(int)$node->server_port;
         return ['version'=>2,'side'=>$side,'port'=>$port,'secret'=>$tunnel->secret,'entries'=>$entries,
+            'tcp_security'=>self::tcpSecurity($settings),
             'probe_targets'=>array_values(array_unique($probe)),
             'health_only'=>$entries===[],
             'staged'=>$staged,
@@ -128,4 +139,3 @@ final class TrustedTunnelOrigin
             'allowed'=>$settings['allowed_sources']??[], 'mark'=>$tunnel->engine==='gre'?((int)$tunnel->subnet<<12)+4095:0];
     }
 }
-

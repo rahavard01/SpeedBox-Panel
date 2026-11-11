@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"crypto/rand"
-	"crypto/tls"
 	"errors"
 	"fmt"
 	"io"
@@ -56,9 +55,8 @@ func (s *server) probe(ctx context.Context) error {
 		}
 		e = func() error {
 			defer c.Close()
-			secure := tls.Client(c, s.clientTLS)
-			secure.SetDeadline(time.Now().Add(4 * time.Second))
-			if e := secure.HandshakeContext(ctx); e != nil {
+			secure, e := s.wrapTCP(ctx, c, false)
+			if e != nil {
 				return e
 			}
 			if e := s.sendMetadata(secure, hello{Target: target, IP: source.Addr().String(), Port: source.Port(), Probe: true}); e != nil {

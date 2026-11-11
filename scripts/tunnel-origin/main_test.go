@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"context"
 	"crypto/rand"
-	"crypto/tls"
 	"errors"
 	"io"
 	"net"
@@ -21,6 +20,14 @@ import (
 )
 
 const secret = "1111111111111111111111111111111111111111111111111111111111111111"
+
+// Run the existing end-to-end contract against either explicit transport.
+func newTestServer(c Config) (*server, error) {
+	if c.TCPSecurity == "" {
+		c.TCPSecurity = os.Getenv("SPEEDBOX_ORIGIN_TEST_SECURITY")
+	}
+	return newServer(c)
+}
 
 func eventually(t *testing.T, fn func() bool) {
 	t.Helper()
@@ -172,7 +179,7 @@ func makeFixture(t *testing.T, original ...string) *fixture {
 	f.cancel = cancel
 	t.Cleanup(cancel)
 	f.egress, f.relay = startTestEndpoint(t, ctx, 0, false, func(address string) (*server, error) {
-		s, err := newServer(Config{Role: "egress", Secret: secret, Listen: address, Targets: []int{f.port}, TCP: true, UDP: true, Broker: f.broker})
+		s, err := newTestServer(Config{Role: "egress", Secret: secret, Listen: address, Targets: []int{f.port}, TCP: true, UDP: true, Broker: f.broker})
 		if err != nil {
 			return nil, err
 		}
@@ -187,7 +194,7 @@ func makeFixture(t *testing.T, original ...string) *fixture {
 		return s, nil
 	})
 	f.ingress, f.public = startTestEndpoint(t, ctx, f.port, false, func(address string) (*server, error) {
-		s, err := newServer(Config{Role: "ingress", Secret: secret, Backend: f.relay, Routes: []Route{{address, f.port}}, TCP: true, UDP: true})
+		s, err := newTestServer(Config{Role: "ingress", Secret: secret, Backend: f.relay, Routes: []Route{{address, f.port}}, TCP: true, UDP: true})
 		if err != nil {
 			return nil, err
 		}
@@ -244,9 +251,8 @@ func (f *fixture) authenticated(t *testing.T, ip string, peer *server) (net.Conn
 	if e != nil {
 		t.Fatal(e)
 	}
-	tc := tls.Client(c, peer.clientTLS)
-	tc.SetDeadline(time.Now().Add(3 * time.Second))
-	if e = tc.Handshake(); e != nil {
+	tc, e := peer.wrapTCP(context.Background(), c, false)
+	if e != nil {
 		c.Close()
 		t.Fatal(e)
 	}
@@ -303,7 +309,7 @@ func TestSameIPAcrossDirectAndTunnelKeepsOneQuotaAndRejectsSecondIP(t *testing.T
 }
 func TestTCPRejectsWrongCredentialAndUnregisteredOrigin(t *testing.T) {
 	f := makeFixture(t)
-	bad, e := newServer(Config{Role: "ingress", Secret: strings.Repeat("2", 64), Backend: f.relay, Routes: []Route{{f.public, f.port}}, TCP: true})
+	bad, e := newTestServer(Config{Role: "ingress", Secret: strings.Repeat("2", 64), Backend: f.relay, Routes: []Route{{f.public, f.port}}, TCP: true})
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -312,9 +318,7 @@ func TestTCPRejectsWrongCredentialAndUnregisteredOrigin(t *testing.T) {
 		t.Fatal(e)
 	}
 	defer raw.Close()
-	c := tls.Client(raw, bad.clientTLS)
-	c.SetDeadline(time.Now().Add(time.Second))
-	if e = c.Handshake(); e == nil {
+	if _, e = bad.wrapTCP(context.Background(), raw, false); e == nil {
 		t.Fatal("wrong tunnel secret was accepted")
 	}
 	if ips, _ := f.gate.counts(); ips != 0 {
@@ -326,8 +330,8 @@ func TestTCPRejectsWrongCredentialAndUnregisteredOrigin(t *testing.T) {
 		t.Fatal(e)
 	}
 	defer raw.Close()
-	c = tls.Client(raw, f.ingress.clientTLS)
-	if e = c.Handshake(); e != nil {
+	c, e := f.ingress.wrapTCP(context.Background(), raw, false)
+	if e != nil {
 		t.Fatal(e)
 	}
 	if e = f.ingress.sendHello(c, f.port, netip.MustParseAddrPort("203.0.113.5:12345")); e != nil {
@@ -510,7 +514,7 @@ func TestRetiredUDPFlowCannotReopenAnOldIdentity(t *testing.T) {
 
 func TestBootReadinessCreatesPrivateRuntimeDirectoryAndCleansUp(t *testing.T) {
 	ready := filepath.Join(t.TempDir(), "fresh-run", "endpoint.ready")
-	s, e := newServer(Config{Role: "egress", Secret: secret, Listen: "127.0.0.1:0", Targets: []int{12345}, TCP: true, ReadyFile: ready})
+	s, e := newTestServer(Config{Role: "egress", Secret: secret, Listen: "127.0.0.1:0", Targets: []int{12345}, TCP: true, ReadyFile: ready})
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -557,7 +561,7 @@ func TestConfiguredCarrierProbeRequiresAuthenticatedPeerAndBroker(t *testing.T) 
 	}
 	cfg := f.ingress.cfg
 	cfg.Secret = strings.Repeat("2", 64)
-	wrong, e := newServer(cfg)
+	wrong, e := newTestServer(cfg)
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -571,7 +575,7 @@ func TestConfiguredCarrierProbeRequiresAuthenticatedPeerAndBroker(t *testing.T) 
 	cfg = f.ingress.cfg
 	cfg.TCP = false
 	cfg.Backend = freePort(t, "127.0.0.1")
-	blocked, e := newServer(cfg)
+	blocked, e := newTestServer(cfg)
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -585,7 +589,7 @@ func TestHealthEndpointAuthenticatesBothProtocolsWithoutOpeningNodePorts(t *test
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	_, relay := startTestEndpoint(t, ctx, 0, true, func(address string) (*server, error) {
-		h, err := newServer(Config{Role: "health", Secret: secret, Listen: address, Targets: []int{1}, TCP: true, UDP: true, ReadyFile: ready})
+		h, err := newTestServer(Config{Role: "health", Secret: secret, Listen: address, Targets: []int{1}, TCP: true, UDP: true, ReadyFile: ready})
 		if err != nil {
 			return nil, err
 		}
@@ -593,7 +597,7 @@ func TestHealthEndpointAuthenticatesBothProtocolsWithoutOpeningNodePorts(t *test
 		return h, nil
 	})
 	cfg := Config{Role: "ingress", Secret: secret, Backend: relay, Routes: []Route{{"127.0.0.1:0", 1}}, TCP: true, UDP: true}
-	client, e := newServer(cfg)
+	client, e := newTestServer(cfg)
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -601,7 +605,7 @@ func TestHealthEndpointAuthenticatesBothProtocolsWithoutOpeningNodePorts(t *test
 		t.Fatal(e)
 	}
 	cfg.Secret = strings.Repeat("2", 64)
-	wrong, e := newServer(cfg)
+	wrong, e := newTestServer(cfg)
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -612,9 +616,8 @@ func TestHealthEndpointAuthenticatesBothProtocolsWithoutOpeningNodePorts(t *test
 	if e != nil {
 		t.Fatal(e)
 	}
-	secure := tls.Client(raw, client.clientTLS)
-	secure.SetDeadline(time.Now().Add(time.Second))
-	if e := secure.HandshakeContext(ctx); e != nil {
+	secure, e := client.wrapTCP(ctx, raw, false)
+	if e != nil {
 		t.Fatal(e)
 	}
 	if e := client.sendHello(secure, 1, netip.MustParseAddrPort("198.51.100.2:12345")); e != nil {

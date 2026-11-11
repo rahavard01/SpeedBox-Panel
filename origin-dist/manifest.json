@@ -3,15 +3,18 @@
   "source_files": {
     "agent/go.mod": "b2e0334684fe99c1f07d60c92e95d27240bd2e8dab325566bf13f4a76b1eab85",
     "agent/internal/origin/registry.go": "cc7dc77004ad7131f142f54b014c43cba47e9dfc83069a0aea8a099e242d8555",
+    "scripts/tunnel-origin/auth_bench_test.go": "0e09e9fdc2f826767a572cb7411ea5686578308f1cd546378869d5dd2c1861f0",
+    "scripts/tunnel-origin/auth_stream.go": "743313681f2b3edb2d9ace76a2634d59b34357a1bde64896109c6d43f2bcff97",
+    "scripts/tunnel-origin/auth_stream_test.go": "027d8ae91c90c7be6ca0f1565e6204b6e832036b74b7c95baa700f65750c8f3a",
     "scripts/tunnel-origin/broker_contract_test.go": "26b70300c5471a976111b610eb61c9f815c910959d38e423b6d827a346b2e998",
     "scripts/tunnel-origin/build.py": "c8839b0ec3423100ced65c4f0b16864e8a640ade14725cab71feb9ec0dd338fb",
     "scripts/tunnel-origin/copy_stream_test.go": "2ff152426eabc87f4264a1910de711d5bbbb50e7e712aeaf8ada0c777fc08446",
     "scripts/tunnel-origin/go.mod": "7229046022a13890bd160be4ed3450b6795ba3e9060182e2c8c3d48f825b4ca9",
-    "scripts/tunnel-origin/host.py": "9125d746bda87d31b0fa3f8456c58028a051c4a3d414a836fe23e85e7f179a16",
-    "scripts/tunnel-origin/main.go": "6d91841587eb17ab5890b440f6cb5f11ead365ba09a517b07c73d5d399c74194",
-    "scripts/tunnel-origin/main_test.go": "621c5d8a5a14f9ebd7b2ddb61294f0a158c69848a3fb28a927e6de6b260185f5",
+    "scripts/tunnel-origin/host.py": "219bea23fc7ca426961044c36eb5e39e3f2fe8008829ad7b15df0607d05331ea",
+    "scripts/tunnel-origin/main.go": "ba3d2d86abdd6633ca4a083ff79277fdca976b32806b221fb89acace5f38ca45",
+    "scripts/tunnel-origin/main_test.go": "9a108a605a5f0dcc821713c7a3924e532261b460eddc9c75b0d9cf7caf8fe714",
     "scripts/tunnel-origin/port_helpers_test.go": "19ac9cda736f1ef440abb258233400aa1601ec43f8c2a2f2054d2dd542d50ce1",
-    "scripts/tunnel-origin/probe.go": "da43f00bff829a55aa147a56b8df6731bb7503c74d34447003d65788a9c18df6",
+    "scripts/tunnel-origin/probe.go": "3e255ec04d8b166def1dc9364a83a60b392d3a10f6eba862dd7ea3f259da5743",
     "scripts/tunnel-origin/tls.go": "bda06689015b8f9dae4da4e1d69f3b284fcd9c4609f94abde677c3660b762aaa",
     "scripts/tunnel-origin/udp.go": "c55aafeeee9fac629930bcfd4527fe6584d7424fd02e4bace75706dbca90abe4",
     "scripts/verify-origin.py": "182fe4fd23e5c8731dfb2ffb110574baa2d16d84730dfa08c4f3740e4445f3b5"
@@ -19,25 +22,25 @@
   "archives": {
     "amd64": {
       "file": "tunnel-origin-linux-amd64.gz",
-      "sha256": "8dac95841bddab0de102eef44d4806e8374023eec2f0d764599252f2ac2c19f4",
-      "binary_sha256": "9dace0447ce664e4ae36dc67ccce3668f7b4e2d757178446a48c1dcf04ec2783",
-      "bytes": 5460130,
+      "sha256": "e361938f81b08b186f1c4060d5c1dd29865869e504ee9c0330e7e3ca1de8cf41",
+      "binary_sha256": "10924f3683f90dac2cbb5ff29e66434bb66091a7755f3469270a2f55fe0a532f",
+      "bytes": 5464226,
       "selftest": {
         "file": "selftest-linux-amd64.gz",
-        "sha256": "8ebdd15fe3aeb95200c065a82eed30246dc78ca7b420cae0914044da65eabb14",
-        "binary_sha256": "d6a9325471f93bb5ccdf7a4dfee22a010b2c3ac1702e81b928de5392bcd5cd4b",
-        "bytes": 6455458
+        "sha256": "ec994eeaf8e1194a58d99b1b31e6a671857c21db980762386d69983b8b2bbe24",
+        "binary_sha256": "d5e809ed11f17bb55a02c44763771d138e7f5b4237e74391bc68ba1b917ea0b7",
+        "bytes": 6496418
       }
     },
     "arm64": {
       "file": "tunnel-origin-linux-arm64.gz",
-      "sha256": "dc4f8febb336a5b090e47de53aa39bd99f886a49b118bc9128bf83d769b21156",
-      "binary_sha256": "ec981650bbcfd525cd6516d1b51c888f8cd795fadbf09ce4df424ab7897f5399",
+      "sha256": "313d294c9a286500c44baf3ff27ee2a875bd97a2eea045aa95de8fe0817c79b7",
+      "binary_sha256": "4f6fffbb9dc3c63b1b5ee67b3d3593ba20abffaedbb6248fb1ba460d6a1a0493",
       "bytes": 4980898,
       "selftest": {
         "file": "selftest-linux-arm64.gz",
-        "sha256": "09e3e4a92eed2a8e7f349ae717ac15ce239909f31d29cbc3fecd3f8a80256706",
-        "binary_sha256": "dabcf03359d9ed6d06a30c5089ed2ed0f3d79e62e292cea58db7971a64a3d9f4",
+        "sha256": "0c4d6f1c9e591d2bbc11d1b494a3903e71844721cf2036e4ea940593d1e7efd6",
+        "binary_sha256": "aaf7958c0d948581962e49b305ca953d34ef37ef34fedbc752298b5c82e7f4e4",
         "bytes": 5963938
       }
     }

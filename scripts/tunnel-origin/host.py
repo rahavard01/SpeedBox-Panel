@@ -66,6 +66,7 @@ def validate(plan):
     if not re.fullmatch(r'[a-f0-9]{64}',str(plan.get('secret',''))):raise ValueError('invalid identity credential')
     if not isinstance(plan.get('entries'),list) or not (0 if plan.get('health_only') else 1)<=len(plan['entries'])<=256:raise ValueError('invalid identity mapping count')
     if plan.get('health_only') and plan['entries']:raise ValueError('health-only endpoint cannot forward node traffic')
+    if plan.get('tcp_security','tls') not in ('tls','hmac-stream-v1'):raise ValueError('invalid identity TCP security mode')
     used=set()
     for row in plan['entries']:
         for key in ('public_port','target_port'):
@@ -116,7 +117,7 @@ def native(backend,request):
 
 def config_for(plan,identifier):
     p=validate(plan);tcp=bool(p.get('tcp',True));udp=bool(p.get('udp',False))
-    c={'role':'ingress' if p['side']=='iran' else 'egress','secret':p['secret'],'tcp':tcp,'udp':udp,'ready_file':str(paths(identifier)['ready'])}
+    c={'tcp_security':p.get('tcp_security','tls'),'role':'ingress' if p['side']=='iran' else 'egress','secret':p['secret'],'tcp':tcp,'udp':udp,'ready_file':str(paths(identifier)['ready'])}
     if p['side']=='iran':
         c.update(backend=p.get('backend',f"127.0.0.1:{p['port']}"),routes=[{'listen':f":{v['public_port']}",'target':v['target_port']} for v in p['entries']],allowed=p.get('allowed',[]),mark=int(p.get('mark',0)))
         if p.get('health_only'):c['routes']=[{'listen':'127.0.0.1:0','target':1}]
