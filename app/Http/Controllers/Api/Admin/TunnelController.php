@@ -175,6 +175,7 @@ class TunnelController extends Controller
         $data = $request->validate(['name' => 'required|string|max:100', 'public_host' => ['required','string','max:253',function ($a,$v,$fail) {
             if (!filter_var($v,FILTER_VALIDATE_IP) && !filter_var($v,FILTER_VALIDATE_DOMAIN,FILTER_FLAG_HOSTNAME)) $fail('IP یا دامنهٔ معتبر وارد کنید؛ بدون http و شماره پورت.');
         }], 'tunnel_port' => 'required|integer|between:1,65535', 'accept_udp' => 'required|boolean',
+            'preserve_client_ip' => 'sometimes|boolean',
             'mappings' => 'required|array|min:1|max:20', 'mappings.*.public_port' => 'required|integer|between:1,65535|distinct',
             'mappings.*.target_port' => 'required|integer|between:1,65535',
             'peer_host' => ['nullable','string','max:253',function ($a,$v,$fail) { if ($v && !filter_var($v,FILTER_VALIDATE_IP) && !filter_var($v,FILTER_VALIDATE_DOMAIN,FILTER_FLAG_HOSTNAME)) $fail('آدرس ارتباط دو سرور معتبر نیست.'); }],
@@ -188,6 +189,7 @@ class TunnelController extends Controller
         }
         $data['telegram_alerts']=app(\App\Services\TunnelAlertSettings::class)->resolve($request,$existing);
         $data['enabled']=$existing?(bool)($existing->settings['enabled']??true):true;
+        $data['preserve_client_ip']=(bool)($data['preserve_client_ip']??$existing?->settings['preserve_client_ip']??true);
         unset($data['name']); $data['peer_host'] = $data['peer_host'] ?? '';
         $data=[...$data,...\App\Services\TunnelCdn::normalize($request,'backpack',$kind,$transport,$existing)];
         return $data;

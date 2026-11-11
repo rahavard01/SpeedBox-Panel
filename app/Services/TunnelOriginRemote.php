@@ -58,10 +58,14 @@ PY;
     public function refreshNodePolicy(ServerTunnel $t,array $before,array $after,bool $force=false): void
     {
         if($t->engine==='wattunnel')return;
-        if(empty($before['source_identity']) && empty($after['source_identity']))return;
-        if(!$force && (empty($after['source_identity']) || !($after['enabled']??true)))return;
-        if(!$force && !empty($before['source_identity']) && ($before['enabled']??true)
-            && TrustedTunnelOrigin::ports($before)===TrustedTunnelOrigin::ports($after))return;
+        $beforePorts=TrustedTunnelOrigin::policyPorts($t,$before);
+        $afterPorts=TrustedTunnelOrigin::policyPorts($t,$after);
+        if(!$beforePorts && !$afterPorts)return;
+        $beforeRequired=TrustedTunnelOrigin::preservesClientIp($before) && ($before['enabled']??true);
+        $afterRequired=TrustedTunnelOrigin::preservesClientIp($after) && ($after['enabled']??true);
+        if(!$force && isset($before['source_identity_runtime_version'])
+            && $beforeRequired===$afterRequired && ($before['enabled']??true)===($after['enabled']??true)
+            && $beforePorts===$afterPorts)return;
         $server=$t->foreign;
         if(!$server?->machine_id)throw new RuntimeException('ماشین نود مقصد برای بازیابی هویت پیدا نشد.');
         $sudo=$server->ssh_user==='root'?'':'sudo -n ';
@@ -69,6 +73,7 @@ PY;
         $script=<<<'PY'
 import json,re,socket,subprocess,sys,time
 wanted=set(json.loads(sys.argv[1]))
+require_broker=sys.argv[2]=='1'
 for _ in range(60):
     pid=subprocess.run(['systemctl','show','xboard-node.service','--property=MainPID','--value'],text=True,capture_output=True).stdout.strip()
     rows=subprocess.run(['ss','-H','-lntup'],text=True,capture_output=True).stdout.splitlines()
@@ -78,17 +83,19 @@ for _ in range(60):
         if len(fields)>4 and 'pid='+pid+',' in row:
             match=re.search(r':([0-9]+)$',fields[4])
             if match:ports.add(int(match.group(1)))
-    try:
-        with socket.socket(socket.AF_UNIX,socket.SOCK_STREAM) as c:
-            c.settimeout(1);c.connect('/run/speedbox-origin/broker.sock');c.sendall(b'{"operation":"ping","version":1}\n')
-            ready=c.makefile('rb').readline(32)==b'ORIGIN1\n'
-    except OSError:ready=False
+    ready=not require_broker
+    if require_broker:
+        try:
+            with socket.socket(socket.AF_UNIX,socket.SOCK_STREAM) as c:
+                c.settimeout(1);c.connect('/run/speedbox-origin/broker.sock');c.sendall(b'{"operation":"ping","version":1}\n')
+                ready=c.makefile('rb').readline(32)==b'ORIGIN1\n'
+        except OSError:ready=False
     if pid.isdigit() and int(pid)>0 and ready and wanted.issubset(ports):print('NODE ORIGIN POLICY READY');break
     time.sleep(.5)
 else:raise SystemExit('Node did not reload its committed source-identity policy')
 PY;
-        $wanted=ProxyServer::where('machine_id',$server->machine_id)->where('enabled',true)->whereIn('server_port',TrustedTunnelOrigin::ports($after))->pluck('server_port')->map(fn($v)=>(int)$v)->all();
-        $this->ssh->run($server,$sudo.'python3 -c '.escapeshellarg($script).' '.escapeshellarg(json_encode($wanted)),40);
+        $wanted=ProxyServer::where('machine_id',$server->machine_id)->where('enabled',true)->whereIn('server_port',array_values(array_unique([...$beforePorts,...$afterPorts])))->pluck('server_port')->map(fn($v)=>(int)$v)->all();
+        $this->ssh->run($server,$sudo.'python3 -c '.escapeshellarg($script).' '.escapeshellarg(json_encode($wanted)).' '.($afterRequired?'1':'0'),40);
     }
 
     public function allocate(ServerTunnel $t,array $settings,array $entries): int

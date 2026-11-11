@@ -20,6 +20,8 @@ namespace {
  $manager->busy=true;$job=new SyncTunnelOrigins([15]);$job->handle($manager);check($job->delays===[15],'shared server lease schedules retry');
  $manager->busy=false;$t->settings=TrustedTunnelOrigin::upgrade($t,$t->settings);$manager->calls=[];(new SyncTunnelOrigins([15]))->handle($manager);check($manager->calls===[],'successful enrollment terminates retries');
  $t->engine='gost';$new->enabled=false;(new SyncTunnelOrigins([15]))->handle($manager);check($manager->calls[0][0]==='reapply','enablement change queues network reapply');
- $manager->calls=[];$t->engine='wattunnel';(new SyncTunnelOrigins([15]))->handle($manager);check($manager->calls===[],'Wat native mapped-port identity needs no adapter enrollment');
+ $manager->calls=[];$t->engine='backpack';$t->settings=TrustedTunnelOrigin::upgrade($t,[...$t->settings,'preserve_client_ip'=>false]);
+ $new->enabled=!$new->enabled;(new SyncTunnelOrigins([15]))->handle($manager);check($manager->calls===[],'node changes do not re-enable an explicitly opted-out tunnel');
+ $t->engine='wattunnel';(new SyncTunnelOrigins([15]))->handle($manager);check($manager->calls===[],'Wat native mapped-port identity needs no adapter enrollment');
  echo "TUNNEL ORIGIN SYNC: production job checks passed\n";
 }

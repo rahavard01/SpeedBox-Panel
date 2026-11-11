@@ -23,9 +23,11 @@ final class TrustedTunnelOrigin
     public static function upgrade(ServerTunnel $tunnel, array $settings): array
     {
         if ($tunnel->engine !== 'wattunnel') {
+            $settings['preserve_client_ip']=$settings['preserve_client_ip']??$tunnel->settings['preserve_client_ip']??true;
+            $preserve=self::preservesClientIp($settings);
             if(!array_key_exists('source_identity_tcp_security',$settings))$settings['source_identity_tcp_security']=array_key_exists('source_identity_tcp_security',$tunnel->settings)?self::tcpSecurity($tunnel->settings):'hmac-stream-v1';
             self::tcpSecurity($settings);
-            $entries = self::entries($tunnel, $settings);
+            $entries = $preserve ? self::entries($tunnel, $settings) : [];
             $settings['source_identity_policy_version']=3;
             $settings['source_identity'] = $entries !== [];
             $settings['source_identity_targets'] = array_values(array_unique(array_column($entries, 'target_port')));
@@ -42,6 +44,7 @@ final class TrustedTunnelOrigin
 
     public static function topology(ServerTunnel $t,array $settings): string
     {
+        if($t->engine!=='wattunnel' && !self::preservesClientIp($settings))return hash('sha256','source-identity-off');
         $server=ManagedServer::find($t->foreign_server_id);$nodes=[];
         if($server?->machine_id)foreach(ProxyServer::where('machine_id',$server->machine_id)->get() as $n)
             if(empty($n->parent_id)&&self::covers($t,$settings,(int)$n->server_port))$nodes[(int)$n->id]=[(int)$n->server_port,(bool)$n->enabled,(string)($n->type??'')];
@@ -64,14 +67,37 @@ final class TrustedTunnelOrigin
     {
         if (!$node->machine_id || !Schema::hasTable('speedbox_tunnels')) return false;
         $serverIds = ManagedServer::where('machine_id', $node->machine_id)->pluck('id');
+        $required=false;
         foreach (ServerTunnel::where('status', '!=', 'deleted')->whereIn('foreign_server_id', $serverIds)->get() as $tunnel) {
             $settings = $tunnel->settings;
-            if (($settings['enabled'] ?? true) && in_array((int) $node->server_port, self::ports($settings), true)) return true;
+            if(!($settings['enabled']??true))continue;
+            // A native loopback forward may share this node with authenticated
+            // forwards. Registered connections still resolve through the broker;
+            // only an explicitly opted-out route permits the legacy fallback.
+            if($tunnel->engine!=='wattunnel' && !self::preservesClientIp($settings)
+                && self::covers($tunnel,$settings,(int)$node->server_port))return false;
+            if (in_array((int) $node->server_port, self::ports($settings), true)) $required=true;
             // New nodes fail closed while their paired enrollment is queued.
             if(($settings['enabled']??true) && ($settings['source_identity_policy_version']??0)>=3
-                && self::covers($tunnel,$settings,(int)$node->server_port))return true;
+                && self::covers($tunnel,$settings,(int)$node->server_port))$required=true;
         }
-        return false;
+        return $required;
+    }
+
+    public static function preservesClientIp(array $settings): bool
+    {
+        $value=$settings['preserve_client_ip']??true;
+        if(!is_bool($value))throw new \RuntimeException('وضعیت حفظ آی‌پی واقعی معتبر نیست.');
+        return $value;
+    }
+
+    /** Node policy also changes when an ordinary forward replaces an adapter. */
+    public static function policyPorts(ServerTunnel $t,array $settings): array
+    {
+        $server=ManagedServer::find($t->foreign_server_id);$ports=[];
+        if($server?->machine_id)foreach(ProxyServer::where('machine_id',$server->machine_id)->get() as $node)
+            if(empty($node->parent_id) && self::covers($t,$settings,(int)$node->server_port))$ports[]=(int)$node->server_port;
+        $ports=array_values(array_unique($ports));sort($ports,SORT_NUMERIC);return $ports;
     }
 
     public static function covers(ServerTunnel $tunnel,array $settings,int $port): bool
@@ -115,7 +141,7 @@ final class TrustedTunnelOrigin
     {
         if ($tunnel->engine==='wattunnel' || (empty($settings['source_identity'])&&$tunnel->engine!=='gost')) return null;
         if(empty($settings['source_identity_port']) && empty($settings['source_identity']))return null;
-        $entries=self::entries($tunnel,$settings);
+        $entries=self::preservesClientIp($settings)?self::entries($tunnel,$settings):[];
         if((!$entries && $tunnel->engine!=='gost') || empty($settings['source_identity_port']))throw new \RuntimeException('تنظیمات بازیابی آی‌پی واقعی نیازمند اعمال مجدد است.');
         $udpOnly=self::udpOnlyBackpack($tunnel);
         $protocol=$tunnel->engine==='backpack'?($udpOnly?'udp':'tcp'):($settings['protocol']??'tcp');

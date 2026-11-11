@@ -17,6 +17,45 @@ def config(engine='gost'):
             'settings':{**copy.deepcopy(defaults),'engine':engine,'transport':'gre' if engine=='gre' else 'tcp','peer_host':'192.0.2.2','local_endpoint':'192.0.2.1','public_host':'192.0.2.1','inner_iran':'10.226.0.1/30','inner_foreign':'10.226.0.2/30','protocol':'both','mappings':[{'public_port':7798,'public_end':7798,'target_port':7798,'target_end':7798},{'public_port':8443,'public_end':8443,'target_port':443,'target_end':443}]}}
 
 class Identity(unittest.TestCase):
+    def test_opt_out_removes_adapter_and_keeps_native_mappings(self):
+        for backend in ('backpack','gost','gre'):
+            with self.subTest(backend=backend),tempfile.TemporaryDirectory() as d,patch.object(o,'ROOT',Path(d)/'state'),patch.object(o,'ETC',Path(d)/'etc'),patch.object(o,'RUN',Path(d)/'run'),patch.object(o,'UNITS',Path(d)/'units'),patch.object(o,'command',return_value=subprocess.CompletedProcess([],0,'','')),patch.object(o,'preflight') as preflight,patch.object(o,'install') as install:
+                p=o.paths(IDENT);o.atomic(p['state'],{'plan':plan(),'enabled':True});o.atomic(p['unit'],o.MARKER+'[Service]\n')
+                if backend=='backpack':
+                    request={'action':'apply','name':IDENT,'ports':'7798=7798,8443=443','origin_plan':None}
+                    driver='backpack'
+                else:
+                    cfg=config(backend);cfg['origin_plan']=None
+                    request={'action':'apply','config':cfg};driver='network'
+                with patch.object(o,'native',return_value={'ok':True,'data':{}}) as native:
+                    o.dispatch(driver,request)
+                    sent=native.call_args.args[1]
+                if backend=='backpack':self.assertEqual(sent['ports'],'7798=7798,8443=443')
+                else:self.assertEqual(sent['config']['settings']['mappings'],request['config']['settings']['mappings'])
+                self.assertFalse(p['state'].exists());self.assertFalse(p['unit'].exists());preflight.assert_not_called();install.assert_not_called()
+
+    def test_gost_health_only_keeps_user_data_outside_adapter(self):
+        p={**plan(),'entries':[],'health_only':True,'probe_targets':[]}
+        cfg=config();before=copy.deepcopy(cfg['settings']['mappings'])
+        transformed=o.transform('network',{'action':'apply','config':cfg},p)['config']
+        self.assertEqual(transformed['settings']['mappings'][:-1],before)
+        self.assertEqual(transformed['settings']['mappings'][-1]['public_port'],25001)
+        self.assertEqual(transformed['health_probe'],2)
+        foreign=o.config_for({**p,'side':'foreign'},IDENT)
+        self.assertEqual(foreign['role'],'health');self.assertEqual(foreign['targets'],[1])
+        self.assertEqual(o.config_for(p,IDENT)['routes'],[{'listen':'127.0.0.1:0','target':1}])
+
+    def test_opt_out_rollback_restores_original_adapter(self):
+        with tempfile.TemporaryDirectory() as d,patch.object(o,'ROOT',Path(d)/'state'),patch.object(o,'ETC',Path(d)/'etc'),patch.object(o,'RUN',Path(d)/'run'),patch.object(o,'UNITS',Path(d)/'units'),patch.object(o,'active',return_value=False),patch.object(o,'preflight'),patch.object(o,'command',return_value=subprocess.CompletedProcess([],1,'','')),patch.object(o,'native',return_value={'ok':True,'data':{}}):
+            old={'plan':plan(),'enabled':False,'pending':True};p=o.paths(IDENT)
+            o.atomic(p['state'],old);o.atomic(p['unit'],o.MARKER+'[Service]\n')
+            request={'action':'snapshot','name':IDENT,'revision':'e'*32}
+            o.dispatch('backpack',request)
+            o.dispatch('backpack',{'action':'apply','name':IDENT,'ports':'7798=7798','origin_plan':None})
+            self.assertFalse(p['state'].exists())
+            o.dispatch('backpack',{**request,'action':'rollback'})
+            self.assertEqual(o.read(p['state']),old)
+
     def test_security_mode_reaches_both_runtime_configs_and_legacy_is_tls(self):
         for side in ('iran','foreign'):
             self.assertEqual(o.config_for(plan(side),IDENT)['tcp_security'],'tls')

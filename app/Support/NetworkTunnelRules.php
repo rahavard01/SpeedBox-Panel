@@ -70,6 +70,7 @@ final class NetworkTunnelRules
             'allowed_sources' => 'sometimes|array|max:128', 'allowed_sources.*' => 'required|string|max:80',
             'max_connections' => 'required|integer|between:0,100000', 'connection_rate' => 'required|integer|between:0,100000',
             'clamp_mss' => 'required|boolean', 'proxy_protocol' => 'required|boolean',
+            'preserve_client_ip' => 'sometimes|boolean',
             'monitor' => 'required|boolean', 'monitor_interval' => 'required|integer|between:5,300',
             'monitor_port' => 'nullable|integer|between:1,65535', 'failover' => 'required|boolean',
             'failure_threshold' => 'required|integer|between:1,20', 'recovery_threshold' => 'required|integer|between:1,20',
@@ -138,6 +139,7 @@ final class NetworkTunnelRules
         $data['quota_gb']=(float)$data['quota_gb'];
         if($data['engine']==='gre' && !$data['pmtud'] && !str_starts_with($data['transport'],'ip6') && $data['ttl']!==0)self::fail('ttl','TTL ثابت با غیرفعال‌کردن PMTUD سازگار نیست.');
         $data['accept_udp']=$data['protocol']!=='tcp';
+        $data['preserve_client_ip']=(bool)($data['preserve_client_ip']??$existing?->settings['preserve_client_ip']??true);
         $data['bind_device']=$data['bind_device']??'';
         $data['snat_address']=$data['snat_address']??'';
         $data['addresses']=$data['addresses']??[];

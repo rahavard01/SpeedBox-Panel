@@ -138,6 +138,7 @@ function mount(ctx){
   const gre=engine==='gre',saved=!t&&(!seed||seed.__resume)?creationDrafts.get(engine):null;
   let draft=copy(saved?.draft||{...cap.defaults,...(t?.settings||{}),engine,name:t?.name||'',iran_server_id:t?.iran_server_id||null,foreign_server_id:t?.foreign_server_id||null});
   if(seed)draft={...draft,...seed,engine};
+  if(draft.preserve_client_ip===undefined)draft.preserve_client_ip=true;
   if(!t&&draft.creation_mode==='manual'){delete draft.test_id;delete draft.result_id;draft.__test=null;}
   if(!t)draft.address_source='servers';
   if(!t&&!saved&&!seed?.__verified){draft.transport=gre?(seed?.transport&&cap.gre_types.includes(seed.transport)?seed.transport:seed?.ip_family==='ipv6'?'ip6gre':'gre'):'tcp';draft.address_source='servers';}
@@ -237,7 +238,7 @@ function mount(ctx){
   function draw(){
    if(disposed)return;
    const unstable=selectedRow()&&(draft.protocol==='both'?['tcp','udp']:[draft.protocol]).some(p=>selectedRow().protocols?.[p]?.status==='unstable');
-   show((t?'ویرایش تونل ':'ساخت تونل ')+engines[engine].name,`<form data-network-editor data-engine="${engine}">${!t&&draft.creation_mode==='manual'?'<p class="tunnel-muted">ساخت دستی؛ مقایسهٔ سرعت روش‌ها اجرا نمی‌شود.</p>':''}${methodSummary(draft,[server(draft.iran_server_id)?.name||'',server(draft.foreign_server_id)?.name||''])}${(gre?greFields():gostFields())+`<section class="network-port-section">${mapFields()}</section>`+advancedFields()}${unstable?`<label class="tunnel-check tunnel-warning"><input type="checkbox" name="accept_unstable" data-setting required ${draft.accept_unstable?'checked':''}>ناپایداری این پروتکل را در نتیجهٔ تست دیدم و استفاده از آن را تأیید می‌کنم.</label>`:''}<div class="form-actions network-navigation"><button class="button primary" type="submit">${t?'ذخیره و اعمال':'ساخت تونل'}</button>${!t?btn('بازگشت','data-back-test','network-back'):''}${btn('انصراف','data-close','cancel')}</div></form>`);
+   show((t?'ویرایش تونل ':'ساخت تونل ')+engines[engine].name,`<form data-network-editor data-engine="${engine}">${!t&&draft.creation_mode==='manual'?'<p class="tunnel-muted">ساخت دستی؛ مقایسهٔ سرعت روش‌ها اجرا نمی‌شود.</p>':''}${methodSummary(draft,[server(draft.iran_server_id)?.name||'',server(draft.foreign_server_id)?.name||''])}${(gre?greFields():gostFields())+`<section class="network-port-section">${mapFields()}</section><section class="network-advanced-group">${check('preserve_client_ip','حفظ IP واقعی کاربران',draft.preserve_client_ip)}<p class="tunnel-muted">برای تشخیص IP واقعی و اعمال دقیق محدودیت دستگاه‌ها؛ فعال‌بودن این گزینه می‌تواند مصرف RAM و CPU را افزایش دهد. در حالت خاموش، اتصالات تونلی ممکن است با IP واسط دیده شوند.</p></section>`+advancedFields()}${unstable?`<label class="tunnel-check tunnel-warning"><input type="checkbox" name="accept_unstable" data-setting required ${draft.accept_unstable?'checked':''}>ناپایداری این پروتکل را در نتیجهٔ تست دیدم و استفاده از آن را تأیید می‌کنم.</label>`:''}<div class="form-actions network-navigation"><button class="button primary" type="submit">${t?'ذخیره و اعمال':'ساخت تونل'}</button>${!t?btn('بازگشت','data-back-test','network-back'):''}${btn('انصراف','data-close','cancel')}</div></form>`);
    const f=body().querySelector('[data-network-editor]');
    f.elements.name.dir='auto';
    const alertInput=f.elements.telegram_alerts;

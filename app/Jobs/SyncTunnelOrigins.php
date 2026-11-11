@@ -23,7 +23,7 @@ class SyncTunnelOrigins implements ShouldQueue,ShouldBeEncrypted
     {
         $ids=ManagedServer::whereIn('machine_id',$this->machineIds)->pluck('id');
         foreach(ServerTunnel::where('status','!=','deleted')->whereIn('foreign_server_id',$ids)->get() as $t){
-            if($t->engine==='wattunnel')continue;
+            if($t->engine==='wattunnel' || !TrustedTunnelOrigin::preservesClientIp($t->settings))continue;
             try{$entries=TrustedTunnelOrigin::entries($t,$t->settings);}
             catch(\RuntimeException){$t->update(['status'=>'needs_review','message'=>'مقصد نود در مسیر چندمقصدی پشتیبانی نمی‌شود؛ برای نود مسیر جدا تنظیم کنید.']);continue;}
             $wanted=array_values(array_unique(array_column($entries,'target_port')));sort($wanted,SORT_NUMERIC);

@@ -96,5 +96,31 @@ namespace {
     $back=Origin::upgrade($t,[...$next,'source_identity_tcp_security'=>'tls']);
     check(Origin::plan($t,$back,'iran')['staged'],'returning to TLS also stages ingress');
     foreach(['plain','',null,false,[]] as $bad){$rejected=false;try{Origin::upgrade($t,[...$next,'source_identity_tcp_security'=>$bad]);}catch(\RuntimeException){$rejected=true;}check($rejected,'invalid mode cannot silently downgrade');}
+    // Explicit opt-out survives edits and removes only managed identity routes.
+    foreach(['backpack','gost','gre'] as $engine){
+        $t->engine=$engine;$t->kind='reverse';$t->transport='tcp';$t->orientation='normal';$t->settings=$base;
+        $off=Origin::upgrade($t,[...$base,'preserve_client_ip'=>false]);
+        check($off['preserve_client_ip']===false && !$off['source_identity'] && Origin::ports($off)===[],"$engine opt-out has no registered node ports");
+        foreach(['iran','foreign'] as $side){
+            $p=Origin::plan($t,$off,$side);
+            check($engine==='gost' ? ($p['health_only'] && $p['entries']===[] && $p['probe_targets']===[]) : $p===null,"$engine off uses native data path on $side");
+        }
+        $t->settings=$off;ServerTunnel::$rows=[$t];
+        check(!Origin::required(ProxyServer::$rows[0]),"$engine opt-out allows ordinary node forwarding");
+        $again=Origin::upgrade($t,$base);check(!$again['preserve_client_ip'] && !$again['source_identity'],"$engine edits do not silently re-enable identity");
+        $on=Origin::upgrade($t,[...$off,'preserve_client_ip'=>true]);
+        check($on['source_identity'] && Origin::plan($t,$on,'iran')['staged'],"$engine re-enable stages authenticated ingress");
+        $t->settings=$off;$signature=Origin::topology($t,$off);
+        $extra=new ProxyServer(['id'=>99,'machine_id'=>15,'enabled'=>true,'parent_id'=>null,'server_port'=>2044]);ProxyServer::$rows[]=$extra;
+        check(Origin::topology($t,$off)===$signature,"$engine off does not trigger identity enrollment when nodes change");array_pop(ProxyServer::$rows);
+    }
+    $t->engine='backpack';$t->settings=Origin::upgrade($t,[...$base,'preserve_client_ip'=>true]);
+    $native=clone $t;$native->id=22;$native->settings=Origin::upgrade($native,[...$base,'preserve_client_ip'=>false]);
+    foreach([[$t,$native],[$native,$t]] as $rows){ServerTunnel::$rows=$rows;check(!Origin::required(ProxyServer::$rows[0]),'mixed native and registered routes allow native fallback regardless of query order');}
+    $native->settings['enabled']=false;ServerTunnel::$rows=[$t,$native];check(Origin::required(ProxyServer::$rows[0]),'stopped native route does not relax another active identity route');
+    $native->settings['enabled']=true;$native->settings['mappings']=[['public_port'=>9999,'target_port'=>9999]];
+    check(Origin::required(ProxyServer::$rows[0]),'unrelated native route cannot relax this node port');
+    $t->engine='wattunnel';$wat=Origin::upgrade($t,[...$base,'preserve_client_ip'=>false]);check($wat['source_identity'] && Origin::plan($t,$wat,'iran')===null,'WatTunnel behavior is independent of this opt-out');
+    foreach(['false',0,1,[]] as $bad){$t->engine='backpack';$rejected=false;try{Origin::upgrade($t,[...$base,'preserve_client_ip'=>$bad]);}catch(\RuntimeException){$rejected=true;}check($rejected,'non-boolean internal opt-out is rejected');}
     echo "TUNNEL ORIGIN PLAN: $checks checks passed\n";
 }
