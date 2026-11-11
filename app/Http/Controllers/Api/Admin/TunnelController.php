@@ -15,8 +15,14 @@ class TunnelController extends Controller
         $tunnels = ServerTunnel::with(['iran:id,name,host,machine_id','foreign:id,name,host,machine_id'])->latest()->get();
         foreach ($tunnels as $t) {
             \App\Services\TunnelHealth::display($t);
-            $blocking=DB::table('speedbox_tunnel_leases')->whereIn('managed_server_id',[$t->iran_server_id,$t->foreign_server_id])->value('operation_id');
-            $t->operation = $blocking ? TunnelOperation::find($blocking) : $t->operations()->latest()->first();
+            $blockingIds=DB::table('speedbox_tunnel_leases')->whereIn('managed_server_id',[$t->iran_server_id,$t->foreign_server_id])->pluck('operation_id');
+            $blocking=TunnelOperation::whereIn('id',$blockingIds)->whereIn('status',['queued','running'])->latest()->first();
+            // Progress belongs to this tunnel; a shared host lease is a separate constraint.
+            $t->operation = $t->operations()->whereIn('status',['queued','running'])->whereNotIn('action',TunnelManager::READ_ONLY)->latest()->first()
+                ?? $t->operations()->whereIn('status',['queued','running'])->latest()->first()
+                ?? $t->operations()->latest()->first();
+            $t->blocking_operation = $blocking && (int)$blocking->tunnel_id !== (int)$t->id
+                ? ['id'=>$blocking->id,'status'=>$blocking->status,'message'=>'عملیات دیگری روی سرور مشترک در حال اجراست.'] : null;
             $ports = [];
             foreach ($t->settings['mappings'] as $mapping) $ports = [...$ports,...range((int)$mapping['target_port'],(int)($mapping['target_end'] ?? $mapping['target_port']))];
             $t->nodes = ProxyServer::where('machine_id', $t->foreign?->machine_id)->whereIn('server_port', $ports)->get(['id','name','host','port','server_port','machine_id']);
@@ -57,26 +63,43 @@ class TunnelController extends Controller
 
     public function store(Request $request, TunnelManager $manager)
     {
-        $selection = $request->validate(['test_id' => 'required|integer|exists:speedbox_tunnel_tests,id', 'result_id' => 'required|string|max:100', 'accept_unstable' => 'sometimes|boolean']);
-        $test = TunnelConnectionTest::findOrFail($selection['test_id']);
-        abort_if($test->operations()->whereIn('action',['network-test','cdn-test'])->exists(),422,'نتیجهٔ GOST یا GRE برای ساخت BackPack قابل استفاده نیست.');
-        abort_unless($test->status === 'completed' && $test->updated_at->greaterThan(now()->subHours(24)), 422, 'ابتدا بررسی اتصال را کامل کنید؛ نتیجه باید مربوط به ۲۴ ساعت اخیر باشد.');
-        $row = collect($test->results)->firstWhere('id', $selection['result_id']);
-        abort_unless($row && (($row['selectable']??false)||$request->input('connection_mode')==='cdn'&&\App\Services\TunnelCdn::supported('backpack',$row['kind'],$row['transport'])), 422, 'یک روش قابل استفاده از نتیجهٔ تست انتخاب کنید.');
-        abort_if($request->input('connection_mode')!=='cdn' && $row['status'] === 'unstable' && !$request->boolean('accept_unstable'), 422, 'این روش ناپایدار بود؛ انتخاب آن را تأیید کنید.');
+        $request->validate(['creation_mode'=>['sometimes',Rule::in(['tested','manual'])]]);
+        if ($request->input('creation_mode') === 'manual') {
+            $manual=$request->validate([
+                'test_id'=>'prohibited','result_id'=>'prohibited',
+                'iran_server_id'=>'required|integer|different:foreign_server_id|exists:speedbox_managed_servers,id',
+                'foreign_server_id'=>'required|integer|exists:speedbox_managed_servers,id',
+                'kind'=>['required',Rule::in(['reverse','direct'])],
+                'transport'=>['required',Rule::in(array_unique([...TunnelManager::REVERSE,...TunnelManager::DIRECT]))],
+                'orientation'=>['required',Rule::in(['normal','swapped'])],
+            ]);
+            $supported=$manual['kind']==='reverse'?TunnelManager::REVERSE:TunnelManager::DIRECT;
+            abort_unless(in_array($manual['transport'],$supported,true),422,'این روش برای نوع تونل انتخاب‌شده پشتیبانی نمی‌شود.');
+            $row=$manual;
+            $iranId=(int)$manual['iran_server_id'];$foreignId=(int)$manual['foreign_server_id'];
+        } else {
+            $selection = $request->validate(['test_id' => 'required|integer|exists:speedbox_tunnel_tests,id', 'result_id' => 'required|string|max:100', 'accept_unstable' => 'sometimes|boolean']);
+            $test = TunnelConnectionTest::findOrFail($selection['test_id']);
+            abort_if($test->operations()->whereIn('action',['network-test','cdn-test'])->exists(),422,'نتیجهٔ GOST یا GRE برای ساخت BackPack قابل استفاده نیست.');
+            abort_unless($test->status === 'completed' && $test->updated_at->greaterThan(now()->subHours(24)), 422, 'ابتدا بررسی اتصال را کامل کنید؛ نتیجه باید مربوط به ۲۴ ساعت اخیر باشد.');
+            $row = collect($test->results)->firstWhere('id', $selection['result_id']);
+            abort_unless($row && (($row['selectable']??false)||$request->input('connection_mode')==='cdn'&&\App\Services\TunnelCdn::supported('backpack',$row['kind'],$row['transport'])), 422, 'یک روش قابل استفاده از نتیجهٔ تست انتخاب کنید.');
+            abort_if($request->input('connection_mode')!=='cdn' && $row['status'] === 'unstable' && !$request->boolean('accept_unstable'), 422, 'این روش ناپایدار بود؛ انتخاب آن را تأیید کنید.');
+            $iranId=(int)$test->iran_server_id;$foreignId=(int)$test->foreign_server_id;
+        }
         $settings = $this->settings($request, $row['kind'], $row['transport'],null,$row['orientation']);
-        \App\Services\TunnelCdn::assertReceipt($settings,['engine'=>'backpack','kind'=>$row['kind'],'transport'=>$row['transport'],'orientation'=>$row['orientation']],$test->iran_server_id,$test->foreign_server_id);
-        [$tunnel,$op] = DB::transaction(function () use ($request,$test,$row,$settings,$manager) {
-            $this->lockServers($test->iran_server_id, $test->foreign_server_id);
-            $this->portsAvailable($test->iran_server_id, $settings);
-            $blocked=[...$manager->reservedPorts(ManagedServer::findOrFail($test->iran_server_id)),...$manager->reservedPorts(ManagedServer::findOrFail($test->foreign_server_id)),(int)$settings['tunnel_port'],...array_map('intval',array_column($settings['mappings'],'public_port')),...array_map('intval',array_column($settings['mappings'],'target_port'))];
+        \App\Services\TunnelCdn::assertReceipt($settings,['engine'=>'backpack','kind'=>$row['kind'],'transport'=>$row['transport'],'orientation'=>$row['orientation']],$iranId,$foreignId);
+        [$tunnel,$op] = DB::transaction(function () use ($request,$iranId,$foreignId,$row,$settings,$manager) {
+            $this->lockServers($iranId, $foreignId);
+            $this->portsAvailable($iranId, $settings);
+            $blocked=[...$manager->reservedPorts(ManagedServer::findOrFail($iranId)),...$manager->reservedPorts(ManagedServer::findOrFail($foreignId)),(int)$settings['tunnel_port'],...array_map('intval',array_column($settings['mappings'],'public_port')),...array_map('intval',array_column($settings['mappings'],'target_port'))];
             for($i=0;$i<200;$i++) {
                 $subnet=random_int(1024,16000);
                 if(!ServerTunnel::where('subnet',$subnet)->exists()&&!in_array(40000+$subnet,$blocked,true))break;
             }
             abort_if($i===200,409,'پورت داخلی آزاد برای این تونل پیدا نشد؛ دوباره تلاش کنید.');
             $tunnel = ServerTunnel::create(['name' => $request->input('name'), 'remote_name' => 'sb-'.bin2hex(random_bytes(16)),
-                'iran_server_id' => $test->iran_server_id, 'foreign_server_id' => $test->foreign_server_id,
+                'iran_server_id' => $iranId, 'foreign_server_id' => $foreignId,
                 'kind' => $row['kind'], 'transport' => $row['transport'], 'orientation' => $row['orientation'],
                 'settings' => $settings, 'secret' => bin2hex(random_bytes(32)), 'subnet' => $subnet]);
             return [$tunnel,$manager->queue('apply',$tunnel,null)];

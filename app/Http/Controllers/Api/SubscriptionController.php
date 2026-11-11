@@ -257,11 +257,15 @@ class SubscriptionController extends Controller
                 $limit = (int) ($user->device_limit ?? 0);
                 $names[] = "{$flag}🔌 Online : {$online} / ".($limit > 0 ? (string) $limit : '∞');
             }
-            if ($showInfo && in_array((string) $days, ['0', '1', '2'], true)) {
+            $hasReservation = ($reservation['state'] ?? null) === 'reserved';
+            if ($showInfo && $hasReservation && (in_array((string) $days, ['0', '1', '2'], true) || ($remaining > 0 && $remaining <= 1))) {
+                array_unshift($names, "{$flag}✅ طرح بعدی رزرو شده ✅");
+            }
+            if ($showInfo && !$hasReservation && in_array((string) $days, ['0', '1', '2'], true)) {
                 array_unshift($names, "{$flag}❌ اکانت شما رو به اتمام است ❌");
             }
             if ($showInfo && $remaining <= 0) array_unshift($names, "{$flag}⛔ ترافیک شما به اتمام رسید ⛔");
-            elseif ($showInfo && $remaining <= 1) array_unshift($names, "{$flag}❌ ترافیک شما رو به اتمام است ❌");
+            elseif ($showInfo && !$hasReservation && $remaining <= 1) array_unshift($names, "{$flag}❌ ترافیک شما رو به اتمام است ❌");
             $first = $servers[0];
             $servers = array_merge(array_map(fn ($name) => array_replace($first, ['name' => $name]), $names), $servers);
         }

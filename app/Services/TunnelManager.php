@@ -10,6 +10,7 @@ class TunnelManager
 {
     public const REVERSE = ['tcp','tcpmux','stealth','pck','ws','wss','wsmux','wssmux','kcp','quic','udp'];
     public const DIRECT = ['xdi','pck','udp','quic','sni'];
+    public const READ_ONLY = ['logs','preview','history','maintenance-status'];
 
     public static function busy(int $serverId): bool
     {
@@ -37,6 +38,7 @@ class TunnelManager
             $entity = $tunnel ?? $test;
             $ids = [$entity->iran_server_id, $entity->foreign_server_id]; sort($ids);
             $network = $tunnel && $tunnel->engine !== 'backpack';
+            $readOnly = in_array($action, self::READ_ONLY, true);
             $maintenance = !$network && in_array($action,['maintenance-status','optimize','engine-update'],true);
             if ($maintenance) {
                 $scope=$this->maintenanceScope($tunnel);
@@ -49,12 +51,12 @@ class TunnelManager
             abort_if($servers[0]->machine_id && $servers[0]->machine_id === $servers[1]->machine_id, 422, 'دو رکورد انتخاب‌شده متعلق به یک ماشین هستند.');
             abort_if($servers[0]->host === $servers[1]->host, 422, 'سرور ایران و خارج باید متفاوت باشند.');
             foreach ($servers as $server) {
-                abort_if($server->status === 'removing' || self::busy($server->id) || $server->deployments()->whereIn('status', ['queued','running'])->exists(), 409, 'عملیات دیگری روی یکی از این سرورها در حال اجراست.');
+                abort_if($server->status === 'removing' || (!$readOnly && (self::busy($server->id) || $server->deployments()->whereIn('status', ['queued','running'])->exists())), 409, 'عملیات دیگری روی یکی از این سرورها در حال اجراست.');
             }
             if ($maintenance) abort_unless($this->maintenanceScope($tunnel,true) === $scope,409,'تونل‌های وابسته تغییر کرده‌اند؛ دوباره تلاش کنید.');
             $op = TunnelOperation::create(['action' => $action, 'tunnel_id' => $tunnel?->id, 'test_id' => $test?->id,
                 'status' => 'queued', 'progress' => 0, 'payload' => $payload, 'deadline' => now()->addMinutes($test ? 40 : ($maintenance ? 45 : 10)), 'message' => 'در صف عملیات سرورها']);
-            foreach ($ids as $id) DB::table('speedbox_tunnel_leases')->insert(['managed_server_id' => $id, 'operation_id' => $op->id]);
+            if (!$readOnly) foreach ($ids as $id) DB::table('speedbox_tunnel_leases')->insert(['managed_server_id' => $id, 'operation_id' => $op->id]);
             if ($action==='cdn-test') \App\Jobs\RunTunnelCdnTest::dispatch($op->id)->afterCommit();
             elseif ($action==='network-test') RunNetworkTunnelTest::dispatch($op->id)->afterCommit();
             elseif ($network) RunNetworkTunnelOperation::dispatch($op->id)->afterCommit();

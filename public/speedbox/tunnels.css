@@ -347,3 +347,9 @@
 .speedbox-infrastructure-overlay .tunnel-cdn-section textarea { min-height:110px; direction:ltr; text-align:left; }
 .speedbox-infrastructure-overlay .tunnel-cdn-detail { margin:16px 0; }
 @media(max-width:767px){.speedbox-infrastructure-overlay .tunnel-cdn-section{padding:12px}.speedbox-infrastructure-overlay .tunnel-cdn-check .button{max-width:100%;white-space:normal}}
+
+
+/* Each operation uses the same centered percentage above its progress bar. */
+.tunnel-card .deployment-progress,.tunnel-maintenance-progress .deployment-progress{width:100%}
+.tunnel-card .deployment-progress .progress-value,.tunnel-maintenance-progress .progress-value{display:block;text-align:center;font-size:10px;margin-top:6px}
+.tunnel-shared-operation{margin:8px 0;font-size:10px}

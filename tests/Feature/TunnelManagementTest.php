@@ -27,6 +27,77 @@ class TunnelManagementTest extends TestCase
         $user=User::forceCreate(['name'=>'admin','email'=>'admin@test.test','password'=>'pw','role'=>1,'banned'=>false]);
         $this->token=$user->createToken('test',['*'],now()->addHour())->plainTextToken;
     }
+    public function test_manual_backpack_creates_no_fake_measurement_and_keeps_host_leases(): void
+    {
+        $body=['creation_mode'=>'manual','iran_server_id'=>$this->iran->id,'foreign_server_id'=>$this->foreign->id,
+            'kind'=>'reverse','transport'=>'wss','orientation'=>'normal','name'=>'Manual tunnel','public_host'=>'ir.example.test',
+            'tunnel_port'=>8443,'accept_udp'=>false,'mappings'=>[['public_port'=>443,'target_port'=>5790]]];
+        $answer=$this->withToken($this->token)->postJson('/api/admin/infrastructure/tunnels',$body)->assertAccepted();
+        $this->assertSame('wss',$answer->json('data.transport'));
+        $this->assertSame(0,TunnelConnectionTest::count());
+        $this->assertSame('apply',TunnelOperation::first()->action);
+        $this->assertSame(2,DB::table('speedbox_tunnel_leases')->count());
+        Queue::assertPushed(RunTunnelOperation::class);
+    }
+
+    public function test_manual_creation_does_not_weaken_method_or_port_validation(): void
+    {
+        $body=['creation_mode'=>'manual','iran_server_id'=>$this->iran->id,'foreign_server_id'=>$this->foreign->id,
+            'kind'=>'direct','transport'=>'tcp','orientation'=>'normal','name'=>'Manual tunnel','public_host'=>'ir.example.test',
+            'tunnel_port'=>8443,'accept_udp'=>false,'mappings'=>[['public_port'=>443,'target_port'=>5790]]];
+        $this->withToken($this->token)->postJson('/api/admin/infrastructure/tunnels',$body)->assertUnprocessable();
+        $body['kind']='reverse';
+        $this->postJson('/api/admin/infrastructure/tunnels',[...$body,'tunnel_port'=>443])->assertUnprocessable();
+        $this->postJson('/api/admin/infrastructure/tunnels',[...$body,'foreign_server_id'=>$this->iran->id])->assertUnprocessable();
+        $this->postJson('/api/admin/infrastructure/tunnels',[...$body,'test_id'=>123])->assertUnprocessable();
+        unset($body['creation_mode']);
+        $this->postJson('/api/admin/infrastructure/tunnels',$body)->assertUnprocessable();
+        $this->assertSame(0,ServerTunnel::count());
+        $this->assertSame(0,TunnelOperation::count());
+    }
+
+    public function test_shared_host_work_does_not_become_another_cards_progress(): void
+    {
+        $t=$this->createTunnel();
+        $op=app(TunnelManager::class)->queue('test',null,$this->testRecord());
+        $op->update(['progress'=>41,'message'=>'Progress belonging to a separate test']);
+        $row=$this->withToken($this->token)->getJson('/api/admin/infrastructure/tunnels')->assertOk()->json('data.0');
+        $this->assertSame($t->id,$row['id']);
+        $this->assertNull($row['operation']);
+        $this->assertSame($op->id,$row['blocking_operation']['id']);
+        $this->assertArrayNotHasKey('progress',$row['blocking_operation']);
+    }
+
+    public function test_logs_remain_available_while_shared_host_changes_stay_serialized(): void
+    {
+        $t=$this->createTunnel();
+        $manager=app(TunnelManager::class);
+        $busy=$manager->queue('test',null,$this->testRecord());
+        $this->withToken($this->token)->postJson('/api/admin/infrastructure/tunnels/'.$t->id.'/actions',['action'=>'logs'])->assertAccepted();
+        $this->assertSame(2,DB::table('speedbox_tunnel_leases')->where('operation_id',$busy->id)->count());
+        $this->assertSame(2,DB::table('speedbox_tunnel_leases')->count());
+        $this->postJson('/api/admin/infrastructure/tunnels/'.$t->id.'/actions',['action'=>'restart'])->assertConflict();
+    }
+
+    public function test_manual_network_setup_supports_gost_gre_and_wattunnel_without_measurements(): void
+    {
+        $this->withToken($this->token);
+        foreach(['gost','gre','wattunnel'] as $index=>$engine) {
+            $port=14000+$index;
+            $body=[...($engine==='wattunnel'?\App\Support\WatTunnelRules::defaults():app(\App\Services\NetworkTunnelManager::class)->defaults()),
+                'engine'=>$engine,'creation_mode'=>'manual','address_source'=>'servers','ip_family'=>'ipv4',
+                'iran_server_id'=>$this->iran->id,'foreign_server_id'=>$this->foreign->id,'name'=>'Manual '.$engine,
+                'transport'=>$engine==='gre'?'gre':'tcp','protocol'=>'tcp','tunnel_port'=>15000+$index,
+                'mappings'=>[['public_port'=>$port,'public_end'=>$port,'target_port'=>5790,'target_end'=>5790]]];
+            $answer=$this->postJson('/api/admin/infrastructure/network-tunnels',$body)->assertAccepted();
+            $this->assertSame($engine,$answer->json('data.engine'));
+            $op=TunnelOperation::where('tunnel_id',$answer->json('data.id'))->firstOrFail();
+            app(TunnelManager::class)->finish($op,'succeeded','fixture complete');
+        }
+        $this->assertSame(0,TunnelConnectionTest::count());
+        $this->assertSame(3,ServerTunnel::count());
+    }
+
     private function testRecord(array $rows=[]): TunnelConnectionTest
     {
         if(!$rows)$rows=app(TunnelManager::class)->rows([['k'=>'reverse','t'=>'tcp','s'=>'ok','o'=>60,'n'=>60,'z'=>60,'r'=>40,'m'=>15],['k'=>'reverse','t'=>'pck','s'=>'ok','o'=>60,'n'=>60,'z'=>60,'r'=>50,'m'=>12]],'normal');
@@ -186,6 +257,9 @@ class TunnelManagementTest extends TestCase
 
     public function test_ssh_cleanup_budget_caps_the_entire_call_and_restores_normal_options():void
     {
+        if (PHP_OS_FAMILY === 'Windows') {
+            $this->markTestSkipped('Requires POSIX shell fixtures; run this SSH budget test on Linux.');
+        }
         $dir=sys_get_temp_dir().'/speedbox-budget-'.bin2hex(random_bytes(8));mkdir($dir,0700);
         file_put_contents($dir.'/sshpass',"#!/bin/sh\nshift\nexec \"\$@\"\n");
         file_put_contents($dir.'/ssh',"#!/bin/sh\ncase \"\$*\" in *budget-sleep*) exec sleep 3;; *ConnectTimeout=5*) printf short;; *) printf normal;; esac\n");

@@ -19,6 +19,34 @@ class SubscriptionReservationTest extends ReservationTestCase
         return DB::table('v2_user')->find(100);
     }
 
+    public function test_reserved_subscription_uses_one_short_notice_and_keeps_exhaustion_visible(): void
+    {
+        $this->account(2,time()+86400);
+        RuntimeSetting::set('show_info_to_server_enable',true);
+        RuntimeSetting::set('show_online_to_server_enable',false);
+        DB::table('v2_user')->where('id',100)->update(['u'=>(int)(249.5*1073741824),'d'=>0]);
+        $controller=app(\App\Http\Controllers\Api\SubscriptionController::class);
+        $decorate=new \ReflectionMethod($controller,'decorateServers');
+        $names=function()use($controller,$decorate){
+            $account=\App\Models\SubscriptionAccount::findOrFail(100);
+            return array_column($decorate->invoke($controller,[['name'=>'🇩🇪 Test node']],$account),'name');
+        };
+        $before=implode('\n',$names());
+        $this->assertStringContainsString('اکانت شما رو به اتمام است',$before);
+        $this->assertStringContainsString('ترافیک شما رو به اتمام است',$before);
+        $this->assertTrue($this->buy()['reserved']);
+        $rows=$names();$reserved=implode('\n',$rows);
+        $this->assertSame(1,count(array_filter($rows,fn($name)=>str_contains($name,'✅ طرح بعدی رزرو شده ✅'))));
+        $this->assertStringContainsString('®️ Expire',$reserved);
+        $this->assertStringNotContainsString('رو به اتمام است',$reserved);
+        DB::table('v2_user')->where('id',100)->update(['u'=>250*1073741824,'d'=>0]);
+        $this->assertStringContainsString('ترافیک شما به اتمام رسید',implode('\n',$names()));
+        DB::table('v2_user')->where('id',100)->update(['u'=>0,'expired_at'=>time()+5*86400]);
+        $healthy=implode('\n',$names());
+        $this->assertStringNotContainsString('طرح بعدی رزرو شده',$healthy);
+        $this->assertStringContainsString('®️ Expire',$healthy);
+    }
+
     private function buy(): array
     {
         return app(PanelAccountActionService::class)->renewAccountForPanelUser(DB::table('panel_users')->find(1), 'alice@rep.com', '3m', 1);

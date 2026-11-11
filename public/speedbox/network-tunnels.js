@@ -85,13 +85,20 @@ function mount(ctx){
   function draw(){
    if(disposed||activeTestEngine!==engine)return;
    const opened=[...body().querySelectorAll('.network-protocol-details')].map(d=>d.open);
-   show('تست تونل '+engines[engine].name,`<form data-network-test class="tunnel-builder"><p class="tunnel-help">سرور ایران و خارج را انتخاب کنید تا ارتباط، سرعت و پایداری مسیر بررسی شود.</p><div class="form-grid">${select('iran_server_id','سرور ایران',state.iran,servers())}${select('foreign_server_id','سرور خارج',state.foreign,servers())}</div>${engine==='wattunnel'?`<div class="wat-test-settings">${select('direction','جهت‌های مورد بررسی',state.direction,[['normal','ایران به خارج'],['reverse','خارج به ایران — معکوس'],['both','هر دو جهت']])}<details class="network-section"><summary>حامل‌های مورد بررسی</summary><div class="wat-carriers">${['icmp','udp','tcp','tls','ws','wss','h2','h2c','grpc'].map(c=>`<label><input type="checkbox" name="wat_carrier" value="${c}" ${state.carriers.includes(c)?'checked':''} ${pending()?'disabled':''}><bdi dir="ltr">${c.toUpperCase()}</bdi></label>`).join('')}</div></details><p class="tunnel-muted">ICMP روی IPv4 بررسی می‌شود؛ حامل UDP حالت معکوس ندارد.</p></div>`:''}${results()}<div class="form-actions network-navigation"><button type="submit" class="button primary" ${pending()?'disabled':''}>${pending()?'در حال تست…':state.test?'تست دوباره':'تست اتصال'}</button>${pending()?btn('توقف تست','data-cancel-network-test'):''}${btn('بازگشت','data-test-engines','network-back')}${btn('انصراف','data-close','cancel')}</div></form>`);
+   show('تست تونل '+engines[engine].name,`<form data-network-test class="tunnel-builder"><p class="tunnel-help">سرور ایران و خارج را انتخاب کنید تا ارتباط، سرعت و پایداری مسیر بررسی شود.</p><div class="form-grid">${select('iran_server_id','سرور ایران',state.iran,servers())}${select('foreign_server_id','سرور خارج',state.foreign,servers())}</div>${engine==='wattunnel'?`<div class="wat-test-settings">${select('direction','جهت‌های مورد بررسی',state.direction,[['normal','ایران به خارج'],['reverse','خارج به ایران — معکوس'],['both','هر دو جهت']])}<details class="network-section"><summary>حامل‌های مورد بررسی</summary><div class="wat-carriers">${['icmp','udp','tcp','tls','ws','wss','h2','h2c','grpc'].map(c=>`<label><input type="checkbox" name="wat_carrier" value="${c}" ${state.carriers.includes(c)?'checked':''} ${pending()?'disabled':''}><bdi dir="ltr">${c.toUpperCase()}</bdi></label>`).join('')}</div></details><p class="tunnel-muted">ICMP روی IPv4 بررسی می‌شود؛ حامل UDP حالت معکوس ندارد.</p></div>`:''}${results()}<div class="form-actions network-navigation"><button type="submit" class="button primary" ${pending()?'disabled':''}>${pending()?'در حال تست…':state.test?'تست دوباره':'ساخت با تست (پیشنهادی)'}</button>${btn('ساخت دستی بدون تست',`data-manual-network ${pending()?'disabled':''}`)}${pending()?btn('توقف تست','data-cancel-network-test'):''}${btn('بازگشت','data-test-engines','network-back')}${btn('انصراف','data-close','cancel')}</div></form>`);
    const f=body().querySelector('[data-network-test]');
    f.querySelectorAll('.network-protocol-details').forEach((d,i)=>d.open=opened[i]||false);
    for(const key of ['iran_server_id','foreign_server_id']){
     f.elements[key].disabled=pending();
     f.elements[key].addEventListener('change',()=>{state.iran=f.elements.iran_server_id.value;state.foreign=f.elements.foreign_server_id.value;state.test=null;state.operation=null;draw();});
    }
+   f.querySelector('[data-manual-network]').onclick=safe(async()=>{
+    if(!state.iran||!state.foreign||String(state.iran)===String(state.foreign))throw Error('دو سرور متفاوت انتخاب کنید.');
+    clearTimeout(testTimer);activeTestEngine=null;
+    const seed={...state.seed,iran_server_id:Number(state.iran),foreign_server_id:Number(state.foreign),creation_mode:'manual',__manual:true,__verified:false,__resume:true,__test:null};
+    delete seed.test_id;delete seed.result_id;
+    await editor(null,engine,seed);
+   });
    f.querySelector('[data-test-engines]').onclick=()=>{activeTestEngine=null;clearTimeout(testTimer);choose(false);};
    f.querySelector('[data-cancel-network-test]')?.addEventListener('click',safe(async()=>{await api('/tunnel-operations/'+state.operation.id+'/cancel',{method:'POST',body:'{}'});await poll();}));
    f.querySelectorAll('[data-select-network-result]').forEach(b=>b.onclick=safe(async()=>{
@@ -100,7 +107,7 @@ function mount(ctx){
     clearTimeout(testTimer);activeTestEngine=null;
     await editor(null,engine,{...previous,engine,iran_server_id:Number(state.test.iran_server_id),foreign_server_id:Number(state.test.foreign_server_id),
      version:row.version,transport:row.transport,reverse:row.reverse,ip_family:row.ip_family,protocol:protocols.includes(previous.protocol)?previous.protocol:(protocols[0]||'tcp'),connection_mode:!row.selectable&&row.cdn_selectable?'cdn':(previous.connection_mode||'direct'),
-     test_id:state.test.id,result_id:row.id,__verified:true,__resume:true,__test:{rows:state.test.results.filter(r=>r.selectable||r.cdn_selectable),selected:row.id}});
+     creation_mode:'tested',test_id:state.test.id,result_id:row.id,__manual:false,__verified:true,__resume:true,__test:{rows:state.test.results.filter(r=>r.selectable||r.cdn_selectable),selected:row.id}});
    }));
    f.querySelector('[name=direction]')?.addEventListener('change',()=>{state.direction=f.elements.direction.value;});
    if(f.elements.direction)f.elements.direction.disabled=pending();
@@ -125,12 +132,13 @@ function mount(ctx){
   await testFlow(engine);
  }
  async function editor(t,engine,seed=null){
-  if(!t&&!seed?.__verified){await testFlow(engine,seed);return;}
+  if(!t&&!seed?.__verified&&!seed?.__manual){await testFlow(engine,seed);return;}
   if(engine==='wattunnel'){await wat.editor(t,seed);return;}
   const cap=await caps();if(disposed)return;
   const gre=engine==='gre',saved=!t&&(!seed||seed.__resume)?creationDrafts.get(engine):null;
   let draft=copy(saved?.draft||{...cap.defaults,...(t?.settings||{}),engine,name:t?.name||'',iran_server_id:t?.iran_server_id||null,foreign_server_id:t?.foreign_server_id||null});
   if(seed)draft={...draft,...seed,engine};
+  if(!t&&draft.creation_mode==='manual'){delete draft.test_id;delete draft.result_id;draft.__test=null;}
   if(!t)draft.address_source='servers';
   if(!t&&!saved&&!seed?.__verified){draft.transport=gre?(seed?.transport&&cap.gre_types.includes(seed.transport)?seed.transport:seed?.ip_family==='ipv6'?'ip6gre':'gre'):'tcp';draft.address_source='servers';}
   draft.ip_family=draft.ip_family||(String(draft.peer_host||'').includes(':')||String(draft.transport).startsWith('ip6')?'ipv6':'ipv4');
@@ -229,7 +237,7 @@ function mount(ctx){
   function draw(){
    if(disposed)return;
    const unstable=selectedRow()&&(draft.protocol==='both'?['tcp','udp']:[draft.protocol]).some(p=>selectedRow().protocols?.[p]?.status==='unstable');
-   show((t?'ویرایش تونل ':'ساخت تونل ')+engines[engine].name,`<form data-network-editor data-engine="${engine}">${methodSummary(draft,[server(draft.iran_server_id)?.name||'',server(draft.foreign_server_id)?.name||''])}${(gre?greFields():gostFields())+`<section class="network-port-section">${mapFields()}</section>`+advancedFields()}${unstable?`<label class="tunnel-check tunnel-warning"><input type="checkbox" name="accept_unstable" data-setting required ${draft.accept_unstable?'checked':''}>ناپایداری این پروتکل را در نتیجهٔ تست دیدم و استفاده از آن را تأیید می‌کنم.</label>`:''}<div class="form-actions network-navigation"><button class="button primary" type="submit">${t?'ذخیره و اعمال':'ساخت تونل'}</button>${!t?btn('بازگشت','data-back-test','network-back'):''}${btn('انصراف','data-close','cancel')}</div></form>`);
+   show((t?'ویرایش تونل ':'ساخت تونل ')+engines[engine].name,`<form data-network-editor data-engine="${engine}">${!t&&draft.creation_mode==='manual'?'<p class="tunnel-muted">ساخت دستی؛ مقایسهٔ سرعت روش‌ها اجرا نمی‌شود.</p>':''}${methodSummary(draft,[server(draft.iran_server_id)?.name||'',server(draft.foreign_server_id)?.name||''])}${(gre?greFields():gostFields())+`<section class="network-port-section">${mapFields()}</section>`+advancedFields()}${unstable?`<label class="tunnel-check tunnel-warning"><input type="checkbox" name="accept_unstable" data-setting required ${draft.accept_unstable?'checked':''}>ناپایداری این پروتکل را در نتیجهٔ تست دیدم و استفاده از آن را تأیید می‌کنم.</label>`:''}<div class="form-actions network-navigation"><button class="button primary" type="submit">${t?'ذخیره و اعمال':'ساخت تونل'}</button>${!t?btn('بازگشت','data-back-test','network-back'):''}${btn('انصراف','data-close','cancel')}</div></form>`);
    const f=body().querySelector('[data-network-editor]');
    f.elements.name.dir='auto';
    const alertInput=f.elements.telegram_alerts;

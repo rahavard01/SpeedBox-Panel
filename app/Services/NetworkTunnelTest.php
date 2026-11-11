@@ -66,6 +66,13 @@ class NetworkTunnelTest
     {
         if(($settings['address_source']??null)!=='servers')NetworkTunnelRules::fail('address_source','برای تونل جدید از آدرس سرورهای انتخاب‌شده استفاده کنید.');
         foreach($settings['mappings'] as $mapping)if(!empty($mapping['destinations']))NetworkTunnelRules::fail('mappings','مقصد اختصاصی جدید خارج از مسیر تست‌شده است؛ برای آن سرور، تونل جدا بسازید.');
+        $request->validate(['creation_mode'=>['sometimes',\Illuminate\Validation\Rule::in(['tested','manual'])]]);
+        if($request->input('creation_mode')==='manual') {
+            $request->validate(['test_id'=>'prohibited','result_id'=>'prohibited']);
+            // Manual setup skips benchmarking, not route/certificate validation.
+            TunnelCdn::assertReceipt($settings,['engine'=>$settings['engine'],'kind'=>!empty($settings['reverse'])?'reverse':'direct','transport'=>$settings['transport'],'orientation'=>'normal'],(int)$settings['iran_server_id'],(int)$settings['foreign_server_id']);
+            return;
+        }
         $ids=$request->validate(['test_id'=>'required|integer|exists:speedbox_tunnel_tests,id','result_id'=>'required|string|max:100','accept_unstable'=>'sometimes|boolean']);
         $test=TunnelConnectionTest::whereKey($ids['test_id'])->lockForUpdate()->firstOrFail();
         $op=$this->testOperation($test);

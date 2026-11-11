@@ -166,7 +166,7 @@
 .speedbox-infrastructure .rank-bar span{display:block;height:100%;background:#4ea1ff;transition:width .25s ease}
 .speedbox-infrastructure .traffic-up,.speedbox-rank-tooltip .traffic-up{color:#22c55e}
 .speedbox-infrastructure .traffic-down,.speedbox-rank-tooltip .traffic-down{color:#ef4444}
-.speedbox-rank-tooltip{position:fixed;z-index:12500;pointer-events:none;direction:rtl;min-width:230px;padding:12px;border-radius:10px;background:#202020fa;border:1px solid rgba(255,255,255,.2);box-shadow:0 6px 20px rgba(0,0,0,.4);color:#fff;font:11px/1.8 "Vazirmatn Variable",Vazirmatn,ui-sans-serif,system-ui,sans-serif}
+.speedbox-rank-tooltip{position:fixed;z-index:12500;pointer-events:none;direction:rtl;min-width:230px;padding:12px;border-radius:10px;background:var(--speedbox-tooltip-bg,rgba(0,0,0,.7));border:0;box-shadow:none;color:var(--speedbox-tooltip-text,#fff);font:11px/1.8 "Vazirmatn Variable",Vazirmatn,ui-sans-serif,system-ui,sans-serif}
 .speedbox-rank-tooltip[hidden]{display:none}
 .speedbox-rank-tooltip>div{display:flex;justify-content:space-between;gap:14px}
 .speedbox-rank-tooltip .rank-tooltip-period{direction:ltr;display:block;color:rgba(255,255,255,.6);margin-top:8px;text-align:center}

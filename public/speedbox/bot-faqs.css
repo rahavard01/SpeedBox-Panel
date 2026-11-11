@@ -31,15 +31,15 @@
 .userbot-faq-card .faq-actions button:disabled,.userbot-faq-card .faq-input:disabled{opacity:.5;cursor:default}
 .userbot-faq-card .faq-actions button:focus-visible{outline:2px solid #b4b5d1;outline-offset:3px}
 .userbot-faq-card .faq-error{font-size:11px;text-align:center;color:#fca5a5;max-width:92%;margin:12px auto;line-height:1.8}
-.speedbox-shared-tooltip{position:fixed!important;bottom:auto!important;transform:none!important;direction:rtl;text-align:center;max-width:min(340px,calc(100vw - 16px));box-sizing:border-box;white-space:pre-line!important;overflow-wrap:anywhere;z-index:15000!important;pointer-events:none;background:rgba(0,0,0,.7);color:#fff;padding:6px 10px;border-radius:6px;font-size:10px;line-height:1.7;font-family:'Vazirmatn Variable',Vazirmatn,ui-sans-serif,system-ui,sans-serif}
+.speedbox-shared-tooltip{position:fixed!important;bottom:auto!important;transform:none!important;direction:rtl;text-align:center;max-width:min(340px,calc(100vw - 16px));box-sizing:border-box;white-space:pre-line!important;overflow-wrap:anywhere;z-index:15000!important;pointer-events:none;border:0;box-shadow:none;background:var(--speedbox-tooltip-bg,rgba(0,0,0,.7));color:var(--speedbox-tooltip-text,#fff);padding:6px 10px;border-radius:6px;font-size:10px;line-height:1.7;font-family:'Vazirmatn Variable',Vazirmatn,ui-sans-serif,system-ui,sans-serif}
 .speedbox-shared-tooltip[hidden]{display:none!important}
-.speedbox-shared-tooltip .custom-tooltip-arrow{position:absolute;width:8px;height:8px;background:rgba(0,0,0,.7);transform:translateX(-50%) rotate(45deg);bottom:-4px}
+.speedbox-shared-tooltip .custom-tooltip-arrow{position:absolute;width:8px;height:8px;background:var(--speedbox-tooltip-bg,rgba(0,0,0,.7));transform:translateX(-50%) rotate(45deg);bottom:-4px}
 .speedbox-shared-tooltip[data-side="bottom"] .custom-tooltip-arrow{bottom:auto;top:-4px}
 [data-sb-tooltip-tap]{cursor:help}[data-sb-tooltip-tap]:focus-visible{outline:2px solid #b4b5d1;outline-offset:3px}
 @media(max-width:900px){.settings-final .tariff-group-card.userbot-faq-card{width:100%}}
 @media(max-width:600px){.userbot-faq-row{padding:10px}.userbot-faq-card .faq-actions{flex-direction:column}.userbot-faq-card .faq-actions button{width:100%}.faq-row-controls{gap:6px}}
 
-.speedbox-rank-tooltip.custom-tooltip{bottom:auto;transform:none;min-width:230px;max-width:calc(100vw - 16px);background:rgba(0,0,0,.7);padding:6px 10px;border-radius:6px;font-size:10px;line-height:1.7;text-align:center}
+.speedbox-rank-tooltip.custom-tooltip{bottom:auto;transform:none;min-width:230px;max-width:calc(100vw - 16px);background:var(--speedbox-tooltip-bg,rgba(0,0,0,.7));padding:6px 10px;border-radius:6px;font-size:10px;line-height:1.7;text-align:center}
 .speedbox-rank-tooltip .custom-tooltip-arrow{left:50%;transform:translateX(-50%) rotate(45deg)}
 .speedbox-rank-tooltip[data-side="bottom"] .custom-tooltip-arrow{top:-4px;bottom:auto}
 
