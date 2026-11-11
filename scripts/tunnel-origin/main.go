@@ -547,6 +547,12 @@ type originReadOnly struct{ io.Reader }
 type originWriteOnly struct{ io.Writer }
 
 func copyOriginStream(dst, src net.Conn) (int64, error) {
+	if c, ok := dst.(*authStream); ok {
+		return c.relayFrom(src)
+	}
+	if c, ok := src.(*authStream); ok {
+		return c.relayTo(dst)
+	}
 	if _, ok := dst.(*net.TCPConn); ok {
 		if _, ok := src.(*net.TCPConn); ok {
 			return io.Copy(dst, src)

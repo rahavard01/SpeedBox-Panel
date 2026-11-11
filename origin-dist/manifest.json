@@ -4,17 +4,18 @@
     "agent/go.mod": "b2e0334684fe99c1f07d60c92e95d27240bd2e8dab325566bf13f4a76b1eab85",
     "agent/internal/origin/registry.go": "cc7dc77004ad7131f142f54b014c43cba47e9dfc83069a0aea8a099e242d8555",
     "scripts/tunnel-origin/auth_bench_test.go": "0e09e9fdc2f826767a572cb7411ea5686578308f1cd546378869d5dd2c1861f0",
-    "scripts/tunnel-origin/auth_stream.go": "743313681f2b3edb2d9ace76a2634d59b34357a1bde64896109c6d43f2bcff97",
+    "scripts/tunnel-origin/auth_stream.go": "ec8f2f5784a773cc1f004ee72195d96f8ef05cca4e6a2d620fd03845055e6578",
     "scripts/tunnel-origin/auth_stream_test.go": "027d8ae91c90c7be6ca0f1565e6204b6e832036b74b7c95baa700f65750c8f3a",
     "scripts/tunnel-origin/broker_contract_test.go": "26b70300c5471a976111b610eb61c9f815c910959d38e423b6d827a346b2e998",
     "scripts/tunnel-origin/build.py": "c8839b0ec3423100ced65c4f0b16864e8a640ade14725cab71feb9ec0dd338fb",
     "scripts/tunnel-origin/copy_stream_test.go": "2ff152426eabc87f4264a1910de711d5bbbb50e7e712aeaf8ada0c777fc08446",
     "scripts/tunnel-origin/go.mod": "7229046022a13890bd160be4ed3450b6795ba3e9060182e2c8c3d48f825b4ca9",
     "scripts/tunnel-origin/host.py": "219bea23fc7ca426961044c36eb5e39e3f2fe8008829ad7b15df0607d05331ea",
-    "scripts/tunnel-origin/main.go": "ba3d2d86abdd6633ca4a083ff79277fdca976b32806b221fb89acace5f38ca45",
+    "scripts/tunnel-origin/main.go": "9333f11e77fb2ac4136cd2bbe08beadd8c34f207ac85c79c2ec7933d6a85980e",
     "scripts/tunnel-origin/main_test.go": "9a108a605a5f0dcc821713c7a3924e532261b460eddc9c75b0d9cf7caf8fe714",
     "scripts/tunnel-origin/port_helpers_test.go": "19ac9cda736f1ef440abb258233400aa1601ec43f8c2a2f2054d2dd542d50ce1",
     "scripts/tunnel-origin/probe.go": "3e255ec04d8b166def1dc9364a83a60b392d3a10f6eba862dd7ea3f259da5743",
+    "scripts/tunnel-origin/relay_memory_test.go": "1dcdcac4862cefa0fcc6ec2595e6a8b2e1b7db4b4fa1ab7ebe98855ccaf1c9a4",
     "scripts/tunnel-origin/tls.go": "bda06689015b8f9dae4da4e1d69f3b284fcd9c4609f94abde677c3660b762aaa",
     "scripts/tunnel-origin/udp.go": "c55aafeeee9fac629930bcfd4527fe6584d7424fd02e4bace75706dbca90abe4",
     "scripts/verify-origin.py": "182fe4fd23e5c8731dfb2ffb110574baa2d16d84730dfa08c4f3740e4445f3b5"
@@ -22,25 +23,25 @@
   "archives": {
     "amd64": {
       "file": "tunnel-origin-linux-amd64.gz",
-      "sha256": "e361938f81b08b186f1c4060d5c1dd29865869e504ee9c0330e7e3ca1de8cf41",
-      "binary_sha256": "10924f3683f90dac2cbb5ff29e66434bb66091a7755f3469270a2f55fe0a532f",
-      "bytes": 5464226,
+      "sha256": "be13b22ca39c41d4ceea97b94c512e49b04e83a1eb21ba1d124adbd76b8e497b",
+      "binary_sha256": "cca0b908bc3a8501f1546c722e995feb899ca6c99349362ae58242c5d39ef535",
+      "bytes": 5468322,
       "selftest": {
         "file": "selftest-linux-amd64.gz",
-        "sha256": "ec994eeaf8e1194a58d99b1b31e6a671857c21db980762386d69983b8b2bbe24",
-        "binary_sha256": "d5e809ed11f17bb55a02c44763771d138e7f5b4237e74391bc68ba1b917ea0b7",
-        "bytes": 6496418
+        "sha256": "4c4ad0641d8c05c9f24ee615e9259fd45ec8188ac5a52ee2e62735c90e696838",
+        "binary_sha256": "80aea3776b13619c9f90fa1433c2ce6dc3d636c925230ebb6973866c65e4292a",
+        "bytes": 6504610
       }
     },
     "arm64": {
       "file": "tunnel-origin-linux-arm64.gz",
-      "sha256": "313d294c9a286500c44baf3ff27ee2a875bd97a2eea045aa95de8fe0817c79b7",
-      "binary_sha256": "4f6fffbb9dc3c63b1b5ee67b3d3593ba20abffaedbb6248fb1ba460d6a1a0493",
+      "sha256": "81e171292776259c8ee6823a0299a8d66271b9e567af05ad06266e2faf247fb0",
+      "binary_sha256": "77317914a7b62dc668d0fd5e5dd5dc18ddee55b30893abde9e71b54d96073ebe",
       "bytes": 4980898,
       "selftest": {
         "file": "selftest-linux-arm64.gz",
-        "sha256": "0c4d6f1c9e591d2bbc11d1b494a3903e71844721cf2036e4ea940593d1e7efd6",
-        "binary_sha256": "aaf7958c0d948581962e49b305ca953d34ef37ef34fedbc752298b5c82e7f4e4",
+        "sha256": "409a2be416e29ab0f1cb43ee1745678813a211677cb6a22fb2b34da2b52eb184",
+        "binary_sha256": "9743a611a296ef1a766fe3272a3dc64c69a6268dd8ec3ae5eb3b57d5cd4220cc",
         "bytes": 5963938
       }
     }

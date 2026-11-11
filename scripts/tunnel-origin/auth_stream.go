@@ -147,22 +147,28 @@ func (c *authStream) Read(p []byte) (int, error) {
 	if len(p) == 0 {
 		return 0, nil
 	}
-	if len(c.pending) > 0 {
-		n := copy(p, c.pending)
-		c.pending = c.pending[n:]
-		return n, nil
+	if len(c.pending) == 0 {
+		if e := c.readRecordLocked(); e != nil {
+			return 0, e
+		}
 	}
+	n := copy(p, c.pending)
+	c.pending = c.pending[n:]
+	if len(c.pending) == 0 {
+		c.pending = nil
+	}
+	return n, nil
+}
+
+// Caller holds readMu. No payload is exposed before the complete MAC verifies.
+func (c *authStream) readRecordLocked() error {
 	if c.readErr != nil {
-		return 0, c.readErr
+		return c.readErr
 	}
 	if c.readFIN {
-		return 0, io.EOF
+		return io.EOF
 	}
-	fail := func(e error) (int, error) {
-		c.readErr = e
-		c.Conn.Close()
-		return 0, e
-	}
+	fail := func(e error) error { c.readErr = e; c.readBuf = nil; c.Conn.Close(); return e }
 	var head [3]byte
 	if _, e := io.ReadFull(c.Conn, head[:]); e != nil {
 		if e == io.EOF {
@@ -174,10 +180,11 @@ func (c *authStream) Read(p []byte) (int, error) {
 	if c.readSeq == ^uint64(0) || n > authRecordMax || (head[0] != 0 && head[0] != 1) || (head[0] == 1 && n != 0) || (head[0] == 0 && n == 0) {
 		return fail(errAuthStream)
 	}
-	if c.readBuf == nil {
-		c.readBuf = make([]byte, 3+authRecordMax+sha256.Size)
+	size := 3 + n + sha256.Size
+	if cap(c.readBuf) < size {
+		c.readBuf = make([]byte, size)
 	}
-	b := c.readBuf[:3+n+sha256.Size]
+	b := c.readBuf[:size]
 	copy(b, head[:])
 	if _, e := io.ReadFull(c.Conn, b[3:]); e != nil {
 		return fail(e)
@@ -189,12 +196,86 @@ func (c *authStream) Read(p []byte) (int, error) {
 	c.readSeq++
 	if head[0] == 1 {
 		c.readFIN = true
-		return 0, io.EOF
+		c.readBuf = nil
+		return io.EOF
 	}
 	c.pending = b[3 : 3+n]
-	n = copy(p, c.pending)
-	c.pending = c.pending[n:]
-	return n, nil
+	return nil
+}
+
+// Relays share the authenticated record buffers rather than holding another
+// 16 KiB io.Copy buffer in each direction. The locks are private to this relay;
+// the opposite direction and closing the underlying socket remain independent.
+func (c *authStream) relayTo(dst io.Writer) (int64, error) {
+	c.readMu.Lock()
+	defer c.readMu.Unlock()
+	var total int64
+	for {
+		if len(c.pending) == 0 {
+			if e := c.readRecordLocked(); e != nil {
+				if e == io.EOF {
+					return total, nil
+				}
+				return total, e
+			}
+		}
+		n, e := dst.Write(c.pending)
+		if n < 0 || n > len(c.pending) {
+			return total, io.ErrShortWrite
+		}
+		c.pending = c.pending[n:]
+		if len(c.pending) == 0 {
+			c.pending = nil
+		}
+		total += int64(n)
+		if e != nil {
+			return total, e
+		}
+		if n == 0 {
+			return total, io.ErrShortWrite
+		}
+	}
+}
+
+func (c *authStream) relayFrom(src io.Reader) (int64, error) {
+	c.writeMu.Lock()
+	defer c.writeMu.Unlock()
+	if c.writeErr != nil {
+		return 0, c.writeErr
+	}
+	if c.writeFIN {
+		return 0, net.ErrClosed
+	}
+	size := 3 + authRecordMax + sha256.Size
+	if cap(c.writeBuf) < size {
+		c.writeBuf = make([]byte, size)
+	}
+	var total int64
+	empty := 0
+	for {
+		n, e := src.Read(c.writeBuf[3 : 3+authRecordMax])
+		if n < 0 || n > authRecordMax {
+			return total, io.ErrNoProgress
+		}
+		if n > 0 {
+			if err := c.writeRecord(0, c.writeBuf[3:3+n]); err != nil {
+				return total, err
+			}
+			total += int64(n)
+			empty = 0
+		} else {
+			empty++
+		}
+		if e != nil {
+			if e == io.EOF {
+				return total, nil
+			}
+			return total, e
+		}
+		if empty >= 100 {
+			return total, io.ErrNoProgress
+		}
+	}
 }
 
 // Caller holds writeMu. A partial record write poisons and closes the stream.
@@ -208,8 +289,8 @@ func (c *authStream) writeRecord(kind byte, p []byte) error {
 	if c.writeSeq == ^uint64(0) {
 		return c.failWrite(errAuthStream)
 	}
-	if c.writeBuf == nil {
-		c.writeBuf = make([]byte, 3+authRecordMax+sha256.Size)
+	if cap(c.writeBuf) < 3+len(p)+sha256.Size {
+		c.writeBuf = make([]byte, 3+len(p)+sha256.Size)
 	}
 	b := c.writeBuf[:3+len(p)]
 	b[0] = kind
@@ -260,6 +341,7 @@ func (c *authStream) CloseWrite() error {
 		return e
 	}
 	c.writeFIN = true
+	c.writeBuf = nil
 	if w, ok := c.Conn.(interface{ CloseWrite() error }); ok {
 		return w.CloseWrite()
 	}
