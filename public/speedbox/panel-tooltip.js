@@ -13,6 +13,12 @@
       const nodes = root.nodeType === 1 ? [root, ...root.querySelectorAll('[title]')] : [];
       for (const node of nodes) {
         if (!node.hasAttribute('title')) continue;
+        if (node.matches('.code-circle .user-code')) {
+          node.removeAttribute('title');
+          node.removeAttribute('data-sb-tooltip');
+          node.removeAttribute('data-sb-tooltip-tap');
+          continue;
+        }
         const text = node.getAttribute('title');
         if (text) {
           node.setAttribute('data-sb-tooltip', text);
@@ -28,7 +34,7 @@
     }
     function trigger(event) {
       const node = event.target instanceof Element ? event.target.closest('[data-sb-tooltip]') : null;
-      return node && !node.disabled ? node : null;
+      return node && !node.closest('.code-circle') && !node.disabled ? node : null;
     }
     function hide() {
       clearTimeout(timer);

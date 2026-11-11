@@ -115,6 +115,13 @@ window.SpeedboxTunnels = (() => {
     const preview=['localhost','127.0.0.1','[::1]'].includes(location.hostname)&&['1','full','empty','cdn'].includes(previewValue);
     if(preview){api=previewBackend(previewValue,()=>data.servers);openNode=async()=>toast('در پیش‌نمایش محلی، ساخت و ویرایش نود واقعی اجرا نمی‌شود.','info');}
     let disposed=false,timer=null,busy=false,version=0,refreshTimer=null;
+    const statusChecks=new Map(),statusWaits=new Set();
+    let refreshing=false;
+    const requireMounted=()=>{if(disposed)throw new DOMException('View unmounted','AbortError');};
+    const statusDelay=()=>new Promise(resolve=>{
+      const pending={timer:null,finish:()=>{clearTimeout(pending.timer);statusWaits.delete(pending);resolve();}};
+      pending.timer=setTimeout(pending.finish,2000);statusWaits.add(pending);
+    });
     let shellBound=false,timerDelete=null;
     const closeActionMenus=()=>content.querySelectorAll('.tunnel-actions[open]').forEach(menu=>menu.open=false);
     const actionMobile=window.matchMedia('(max-width:767px), (hover:none) and (pointer:coarse)');
@@ -188,13 +195,71 @@ window.SpeedboxTunnels = (() => {
       button.title=label;button.setAttribute('aria-label',label);
     }
     async function refresh(event){
+      if(refreshing)return;
+      refreshing=true;
       const button=event.currentTarget;clearTimeout(refreshTimer);button.disabled=true;refreshIcon(button,'loading');
       try{
-        const loaded=await load();if(disposed||loaded===false)return;
+        await refreshCards();requireMounted();
+        const tunnels=data.data.filter(t=>!['deleted','stopped'].includes(t.status)&&t.settings?.enabled!==false);
+        const failures=[];
+        for(const t of tunnels){
+          requireMounted();
+          try{await checkTunnel(t);}catch(error){if(error.name==='AbortError')throw error;failures.push(`${t.name}: ${error.message}`);}
+        }
+        if(failures.length)throw new Error(failures.join('\n'));
         refreshIcon(button,'success');
         refreshTimer=setTimeout(()=>{if(!disposed&&button.isConnected)refreshIcon(button,'idle');},1600);
       }catch(error){if(!disposed&&button.isConnected)refreshIcon(button,'idle');throw error;}
-      finally{button.disabled=false;}
+      finally{refreshing=false;button.disabled=false;}
+    }
+    async function waitForOperation(operation,deadline){
+      while(active(operation)){
+        requireMounted();
+        if(Date.now()>=deadline)throw new Error('بررسی هنوز تمام نشده؛ نتیجه پس از پایان عملیات روی کارت به‌روز می‌شود.');
+        await statusDelay();requireMounted();
+        operation=(await api(`/tunnel-operations/${operation.id}`)).data;
+        await refreshCards();
+      }
+      requireMounted();return operation;
+    }
+    function checkTunnel(t){
+      const id=Number(t.id);
+      if(statusChecks.has(id))return statusChecks.get(id);
+      const task=Promise.resolve().then(async()=>{
+        const deadline=Date.now()+120000;
+        let answer;
+        while(!answer){
+          requireMounted();
+          let current=data.data.find(x=>Number(x.id)===id);
+          if(!current||current.status==='deleted')return;
+          const pending=active(current.operation)?current.operation:active(current.blocking_operation)?current.blocking_operation:null;
+          if(pending){
+            const completed=await waitForOperation(pending,deadline);
+            if(Number(completed.tunnel_id)===id&&completed.action==='status'){
+              await refreshCards();
+              if(completed.status!=='succeeded')throw new Error(completed.message||'بررسی اتصال ناموفق بود.');
+              return;
+            }
+            current=data.data.find(x=>Number(x.id)===id);
+            if(!current||current.status==='deleted')return;
+          }
+          try{
+            const prefix=current.engine&&current.engine!=='backpack'?'/network-tunnels':'/tunnels';
+            answer=await api(`${prefix}/${id}/actions`,{method:'POST',body:JSON.stringify({action:'status'})});
+          }catch(error){
+            if(error.status!==409||Date.now()>=deadline)throw error;
+            await statusDelay();requireMounted();await refreshCards();
+          }
+        }
+        requireMounted();
+        const current=data.data.find(x=>Number(x.id)===id);
+        if(current)current.operation=answer.data;
+        renderCards();
+        const completed=await waitForOperation(answer.data,deadline);
+        await refreshCards();
+        if(completed.status!=='succeeded')throw new Error(completed.message||'بررسی اتصال ناموفق بود.');
+      }).finally(()=>{statusChecks.delete(id);if(!disposed){renderCards();schedule();}});
+      statusChecks.set(id,task);return task;
     }
     function syncLayout(){
       content.querySelector('.tunnel-history').hidden=!data.tests.length;
@@ -222,7 +287,7 @@ window.SpeedboxTunnels = (() => {
       content.querySelector('[data-tunnel-toolbar-create]').append(content.querySelector('[data-new-tunnel]'));
       content.querySelector('[data-tunnel-list]').innerHTML=live.length?live.map(t=>{
         const pending=active(t.operation),blocked=active(t.blocking_operation),s=t.settings;
-        const disabled=action=>(pending||blocked)&&!['logs','preview','history','edit'].includes(action);
+        const disabled=action=>(action==='status'&&statusChecks.has(Number(t.id)))||(pending||blocked)&&!['logs','preview','history','edit'].includes(action);
         const actions=t.engine&&t.engine!=='backpack'?window.SpeedboxNetworkTunnels.actions(t):[['status','تست اتصال'],['start','شروع'],['stop','توقف'],['restart','راه‌اندازی مجدد'],['logs','گزارش'],['optimize','بهینه‌سازی'],['engine-update','به‌روزرسانی'],['edit','ویرایش'],['delete','حذف تونل']];
         return `<article class="panel-card tunnel-card network-${esc(t.engine||'backpack')}" data-tunnel-card="${t.id}"><header><div class="tunnel-card-heading"><h3>${esc(t.name)}</h3><span class="tunnel-method" dir="ltr">${t.engine==='gost'?esc((s.protocol||'tcp').toUpperCase())+' · '+esc(s.version)+(s.ip_family?' · '+(s.ip_family==='ipv6'?'IPv6':'IPv4'):''):t.engine==='gre'?esc(t.transport.toUpperCase()):t.engine==='wattunnel'?esc(t.transport.toUpperCase())+' · '+(s.reverse?'Reverse':'Direct')+' · '+(s.ip_family==='ipv6'?'IPv6':'IPv4'):esc(t.kind==='reverse'?'Reverse':'Direct')+' '+esc(t.transport.toUpperCase())}</span></div><div class="tunnel-card-state">${badge(pending?'running':t.status)}${s.connection_mode==='cdn'?'<span class="tunnel-badge">CDN</span>':''}<span class="network-engine-badge" dir="ltr"><span>${esc(window.SpeedboxNetworkTunnels?.label(t)||'BackPack')}</span></span></div></header><div class="tunnel-pair"><div><span>سرور ایران</span><b>${esc(t.iran?.name)}</b></div><span class="tunnel-link ${t.status==='connected'?'is-connected':['offline','failed','stopped'].includes(t.status)?'is-disconnected':'is-pending'}" role="img" aria-label="${esc(labels[t.status]||'نیازمند بررسی')}">${linkIcon}</span><div><span>سرور خارج</span><b>${esc(t.foreign?.name)}</b></div></div><div class="tunnel-address"><span>آدرس اتصال کاربران</span><div class="tunnel-endpoints">${s.mappings.map(m=>`<div class="tunnel-endpoint"><bdi dir="ltr">${esc(endpoint(s.public_host,m.public_port,m.public_end))}</bdi><small>پورت <bdi dir="ltr">${m.target_port}${Number(m.target_end??m.target_port)>Number(m.target_port)?'–'+m.target_end:''}</bdi></small></div>`).join('')}</div></div><p class="tunnel-card-message">${esc(pending?t.operation.message:t.message||'برای دریافت وضعیت، تست اتصال را اجرا کنید.')}</p>${pending?progress(t.operation):''}${blocked?`<p class="tunnel-muted tunnel-shared-operation">${esc(t.blocking_operation.message)}</p>`:''}<footer><button type="button" class="button secondary tunnel-detail-button" data-tunnel-detail="${t.id}">جزئیات</button><div class="tunnel-action-control"><details class="tunnel-actions"><summary class="button secondary tunnel-actions-button" aria-label="عملیات تونل ${esc(t.name)}">عملیات</summary><div role="group" aria-label="عملیات تونل">${actions.map(([action,label])=>`<button type="button" data-tunnel-action="${action}" data-id="${t.id}" ${disabled(action)?'disabled':''}>${label}</button>`).join('')}</div></details><select id="tunnel-action-${t.id}" class="tunnel-actions-native" data-enhanced="true" data-tunnel-native-action data-id="${t.id}" aria-label="عملیات تونل ${esc(t.name)}"><option value="">عملیات</option>${actions.map(([action,label])=>`<option value="${action}" ${disabled(action)?'disabled':''}>${label}</option>`).join('')}</select></div></footer></article>`;
       }).join(''):`<div class="panel-card tunnel-empty"><div class="tunnel-empty-symbol" aria-hidden="true"><span>ایران</span><svg viewBox="0 0 48 32" fill="none"><path d="M7 10h33m-7-6 7 6-7 6M41 23H8m7-6-7 6 7 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg><span>خارج</span></div><h3>${allLive.length?'برای این ابزار هنوز تونلی ندارید':'هنوز تونلی ساخته نشده است'}</h3><p>برای شروع، سرور ایران و خارج را انتخاب کنید و روش‌های اتصال را بررسی کنید.</p><div data-empty-action></div><small>هر دو سرور باید در بخش «مدیریت سرورها» اضافه شده باشند.</small></div>`;
@@ -249,6 +314,7 @@ window.SpeedboxTunnels = (() => {
       const runAction=b=>safe(async()=>{
         const t=data.data.find(t=>t.id===Number(b.dataset.id));
         b.closest('details')?.removeAttribute('open');
+        if(b.dataset.tunnelAction==='status'){await checkTunnel(t);return;}
         if(t.engine&&t.engine!=='backpack'){await network.action(t,b.dataset.tunnelAction);return;}
         if(['optimize','engine-update'].includes(b.dataset.tunnelAction)){await openMaintenance(t,b.dataset.tunnelAction);return;}
         if(b.dataset.tunnelAction==='edit'){editing=t;switching=false;selectedTestId=null;test=null;testOperation=null;selection=null;draft=clone(t.settings);draft.name=t.name;wizard=true;renderWizard();return;}
@@ -480,7 +546,7 @@ window.SpeedboxTunnels = (() => {
       body.querySelector('[data-edit-tunnel-node]').onclick=safe(async()=>{const node=t.nodes.find(n=>n.id===Number(body.querySelector('#tunnel-existing-node').value));if(!node)throw Error('یک نود موجود انتخاب کنید.');const p=prefill();if(node.server_port!==p.server_port)throw Error('پورت مقصد تونل باید با پورت اجرای این نود برابر باشد.');await openNode(node,p);});
     }
     function showLogs(op){const result=op.result||{};openModal('گزارش دو سرور',`<div class="tunnel-log-columns">${[['iran','سرور ایران'],['foreign','سرور خارج']].map(([k,l])=>`<section><h4>${l}</h4><pre class="log-box" dir="ltr">${esc(result[k]?.text||result[k]?.error||'گزارشی دریافت نشد.')}</pre></section>`).join('')}</div>`);}
-    return {load,dispose(){clearTimeout(timerDelete);actionMobile.removeEventListener('change',syncActionAccessibility);window.removeEventListener('resize',closeActionMenus);window.removeEventListener('scroll',closeActionMenusOnScroll,true);network?.dispose();disposed=true;maintenance=null;wizard=false;version++;clearTimeout(timer);clearTimeout(refreshTimer);}};
+    return {load,dispose(){disposed=true;for(const pending of statusWaits)pending.finish();clearTimeout(timerDelete);actionMobile.removeEventListener('change',syncActionAccessibility);window.removeEventListener('resize',closeActionMenus);window.removeEventListener('scroll',closeActionMenusOnScroll,true);network?.dispose();maintenance=null;wizard=false;version++;clearTimeout(timer);clearTimeout(refreshTimer);}};
   }
   return {mount};
 })();

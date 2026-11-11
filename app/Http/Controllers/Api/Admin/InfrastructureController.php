@@ -13,6 +13,7 @@ use App\Models\ServerGroup;
 use App\Models\ServerMachine;
 use App\Models\ServerMachineLoadHistory;
 use App\Models\ServerRoute;
+use App\Models\ServerTunnel;
 use App\Services\NodeControlService;
 use App\Services\ManagedServerRemoval;
 use App\Services\RuntimeSetting;
@@ -32,12 +33,15 @@ class InfrastructureController extends Controller
     {
         $machines = ServerMachine::withCount('nodes')->get();
         $nodes = ProxyServer::with('parent')->get();
+        $tunnels = ServerTunnel::where('status', '!=', 'deleted')->get(['id', 'status']);
         return response()->json(['data' => [
             'managed_servers' => ManagedServer::count(),
             'machines' => $machines->count(),
             'online_machines' => $machines->filter(fn ($machine) => $machine->is_active && $machine->last_seen_at >= time() - 300)->count(),
             'nodes' => $nodes->count(),
             'online_nodes' => $nodes->filter(fn ($node) => $this->nodeControl->stateFor($node, [])['online'])->count(),
+            'tunnels' => $tunnels->count(),
+            'connected_tunnels' => $tunnels->where('status', 'connected')->count(),
             'active_users' => DB::table('v2_user')->where('banned', 0)->whereRaw('(u + d) < transfer_enable')->tap(fn ($query) => \App\Services\SubscriptionValidity::whereUnexpired($query))->count(),
             'traffic' => ['upload' => (int) $nodes->sum('u'), 'download' => (int) $nodes->sum('d')],
         ]]);

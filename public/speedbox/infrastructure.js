@@ -56,7 +56,12 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
 
   async function api(path='', options={}) {
     const signal = options.signal || requests.signal;
-    const mutation = ['POST','PUT','PATCH','DELETE'].includes((options.method || 'GET').toUpperCase());
+    const method = (options.method || 'GET').toUpperCase();
+    let statusCheck = false;
+    if(method === 'POST' && /^\/(?:tunnels|network-tunnels)\/\d+\/actions$/.test(path)) {
+      try { statusCheck = JSON.parse(options.body || '{}').action === 'status'; } catch (_) {}
+    }
+    const mutation = ['POST','PUT','PATCH','DELETE'].includes(method) && !statusCheck;
     if(mutation && savingCount) throw new Error('لطفاً تا پایان عملیات جاری صبر کنید.');
     const finish = mutation ? savingOverlay() : () => {};
     try {
@@ -67,7 +72,11 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
       if(response.status===401){ router.replace('/login'); throw new Error('نشست شما منقضی شده است.'); }
       const data = await response.json().catch(()=>({}));
       if (disposed || signal.aborted) throw new DOMException('View unmounted', 'AbortError');
-      if(!response.ok) throw new Error(Object.values(data.errors||{})?.flat()?.[0] || data.message || 'خطا در ارتباط با سرور');
+      if(!response.ok) {
+        const error = new Error(Object.values(data.errors||{})?.flat()?.[0] || data.message || 'خطا در ارتباط با سرور');
+        error.status = response.status;
+        throw error;
+      }
       return data;
     } finally { finish(); }
   }
@@ -202,8 +211,8 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
     content.innerHTML=`
       <div class="stats-grid">
         ${stat('سرورهای مدیریت‌شده',o.managed_servers,'server','servers')}
-        ${stat('ماشین‌های آنلاین',`${o.online_machines} / ${o.machines}`,'heartbeat')}
         ${stat('نودهای فعال',`${o.online_nodes} / ${o.nodes}`,'project-diagram','nodes')}
+        ${stat('تونل‌های متصل',`${o.connected_tunnels ?? 0} / ${o.tunnels ?? 0}`,'exchange-alt','tunnels')}
         ${stat('کاربران فعال',o.active_users,'users')}
       </div>
       <div class="dashboard-grid">
@@ -221,7 +230,7 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
     }));
   }
   async function loadOverview(){
-    if(!content.querySelector('.dashboard-grid')) renderOverview({managed_servers:0,online_machines:0,machines:0,online_nodes:0,nodes:0,active_users:0},true);
+    if(!content.querySelector('.dashboard-grid')) renderOverview({managed_servers:0,online_nodes:0,nodes:0,connected_tunnels:0,tunnels:0,active_users:0},true);
     const [overview,servers,machines,nodes]=await Promise.all([api('/overview'),api('/servers'),api('/machines'),api('/nodes')]);
     if(disposed||state.view!=='overview')return;
     state.overview=overview.data;state.servers=servers.data;state.machines=machines.data;state.nodes=nodes.data;
