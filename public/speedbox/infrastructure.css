@@ -602,3 +602,16 @@
 .speedbox-infrastructure .entity-mobile-card.is-dragging{opacity:.65}
 .speedbox-infrastructure .entity-mobile-card.node-drop-target{box-shadow:inset 0 3px #75cfff,0 0 0 1px #75cfff}
 .speedbox-infrastructure .entity-mobile-card.node-drop-target.node-drop-after{box-shadow:inset 0 -3px #75cfff,0 0 0 1px #75cfff}
+
+/* Dashboard-only surfaces match the main admin dashboard's black KPI boxes. */
+.speedbox-infrastructure .dashboard-overview{--dashboard-inner-bg:rgba(0,0,0,.379);--dashboard-inner-border:rgba(255,255,255,.12)}
+.speedbox-infrastructure .dashboard-overview .dashboard-summary{margin-bottom:18px}
+.speedbox-infrastructure .dashboard-overview .dashboard-summary .stats-grid{margin-bottom:0}
+.speedbox-infrastructure .dashboard-overview :is(.panel-resource-item,.recent-server-item,.machine-item,.rank-row,.queue-running,.queue-metric,.queue-processes,.queue-lane){background:var(--dashboard-inner-bg);border:1px dashed var(--dashboard-inner-border);border-radius:10px}
+.speedbox-infrastructure .dashboard-overview .panel-resource-grid{gap:10px;padding:0}
+.speedbox-infrastructure .dashboard-overview .panel-resource-item{padding:16px 10px}
+.speedbox-infrastructure .dashboard-overview .rank-row:hover,
+.speedbox-infrastructure .dashboard-overview .rank-row:focus-visible,
+.speedbox-infrastructure .dashboard-overview button.queue-metric:hover,
+.speedbox-infrastructure .dashboard-overview button.queue-metric:focus-visible{background:rgba(0,0,0,.48);border-color:rgba(0,180,255,.45)}
+@media(max-width:540px){.speedbox-infrastructure .dashboard-overview .panel-resource-grid{gap:8px}.speedbox-infrastructure .dashboard-overview .panel-resource-item{padding:12px 6px}}
