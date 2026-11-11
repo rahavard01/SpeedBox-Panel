@@ -85,8 +85,48 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
   }
   function empty(title){ return `<div class="empty"><strong>${escape(title)}</strong></div>`; }
   function loadingTable(headers,kind=''){const markup=`<div class="table-wrap"><table><thead><tr>${headers.map(label=>`<th>${escape(label)}</th>`).join('')}</tr></thead><tbody><tr><td class="entity-loading-cell" colspan="${headers.length}">${loading()}</td></tr></tbody></table></div>`;return kind?entityCardLayout(markup,kind):markup;}
+  // Preserve the viewport at the time of the DOM update, not before a request:
+  // the user may scroll while a quiet refresh is in flight.
+  function saveListPosition(target){
+    const page={left:window.scrollX,top:window.scrollY};
+    const ancestors=[];
+    for(let el=target;el;el=el.parentElement)ancestors.push([el,el.scrollLeft,el.scrollTop]);
+    const selector='.table-wrap,.table-scroll,.table-scroll-rtl';
+    const tables=[...target.querySelectorAll(selector)].map(el=>[el.scrollLeft,el.scrollTop]);
+    return ()=>{
+      ancestors.forEach(([el,left,top])=>{if(el.isConnected){el.scrollLeft=left;el.scrollTop=top;}});
+      target.querySelectorAll(selector).forEach((el,i)=>{if(tables[i]){el.scrollLeft=tables[i][0];el.scrollTop=tables[i][1];}});
+      window.scrollTo({left:page.left,top:page.top,behavior:'instant'});
+    };
+  }
+  function updateEntityList(markup){
+    const target=content.querySelector('.panel-card');
+    if(!target)return;
+    const restore=saveListPosition(target),template=document.createElement('template');
+    template.innerHTML=markup;
+    const selector='[data-node-row],[data-server-row],[data-plan-row]';
+    const before=[...target.querySelectorAll(selector)],after=[...template.content.querySelectorAll(selector)];
+    const key=el=>['node','server','plan'].map(type=>el.getAttribute(`data-${type}-row`)).find(id=>id!==null);
+    const oldParent=before[0]?.parentElement,newParent=after[0]?.parentElement;
+    const focused=target.contains(document.activeElement)?document.activeElement:null;
+    const focusSelector=focused?[...focused.attributes].filter(a=>a.name.startsWith('data-')).map(a=>`[${a.name}="${CSS.escape(a.value)}"]`).join(''):'';
+    if(before.length&&after.length&&oldParent.tagName===newParent.tagName&&oldParent.className===newParent.className){
+      const oldRows=new Map(before.map(row=>[key(row),row]));
+      const wanted=new Set(after.map(key));
+      before.forEach(row=>{if(!wanted.has(key(row)))row.remove();});
+      after.forEach((incoming,index)=>{
+        let row=oldRows.get(key(incoming));
+        if(!row)row=incoming;
+        else if(row.outerHTML!==incoming.outerHTML){row.replaceWith(incoming);row=incoming;}
+        const current=oldParent.children[index];
+        if(current!==row)oldParent.insertBefore(row,current||null);
+      });
+    }else target.replaceChildren(template.content);
+    if(focused&&!focused.isConnected&&focusSelector)target.querySelector(focusSelector)?.focus({preventScroll:true});
+    restore();
+  }
   function loading(){ return '<div class="loading" role="status" aria-live="polite"><i class="fas fa-spinner fa-spin" aria-hidden="true"></i><span>در حال دریافت اطلاعات…</span></div>'; }
-  let modalRevision=0;
+  let modalRevision=0, modalPagePosition=null;
   function openModal(title,body,options={}){
     modalRevision++;
     const previousTitle=scope.getElementById('modalTitle').textContent;
@@ -96,6 +136,7 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
     const disclosures=new Map();
     if(options.kind==='tunnel')for(const el of previousBody.querySelectorAll('details')){const key=el.querySelector('summary')?.textContent;const states=disclosures.get(key)||[];states.push(el.open);disclosures.set(key,states);}
     const visible=!modalBackdrop.hidden;
+    if(!visible)modalPagePosition={left:window.scrollX,top:window.scrollY};
     const scroll=[modalBackdrop,overlay.querySelector('.infrastructure-modal'),previousBody,previousBody.querySelector('.modal-fields')].map(el=>({top:el?.scrollTop||0,left:el?.scrollLeft||0}));
     const focused=previousBody.contains(document.activeElement)?document.activeElement:null;
     const focusName=focused?.getAttribute('name'),focusId=focused?.id;
@@ -129,7 +170,7 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
       for(const el of modalBody.querySelectorAll('details')){const states=disclosures.get(el.querySelector('summary')?.textContent);if(states?.length)el.open=states.shift();}
       restore();if(options.kind!=='tunnel')requestAnimationFrame(restore);}else modalBackdrop.scrollTop=0;
   }
-  function closeModal(force=false){ if(savingCount && force!==true)return; modalRevision++; nodeEditorDispose?.();nodeEditorDispose=null;modalBackdrop.hidden=true; document.body.style.overflow='';const handler=modalCloseHandler;modalCloseHandler=null;handler?.(); }
+  function closeModal(force=false){ if(savingCount && force!==true)return; modalRevision++; nodeEditorDispose?.();nodeEditorDispose=null;const wasVisible=!modalBackdrop.hidden;modalBackdrop.hidden=true; document.body.style.overflow='';if(wasVisible&&force!==true&&modalPagePosition)window.scrollTo({left:modalPagePosition.left,top:modalPagePosition.top,behavior:'instant'});modalPagePosition=null;const handler=modalCloseHandler;modalCloseHandler=null;handler?.(); }
   modalBackdrop.addEventListener('click',e=>{if(e.target===modalBackdrop)closeModal()});
 
   async function loadView(){
@@ -539,7 +580,7 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
     const markup = `<div class="table-wrap"><table><thead><tr><th>سرور</th><th>وضعیت</th><th>نودهای متصل</th><th>منابع</th><th>آخرین عملیات</th>${actions?'<th>عملیات</th>':''}</tr></thead><tbody>${list.map(s=>{
       const d=s.deployments?.[0],busy=['queued','running'].includes(d?.status)||s.status==='removing';
       const connection=s.connection_status||'not_seen';
-      return `<tr><td><div class="entity server-identity"><div><b>${escape(s.name)}</b><small>${escape(s.ssh_user)}@${escape(s.host)}:${s.ssh_port}</small></div></div></td><td>${badge(connection,({inactive:'غیرفعال',not_seen:'هنوز متصل نشده'})[connection])}${busy?`<small class="server-operation-label">${s.status==='removing'?'در حال حذف':statusLabel(d?.status)}</small>`:''}<small class="server-last-seen">${timeAgo(s.machine?.last_seen_at)}</small></td><td><span class="server-node-count" dir="ltr">${Number(s.machine?.nodes_count||0).toLocaleString('fa-IR')}</span><small class="server-system">${escape(s.operating_system||'—')} ${escape(s.architecture||'')}</small></td><td>${serverLoad(s.machine)}</td><td class="server-operation-progress">${d?`${badge(d.status)}${deploymentProgress(d)}`:'—'}</td>${actions?`<td><div class="actions"><button class="button entity-install" data-server-action="install" data-id="${s.id}" ${busy?'disabled':''} title="${s.status==='draft'?'نصب سرویس مدیریت نود':'نصب دوباره فایل‌ها و سرویس مدیریت نود و تنظیم مجدد اتصال به پنل'}">${s.status==='draft'?'نصب':'نصب مجدد'}</button><button class="button entity-restart" data-server-action="restart" data-id="${s.id}" ${busy?'disabled':''} title="راه‌اندازی مجدد هسته‌های نود؛ بدون ریبوت ماشین">راه‌اندازی مجدد هسته‌ها</button><button class="button entity-report" data-server-log="${s.id}">گزارش</button><button class="button entity-edit" data-server-edit="${s.id}" ${busy?'disabled':''}>ویرایش</button><button class="button entity-delete" data-server-delete="${s.id}" ${busy?'disabled':''}>حذف</button></div></td>`:''}</tr>`;
+      return `<tr data-server-row="${s.id}"><td><div class="entity server-identity"><div><b>${escape(s.name)}</b><small>${escape(s.ssh_user)}@${escape(s.host)}:${s.ssh_port}</small></div></div></td><td>${badge(connection,({inactive:'غیرفعال',not_seen:'هنوز متصل نشده'})[connection])}${busy?`<small class="server-operation-label">${s.status==='removing'?'در حال حذف':statusLabel(d?.status)}</small>`:''}<small class="server-last-seen">${timeAgo(s.machine?.last_seen_at)}</small></td><td><span class="server-node-count" dir="ltr">${Number(s.machine?.nodes_count||0).toLocaleString('fa-IR')}</span><small class="server-system">${escape(s.operating_system||'—')} ${escape(s.architecture||'')}</small></td><td>${serverLoad(s.machine)}</td><td class="server-operation-progress">${d?`${badge(d.status)}${deploymentProgress(d)}`:'—'}</td>${actions?`<td><div class="actions"><button class="button entity-install" data-server-action="install" data-id="${s.id}" ${busy?'disabled':''} title="${s.status==='draft'?'نصب سرویس مدیریت نود':'نصب دوباره فایل‌ها و سرویس مدیریت نود و تنظیم مجدد اتصال به پنل'}">${s.status==='draft'?'نصب':'نصب مجدد'}</button><button class="button entity-restart" data-server-action="restart" data-id="${s.id}" ${busy?'disabled':''} title="راه‌اندازی مجدد هسته‌های نود؛ بدون ریبوت ماشین">راه‌اندازی مجدد هسته‌ها</button><button class="button entity-report" data-server-log="${s.id}">گزارش</button><button class="button entity-edit" data-server-edit="${s.id}" ${busy?'disabled':''}>ویرایش</button><button class="button entity-delete" data-server-delete="${s.id}" ${busy?'disabled':''}>حذف</button></div></td>`:''}</tr>`;
     }).join('')}</tbody></table></div>`;
     return actions ? entityCardLayout(markup, 'servers') : markup;
   }
@@ -552,7 +593,7 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
       try{
         const r=await api(`/servers/${id}`,{method:'DELETE',body:'{}'});
         if(watch.closed)return;
-        if(!r.data?.id){openModal('نتیجهٔ حذف',`<p>${escape(r.message)}</p>`,options);await loadServers();return;}
+        if(!r.data?.id){openModal('نتیجهٔ حذف',`<p>${escape(r.message)}</p>`,options);await loadServers(true);return;}
         openModal('حذف سرور','<p>در حال حذف سرور…</p>',options);
         const poll=async()=>{
           if(watch.closed||disposed)return;
@@ -561,7 +602,7 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
             if(watch.closed||disposed)return;
             if(['succeeded','failed'].includes(data.status)){
               openModal('نتیجهٔ حذف',`<p>${escape(data.message)}</p>`,options);
-              if(state.view==='servers')await loadServers();return;
+              if(state.view==='servers')await loadServers(true);return;
             }
           }catch(e){if(e.name==='AbortError')return;}
           later(poll,2000);
@@ -576,7 +617,7 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
   function renderServerRows(){
     const q=(scope.getElementById('serverSearch')?.value||'').toLowerCase();
     const list=state.servers.filter(s=>`${s.name} ${s.host}`.toLowerCase().includes(q));
-    content.querySelector('.panel-card').innerHTML=serverTable(list,true);
+    updateEntityList(serverTable(list,true));
     bindServerRows();
   }
   function bindServerRows(){
@@ -597,9 +638,9 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
     </div><div class="form-actions"><button class="button primary">${server?'ذخیره تغییرات':'ذخیره و نصب خودکار'}</button><button type="button" class="button secondary" data-close>انصراف</button></div></form>`,{kind:'server'});
     const toggle=()=>{const key=scope.getElementById('authType').value==='key';scope.getElementById('keyField').style.display=key?'grid':'none';scope.getElementById('passwordField').style.display=key?'none':'grid'}; scope.getElementById('authType').onchange=toggle;toggle();
     scope.querySelector('[data-close]').onclick=closeModal;
-    scope.getElementById('serverForm').onsubmit=async e=>{e.preventDefault();const body=Object.fromEntries(new FormData(e.target));try{const r=await api(server?`/servers/${server.id}`:'/servers',{method:server?'PUT':'POST',body:JSON.stringify(body)});toast(r.message);closeModal();await loadServers();}catch(err){toast(err.message,'error')}};
+    scope.getElementById('serverForm').onsubmit=async e=>{e.preventDefault();const body=Object.fromEntries(new FormData(e.target));try{const r=await api(server?`/servers/${server.id}`:'/servers',{method:server?'PUT':'POST',body:JSON.stringify(body)});toast(r.message);closeModal();await loadServers(true);}catch(err){toast(err.message,'error')}};
   }
-  async function runDeployment(id,action){try{const r=await api(`/servers/${id}/deploy`,{method:'POST',body:JSON.stringify({action,kernel:'singbox'})});toast(r.message);await loadServers();}catch(e){toast(e.message,'error')}}
+  async function runDeployment(id,action){try{const r=await api(`/servers/${id}/deploy`,{method:'POST',body:JSON.stringify({action,kernel:'singbox'})});toast(r.message);await loadServers(true);}catch(e){toast(e.message,'error')}}
   const deploymentActionLabel=action=>({sync_nodes:'اعمال تنظیمات نود',install:'نصب',upgrade:'ارتقا',repair:'نصب مجدد',restart:'راه‌اندازی مجدد هسته‌ها',check:'بررسی وضعیت',uninstall:'حذف کامل سرویس مدیریت نود',warp_prepare:'آماده‌سازی WARP',warp_test:'تست اتصال WARP'}[action]||action);
   async function showDeployments(id){
     openModal('گزارش عملیات', '<div data-deployment-log aria-live="polite">'+loading()+'</div>');
@@ -680,7 +721,7 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
   }
   function renderNodeRows(){
     const q=(scope.getElementById('nodeSearch')?.value||'').toLowerCase();
-    content.querySelector('.panel-card').innerHTML=nodeTable(state.nodes.filter(n=>`${n.id} ${n.name} ${n.host} ${n.type} ${n.kernel} ${n.machine?.name}`.toLowerCase().includes(q)));bindNodeRows();
+    updateEntityList(nodeTable(state.nodes.filter(n=>`${n.id} ${n.name} ${n.host} ${n.type} ${n.kernel} ${n.machine?.name}`.toLowerCase().includes(q))));bindNodeRows();
   }
   async function saveNodeOrder(ids){
     if(nodeOrderSaving)return;
@@ -761,8 +802,8 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
   }
   function bindNodeRows(){
     content.querySelectorAll('[data-node-edit]').forEach(b=>b.onclick=()=>nodeForm(state.nodes.find(n=>n.id==b.dataset.nodeEdit)));
-    content.querySelectorAll('[data-node-clone]').forEach(b=>b.onclick=async()=>{try{const r=await api(`/nodes/${b.dataset.nodeClone}/clone`,{method:'POST'});toast(r.message);await loadNodes();}catch(e){if(e.name!=='AbortError')toast(e.message,'error');}});
-    content.querySelectorAll('[data-node-delete]').forEach(b=>b.onclick=async()=>{if(!confirm('این نود حذف شود؟'))return;try{const r=await api(`/nodes/${b.dataset.nodeDelete}`,{method:'DELETE'});toast(r.message);await loadNodes();}catch(e){if(e.name!=='AbortError')toast(e.message,'error');}});
+    content.querySelectorAll('[data-node-clone]').forEach(b=>b.onclick=async()=>{try{const r=await api(`/nodes/${b.dataset.nodeClone}/clone`,{method:'POST'});toast(r.message);await loadNodes(true);}catch(e){if(e.name!=='AbortError')toast(e.message,'error');}});
+    content.querySelectorAll('[data-node-delete]').forEach(b=>b.onclick=async()=>{if(!confirm('این نود حذف شود؟'))return;try{const r=await api(`/nodes/${b.dataset.nodeDelete}`,{method:'DELETE'});toast(r.message);await loadNodes(true);}catch(e){if(e.name!=='AbortError')toast(e.message,'error');}});
     content.querySelectorAll('[data-node-show]').forEach(input=>input.onchange=async()=>{const id=input.dataset.nodeShow,value=input.checked;input.disabled=true;try{const r=await api(`/nodes/${id}/flags`,{method:'PATCH',body:JSON.stringify({show:value})});const node=state.nodes.find(n=>n.id==id);if(node)node.show=value;toast(r.message);}catch(e){input.checked=!value;if(e.name!=='AbortError')toast(e.message,'error');}finally{input.disabled=false;}});
     content.querySelectorAll('[data-node-move]').forEach(b=>b.onclick=()=>{const index=state.nodes.findIndex(n=>n.id==b.dataset.nodeMove),step=Number(b.dataset.step),target=state.nodes[index+step];if(target)moveNode(b.dataset.nodeMove,target.id,step>0);});
     content.querySelectorAll('[data-drag-node]').forEach(handle=>{
@@ -776,21 +817,34 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
       row.ondrop=e=>{e.preventDefault();const id=draggingNode;draggingNode=null;const rect=row.getBoundingClientRect();if(id!==null)moveNode(id,row.dataset.nodeRow,e.clientY>rect.top+rect.height/2);};
     });
   }
-  function nodeForm(node=null,prefill=null){nodeEditorDispose=window.SpeedboxNodeEditor.mount({node,prefill,state,api,openModal,closeModal,toast,reload:()=>state.view==='tunnels'?tunnelSession.load():loadNodes(),enhanceControls,isSaving:()=>savingCount>0});}
+  async function refreshSavedNode(saved){
+    if(disposed||state.view!=='nodes')return;
+    cancelNodeRefresh();nodeFetchVersion++;
+    if(saved?.id){
+      const index=state.nodes.findIndex(n=>Number(n.id)===Number(saved.id));
+      if(index>=0)state.nodes[index]={...state.nodes[index],...saved};
+      else state.nodes.push(saved);
+      renderNodeRows();
+    }
+    await loadNodes(true).catch(error=>{if(error.name!=='AbortError')scheduleNodeRefresh();});
+  }
+  function nodeForm(node=null,prefill=null){nodeEditorDispose=window.SpeedboxNodeEditor.mount({node,prefill,state,api,openModal,closeModal,toast,reload:saved=>state.view==='tunnels'?tunnelSession.load():refreshSavedNode(saved),enhanceControls,isSaving:()=>savingCount>0});}
 
   const trafficResetOptions = [['','مطابق تنظیمات سیستم'],['0','ابتدای هر ماه'],['1','ماهانه در روز پایان دوره'],['2','بدون بازنشانی'],['3','ابتدای هر سال'],['4','سالانه در روز پایان دوره']];
   const trafficResetLabel = value => trafficResetOptions.find(([key])=>key===String(value ?? ''))?.[1] || 'مطابق تنظیمات سیستم';
   const planTags = plan => {if(Array.isArray(plan?.tags))return plan.tags;if(typeof plan?.tags==='string'){try{const tags=JSON.parse(plan.tags);return Array.isArray(tags)?tags:[];}catch(_){return [];}}return [];};
-  async function loadPlans(){
-    const query=scope.getElementById('planSearch')?.value||'';
-    content.innerHTML=`<div class="toolbar entity-toolbar"><button class="button primary" id="addPlan"><i class="fas fa-plus" aria-hidden="true"></i> ساخت پلن</button><input class="search" id="planSearch" placeholder="جستجو" aria-label="جستجوی پلن"></div><article class="panel-card entity-list-shell"></article>`;
-    content.querySelector('.panel-card').innerHTML=loadingTable(['نام پلن','گروه دسترسی','ترافیک پلن','محدودیت سرعت','محدودیت اتصال','بازنشانی ترافیک','عملیات'],'plans');
-    scope.getElementById('addPlan').disabled=true;
+  async function loadPlans(background=false){
+    if(!background||!scope.getElementById('planSearch')){
+      const query=scope.getElementById('planSearch')?.value||'';
+      content.innerHTML=`<div class="toolbar entity-toolbar"><button class="button primary" id="addPlan"><i class="fas fa-plus" aria-hidden="true"></i> ساخت پلن</button><input class="search" id="planSearch" placeholder="جستجو" aria-label="جستجوی پلن"></div><article class="panel-card entity-list-shell"></article>`;
+      content.querySelector('.panel-card').innerHTML=loadingTable(['نام پلن','گروه دسترسی','ترافیک پلن','محدودیت سرعت','محدودیت اتصال','بازنشانی ترافیک','عملیات'],'plans');
+      scope.getElementById('planSearch').value=query;
+      scope.getElementById('planSearch').oninput=renderPlanRows;
+      scope.getElementById('addPlan').disabled=true;
+    }
     const [plans,groups]=await Promise.all([api('/plans'),api('/groups')]);
-    if(state.view!=='plans')return;
+    if(disposed||state.view!=='plans')return;
     state.plans=plans.data;state.groups=groups.data;
-    scope.getElementById('planSearch').value=query;
-    scope.getElementById('planSearch').oninput=renderPlanRows;
     scope.getElementById('addPlan').disabled=false;scope.getElementById('addPlan').onclick=()=>planForm();renderPlanRows();
   }
   function planUserStats(plan){
@@ -800,7 +854,7 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
   function renderPlanRows(){
     const query=(scope.getElementById('planSearch')?.value||'').trim().toLowerCase();
     const list=state.plans.filter(p=>`${p.name} ${planTags(p).join(' ')} ${state.groups.find(g=>g.id==p.group_id)?.name||''}`.toLowerCase().includes(query));
-    content.querySelector('.panel-card').innerHTML=list.length?entityCardLayout(`<div class="table-wrap"><table class="plan-table"><thead><tr><th>نام پلن</th><th>گروه دسترسی</th><th>ترافیک پلن</th><th>محدودیت سرعت</th><th>محدودیت اتصال</th><th>بازنشانی ترافیک</th><th>عملیات</th></tr></thead><tbody>${list.map(p=>`<tr><td><b>${escape(p.name)}</b>${planUserStats(p)}</td><td>${escape(state.groups.find(g=>g.id==p.group_id)?.name||p.group_id||'—')}</td><td><span dir="ltr">${escape(p.transfer_enable)} GB</span></td><td>${Number(p.speed_limit)>0?`<span dir="ltr">${escape(p.speed_limit)} Mbps</span>`:'نامحدود'}</td><td>${Number(p.device_limit)>0?escape(p.device_limit):'نامحدود'}</td><td>${escape(trafficResetLabel(p.reset_traffic_method))}</td><td><div class="actions"><button class="button entity-edit" data-plan-edit="${p.id}">ویرایش</button><button class="button entity-delete" data-plan-delete="${p.id}">حذف</button></div></td></tr>`).join('')}</tbody></table></div>`, 'plans'):empty(query?'پلنی با این جستجو پیدا نشد':'پلنی تعریف نشده است');
+    updateEntityList(list.length?entityCardLayout(`<div class="table-wrap"><table class="plan-table"><thead><tr><th>نام پلن</th><th>گروه دسترسی</th><th>ترافیک پلن</th><th>محدودیت سرعت</th><th>محدودیت اتصال</th><th>بازنشانی ترافیک</th><th>عملیات</th></tr></thead><tbody>${list.map(p=>`<tr data-plan-row="${p.id}"><td><b>${escape(p.name)}</b>${planUserStats(p)}</td><td>${escape(state.groups.find(g=>g.id==p.group_id)?.name||p.group_id||'—')}</td><td><span dir="ltr">${escape(p.transfer_enable)} GB</span></td><td>${Number(p.speed_limit)>0?`<span dir="ltr">${escape(p.speed_limit)} Mbps</span>`:'نامحدود'}</td><td>${Number(p.device_limit)>0?escape(p.device_limit):'نامحدود'}</td><td>${escape(trafficResetLabel(p.reset_traffic_method))}</td><td><div class="actions"><button class="button entity-edit" data-plan-edit="${p.id}">ویرایش</button><button class="button entity-delete" data-plan-delete="${p.id}">حذف</button></div></td></tr>`).join('')}</tbody></table></div>`, 'plans'):empty(query?'پلنی با این جستجو پیدا نشد':'پلنی تعریف نشده است'));
     content.querySelectorAll('[data-plan-edit]').forEach(b=>b.onclick=()=>planForm(state.plans.find(p=>p.id==b.dataset.planEdit)));
     content.querySelectorAll('[data-plan-delete]').forEach(b=>b.onclick=()=>deletePlan(state.plans.find(p=>p.id==b.dataset.planDelete)));
   }
@@ -826,19 +880,19 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
       for(const key of ['speed_limit','device_limit','capacity_limit','reset_traffic_method'])body[key]=body[key]===''?null:Number(body[key]);
       body.tags=[...new Set(body.tags.split(/[,،\n]/).map(tag=>tag.trim()).filter(Boolean))];
       body.force_update=!!form.elements.force_update?.checked;
-      try{const r=await api(plan?`/plans/${plan.id}`:'/plans',{method:plan?'PUT':'POST',body:JSON.stringify(body)});toast(r.message);closeModal();await loadPlans();}catch(err){if(err.name!=='AbortError')toast(err.message,'error');}
+      try{const r=await api(plan?`/plans/${plan.id}`:'/plans',{method:plan?'PUT':'POST',body:JSON.stringify(body)});toast(r.message);closeModal();await loadPlans(true);}catch(err){if(err.name!=='AbortError')toast(err.message,'error');}
     };
   }
   function deletePlan(plan){
     if(!plan)return;
     openModal('حذف پلن',`<p class="server-delete-description">پلن «${escape(plan.name)}» حذف شود؟ پلنی که توسط کاربران یا تعرفه‌های فروش استفاده می‌شود قابل حذف نیست.</p><div class="form-actions"><button type="button" class="button server-delete-confirm" data-confirm-plan-delete>حذف</button><button type="button" class="button cancel" data-close>انصراف</button></div>`,{kind:'server-delete'});
-    scope.querySelector('[data-confirm-plan-delete]').onclick=async()=>{try{const r=await api(`/plans/${plan.id}`,{method:'DELETE'});toast(r.message);closeModal();await loadPlans();}catch(err){if(err.name!=='AbortError')toast(err.message,'error');}};
+    scope.querySelector('[data-confirm-plan-delete]').onclick=async()=>{try{const r=await api(`/plans/${plan.id}`,{method:'DELETE'});toast(r.message);closeModal();await loadPlans(true);}catch(err){if(err.name!=='AbortError')toast(err.message,'error');}};
   }
   async function loadRouting(){
     if(!content.children.length) content.innerHTML=`<div class="two-columns">${['گروه‌های دسترسی','قوانین مسیریابی'].map(title=>`<article class="panel-card"><div class="panel-head"><h2>${title}</h2></div>${loading()}</article>`).join('')}</div>`;
     const [groups,routes]=await Promise.all([api('/groups'),api('/routes')]);
     if(disposed||state.view!=='routing')return;
-    state.groups=groups.data;state.routes=routes.data;content.innerHTML=`<div class="two-columns"><article class="panel-card"><div class="panel-head"><div><h2>گروه‌های دسترسی</h2></div><button class="button primary routing-create" id="addGroup"><i class="fas fa-plus" aria-hidden="true"></i> گروه جدید</button></div>${simpleList(state.groups,'group')}</article><article class="panel-card"><div class="panel-head"><div><h2>قوانین مسیریابی</h2></div><button class="button primary routing-create" id="addRoute"><i class="fas fa-plus" aria-hidden="true"></i> قانون جدید</button></div>${simpleList(state.routes,'route')}</article></div>`;bindRouting()
+    state.groups=groups.data;state.routes=routes.data;const restore=saveListPosition(content);content.innerHTML=`<div class="two-columns"><article class="panel-card"><div class="panel-head"><div><h2>گروه‌های دسترسی</h2></div><button class="button primary routing-create" id="addGroup"><i class="fas fa-plus" aria-hidden="true"></i> گروه جدید</button></div>${simpleList(state.groups,'group')}</article><article class="panel-card"><div class="panel-head"><div><h2>قوانین مسیریابی</h2></div><button class="button primary routing-create" id="addRoute"><i class="fas fa-plus" aria-hidden="true"></i> قانون جدید</button></div>${simpleList(state.routes,'route')}</article></div>`;bindRouting();restore()
   }
   function simpleList(list,type){if(!list.length)return empty(type==='group'?'گروهی وجود ندارد':'قانونی وجود ندارد');return `<div class="machine-list">${list.map(x=>`<div class="machine-item"><div class="machine-top"><div><b>${escape(type==='group'?x.name:x.remarks)}</b>${type==='route'?`<small style="display:block;color:var(--muted)">${escape(({block:'مسدودسازی',direct:'اتصال مستقیم',dns:'DNS',proxy:'پروکسی'})[x.action]||x.action)} · ${escape(JSON.stringify(x.match))}</small>`:''}</div><div class="actions"><button class="button entity-edit" data-${type}-edit="${x.id}">ویرایش</button><button class="button entity-delete" data-${type}-delete="${x.id}">حذف</button></div></div></div>`).join('')}</div>`}
   function bindRouting(){scope.getElementById('addGroup').onclick=()=>groupForm();scope.getElementById('addRoute').onclick=()=>routeForm();content.querySelectorAll('[data-group-edit]').forEach(b=>b.onclick=()=>groupForm(state.groups.find(x=>x.id==b.dataset.groupEdit)));content.querySelectorAll('[data-route-edit]').forEach(b=>b.onclick=()=>routeForm(state.routes.find(x=>x.id==b.dataset.routeEdit)));content.querySelectorAll('[data-group-delete]').forEach(b=>b.onclick=()=>deleteEntity('groups',b.dataset.groupDelete));content.querySelectorAll('[data-route-delete]').forEach(b=>b.onclick=()=>deleteEntity('routes',b.dataset.routeDelete))}

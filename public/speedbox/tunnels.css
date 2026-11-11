@@ -353,3 +353,7 @@
 .tunnel-card .deployment-progress,.tunnel-maintenance-progress .deployment-progress{width:100%}
 .tunnel-card .deployment-progress .progress-value,.tunnel-maintenance-progress .progress-value{display:block;text-align:center;font-size:10px;margin-top:6px}
 .tunnel-shared-operation{margin:8px 0;font-size:10px}
+
+/* A separate action from green tested creation and neutral navigation. */
+:is(.speedbox-infrastructure,.speedbox-infrastructure-overlay) .button.tunnel-create-untested{background:rgba(59,130,246,.22);border-color:rgba(96,165,250,.65);color:#e3efff}
+:is(.speedbox-infrastructure,.speedbox-infrastructure-overlay) .button.tunnel-create-untested:hover:not(:disabled){background:rgba(59,130,246,.38);border-color:#93c5fd;color:#fff}

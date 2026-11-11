@@ -374,7 +374,7 @@ window.SpeedboxNodeEditor = (() => {
       const body=clone(draft);delete body.transfer_enable_gb;delete body.runtime;delete body.machine;delete body.parent;delete body.created_at;delete body.updated_at;delete body.id;delete body.u;delete body.d;
       body.protocol_settings=clone(draft.protocol_settings);
       if(body.type==='hysteria'){body.protocol_settings.bandwidth={...body.protocol_settings.bandwidth,up:Number(get(body,'protocol_settings.bandwidth.up',0)),down:Number(get(body,'protocol_settings.bandwidth.down',0))};}
-      try{const r=await api(node?`/nodes/${node.id}`:'/nodes',{method:node?'PUT':'POST',body:JSON.stringify(body)});if(disposed)return;toast(r.message);closeModal();await reload();}catch(error){if(error.name!=='AbortError')toast(error.message,'error');}
+      try{const r=await api(node?`/nodes/${node.id}`:'/nodes',{method:node?'PUT':'POST',body:JSON.stringify(body)});if(disposed)return;toast(r.message);closeModal();await reload(r.data);}catch(error){if(error.name!=='AbortError')toast(error.message,'error');}
     };
     return () => {disposed=true;warpSequence++;clearTimeout(warpTimer);warpState.license='';closeSub();};
   }

@@ -411,3 +411,38 @@ body:has(#app .topbar-holder) .side-drawer{right:0!important;max-width:100vw;box
 #app .speedbox-infrastructure .entity-toolbar :is(input.search,button.primary){box-sizing:border-box!important;height:var(--speedbox-list-control-height)!important;min-height:var(--speedbox-list-control-height)!important;line-height:20px!important;padding-block:0!important}
 #app .table-toolbar input.form-control,#app .speedbox-infrastructure .entity-toolbar input.search{appearance:none;-webkit-appearance:none}
 #app .table-toolbar:not(.invoice-billing-toolbar){align-items:flex-start}
+
+/* Continue the existing 1366px desktop scale through nested table controls.
+   This deliberately changes no modal heights or vertical scrolling behavior. */
+@media(min-width:1367px){
+ :root{--speedbox-ui-unit:.07320644vw;--panel-table-heading-height:calc(48 * var(--speedbox-ui-unit))}
+ #app .center-box .users-table :is(.username-text,.usage-top,.usage-top span){font-size:var(--speedbox-text-body)!important}
+ #app .center-box .users-table :is(.badge,.chip,.expiry-badge,.account-plan-badge,.code-badge,.status-badge,.online-badge,.speedbox-online-badge,.speedbox-online-count){font-size:var(--speedbox-text-small)!important;line-height:1.5;gap:calc(4 * var(--speedbox-ui-unit));padding:calc(3 * var(--speedbox-ui-unit)) calc(8 * var(--speedbox-ui-unit))}
+ #app .center-box .users-table :is(.view-btn,.btn-mini,.user-history-btn){font-size:var(--speedbox-text-small)!important;height:auto;min-height:calc(24 * var(--speedbox-ui-unit));padding:calc(4 * var(--speedbox-ui-unit)) calc(8 * var(--speedbox-ui-unit));border-radius:calc(8 * var(--speedbox-ui-unit))}
+ #app .center-box .users-table .username-text{max-width:calc(180 * var(--speedbox-ui-unit))}
+ #app .center-box .users-table .username-trigger{gap:calc(6 * var(--speedbox-ui-unit))}
+ #app .center-box .users-table .presence-dot{width:calc(7 * var(--speedbox-ui-unit));height:calc(7 * var(--speedbox-ui-unit))}
+ #app .center-box .users-table :is(.usage-bar,.usage-bar__fill){height:calc(5 * var(--speedbox-ui-unit))}
+ #app .center-box .users-table :is(.badge,.chip,.expiry-badge,.account-plan-badge,.speedbox-online-count,.view-btn,.btn-mini,.user-history-btn) i{font-size:inherit!important}
+ #app .center-box .users-table .reservation-marker{width:1.15em;height:1.15em;font-size:inherit}
+ #app .center-box .users-table .account-plan-cell{min-width:calc(90 * var(--speedbox-ui-unit));width:calc(100 * var(--speedbox-ui-unit));max-width:calc(165 * var(--speedbox-ui-unit))}
+ #app .center-box .users-table .account-plan-badge{max-width:calc(145 * var(--speedbox-ui-unit))}
+ #app .center-box .users-table .expiry-date-cell{min-width:calc(120 * var(--speedbox-ui-unit));width:calc(156 * var(--speedbox-ui-unit));max-width:calc(180 * var(--speedbox-ui-unit))}
+ #app .center-box .users-table .usage-cell{min-width:calc(180 * var(--speedbox-ui-unit));width:calc(200 * var(--speedbox-ui-unit))}
+ #app .center-box .users-table .user-row-actions{gap:calc(5 * var(--speedbox-ui-unit))}
+ #app .center-box .panel-managed-table .node-id-badge{height:calc(28 * var(--speedbox-ui-unit));min-width:calc(28 * var(--speedbox-ui-unit));padding-inline:calc(8 * var(--speedbox-ui-unit))}
+ body .create-modal.dashboard-records-modal{width:66vw!important;max-width:92vw!important}
+ body .create-modal.speedbox-records-modal{width:74vw!important;max-width:92vw!important}
+ body .create-modal:is(.dashboard-records-modal,.speedbox-records-modal){box-sizing:border-box;min-width:0!important;padding:calc(24 * var(--speedbox-ui-unit));border-radius:calc(24 * var(--speedbox-ui-unit));font-size:var(--speedbox-text-body)}
+ body .create-modal:is(.dashboard-records-modal,.speedbox-records-modal) .create-header h3{font-size:var(--speedbox-text-heading)!important}
+ body .create-modal:is(.dashboard-records-modal,.speedbox-records-modal) :is(.dashboard-pagination-row,.traffic-pagination,.dashboard-total,.current-month-label,.speedbox-modal-platform-header .h-left span){font-size:var(--speedbox-text-small)!important}
+ body .create-modal:is(.dashboard-records-modal,.speedbox-records-modal) :is(.dashboard-pagination-row,.traffic-pagination){gap:calc(10 * var(--speedbox-ui-unit))}
+ body .create-modal:is(.dashboard-records-modal,.speedbox-records-modal) :is(.dashboard-pagination-row,.traffic-pagination) button{font-size:inherit!important;padding:calc(3 * var(--speedbox-ui-unit)) calc(8 * var(--speedbox-ui-unit));border-radius:calc(8 * var(--speedbox-ui-unit))}
+ body .create-modal:is(.dashboard-records-modal,.speedbox-records-modal) .speedbox-modal-platform-header{padding:calc(10 * var(--speedbox-ui-unit)) calc(18 * var(--speedbox-ui-unit));min-width:calc(190 * var(--speedbox-ui-unit))}
+ body .create-modal:is(.dashboard-records-modal,.speedbox-records-modal) .speedbox-modal-platform-header i{font-size:calc(22 * var(--speedbox-ui-unit))!important}
+ #app .center-box .users-table .speedbox-online-count{min-width:calc(70 * var(--speedbox-ui-unit));border-radius:calc(8 * var(--speedbox-ui-unit))}
+ #app .center-box .users-table .user-row-actions button{font-size:var(--speedbox-text-small)!important;min-width:calc(24 * var(--speedbox-ui-unit));min-height:calc(24 * var(--speedbox-ui-unit));padding:calc(4 * var(--speedbox-ui-unit)) calc(8 * var(--speedbox-ui-unit))}
+ #app .center-box .panel-managed-table :is(.badge,.node-id-badge,.entity small,.server-system,.server-last-seen,.node-traffic-top,.node-traffic-meta){font-size:var(--speedbox-text-small)!important}
+ #app .center-box .panel-managed-table .actions .button{font-size:var(--speedbox-text-small)!important;height:calc(29 * var(--speedbox-ui-unit));padding:calc(5 * var(--speedbox-ui-unit)) calc(10 * var(--speedbox-ui-unit));border-radius:calc(10 * var(--speedbox-ui-unit))}
+ body .create-modal:is(.dashboard-records-modal,.speedbox-records-modal) .back-button a{font-size:var(--speedbox-text-body)!important;padding:calc(8 * var(--speedbox-ui-unit)) calc(20 * var(--speedbox-ui-unit))}
+}
