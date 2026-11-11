@@ -6,7 +6,6 @@ import (
 	"crypto/rand"
 	"crypto/tls"
 	"errors"
-	"fmt"
 	"io"
 	"net"
 	"net/netip"
@@ -112,15 +111,13 @@ func makeFixture(t *testing.T, original ...string) *fixture {
 	} else {
 		f.closeBroker = func() { f.r.Close() }
 	}
-	f.tcp, e = net.Listen("tcp4", "127.0.0.1:0")
+	t.Cleanup(f.closeBroker)
+	f.tcp, f.udp, e = bindTestPair("")
 	if e != nil {
 		t.Fatal(e)
 	}
+	t.Cleanup(func() { f.tcp.Close(); f.udp.Close() })
 	f.port = f.tcp.Addr().(*net.TCPAddr).Port
-	f.udp, e = net.ListenPacket("udp4", fmt.Sprintf("127.0.0.1:%d", f.port))
-	if e != nil {
-		t.Fatal(e)
-	}
 	policy := origin.Policy{Required: true, Port: uint16(f.port), Registry: f.r}
 	resolve := func(src netip.AddrPort) (string, error) {
 		if f.stub != nil {
@@ -171,42 +168,36 @@ func makeFixture(t *testing.T, original ...string) *fixture {
 			}
 		}
 	}()
-	f.relay = freePort(t, "127.0.0.1")
-	f.public = freePort(t, "127.0.0.1")
-	f.egress, e = newServer(Config{Role: "egress", Secret: secret, Listen: f.relay, Targets: []int{f.port}, TCP: true, UDP: true, Broker: f.broker})
-	if e != nil {
-		t.Fatal(e)
-	}
-	f.ingress, e = newServer(Config{Role: "ingress", Secret: secret, Backend: f.relay, Routes: []Route{{f.public, f.port}}, TCP: true, UDP: true})
-	if e != nil {
-		t.Fatal(e)
-	}
-	if f.stub != nil {
-		f.egress.brokerDial = func() (net.Conn, error) {
-			if strings.HasSuffix(f.egress.cfg.Broker, "missing.sock") {
-				return nil, errors.New("missing broker")
-			}
-			return f.stub.dial()
-		}
-	}
-	// The runner permits loopback sockets only; model the authenticated public
-	// listener's RemoteAddr while exercising real TCP/UDP and the real broker.
-	f.ingress.original = func(a net.Addr) (netip.AddrPort, error) {
-		p, e := addr(a)
-		return netip.AddrPortFrom(netip.MustParseAddr(f.original), p.Port()), e
-	}
 	ctx, cancel := context.WithCancel(context.Background())
 	f.cancel = cancel
-	bound := make(chan error, 4)
-	go f.egress.tcp(ctx, f.relay, 0, bound)
-	go f.egress.udp(ctx, f.relay, 0, bound)
-	go f.ingress.tcp(ctx, f.public, f.port, bound)
-	go f.ingress.udp(ctx, f.public, f.port, bound)
-	for i := 0; i < 4; i++ {
-		if e = <-bound; e != nil {
-			t.Fatal(e)
+	t.Cleanup(cancel)
+	f.egress, f.relay = startTestEndpoint(t, ctx, 0, false, func(address string) (*server, error) {
+		s, err := newServer(Config{Role: "egress", Secret: secret, Listen: address, Targets: []int{f.port}, TCP: true, UDP: true, Broker: f.broker})
+		if err != nil {
+			return nil, err
 		}
-	}
+		if f.stub != nil {
+			s.brokerDial = func() (net.Conn, error) {
+				if strings.HasSuffix(s.cfg.Broker, "missing.sock") {
+					return nil, errors.New("missing broker")
+				}
+				return f.stub.dial()
+			}
+		}
+		return s, nil
+	})
+	f.ingress, f.public = startTestEndpoint(t, ctx, f.port, false, func(address string) (*server, error) {
+		s, err := newServer(Config{Role: "ingress", Secret: secret, Backend: f.relay, Routes: []Route{{address, f.port}}, TCP: true, UDP: true})
+		if err != nil {
+			return nil, err
+		}
+		// Model a public source while exercising real loopback TCP/UDP.
+		s.original = func(a net.Addr) (netip.AddrPort, error) {
+			p, err := addr(a)
+			return netip.AddrPortFrom(netip.MustParseAddr(f.original), p.Port()), err
+		}
+		return s, nil
+	})
 	go f.ingress.reap(ctx)
 	go f.egress.reap(ctx)
 	t.Cleanup(func() {
@@ -229,7 +220,6 @@ func makeFixture(t *testing.T, original ...string) *fixture {
 			v.close()
 		}
 		f.egress.mu.Unlock()
-		f.closeBroker()
 	})
 	return f
 }
@@ -591,18 +581,17 @@ func TestConfiguredCarrierProbeRequiresAuthenticatedPeerAndBroker(t *testing.T) 
 }
 
 func TestHealthEndpointAuthenticatesBothProtocolsWithoutOpeningNodePorts(t *testing.T) {
-	relay := freePort(t, "127.0.0.1")
 	ready := filepath.Join(t.TempDir(), "run", "health.ready")
-	h, e := newServer(Config{Role: "health", Secret: secret, Listen: relay, Targets: []int{1}, TCP: true, UDP: true, ReadyFile: ready})
-	if e != nil {
-		t.Fatal(e)
-	}
-	h.brokerDial = func() (net.Conn, error) { panic("health-only endpoint must not register or connect to nodes") }
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	done := make(chan error, 1)
-	go func() { done <- h.run(ctx) }()
-	eventually(t, func() bool { _, e := os.Stat(ready); return e == nil })
+	_, relay := startTestEndpoint(t, ctx, 0, true, func(address string) (*server, error) {
+		h, err := newServer(Config{Role: "health", Secret: secret, Listen: address, Targets: []int{1}, TCP: true, UDP: true, ReadyFile: ready})
+		if err != nil {
+			return nil, err
+		}
+		h.brokerDial = func() (net.Conn, error) { panic("health-only endpoint must not register or connect to nodes") }
+		return h, nil
+	})
 	cfg := Config{Role: "ingress", Secret: secret, Backend: relay, Routes: []Route{{"127.0.0.1:0", 1}}, TCP: true, UDP: true}
 	client, e := newServer(cfg)
 	if e != nil {
@@ -638,7 +627,5 @@ func TestHealthEndpointAuthenticatesBothProtocolsWithoutOpeningNodePorts(t *test
 	}
 	secure.Close()
 	cancel()
-	if e := <-done; e != nil {
-		t.Fatal(e)
-	}
+	eventually(t, func() bool { _, err := os.Stat(ready); return os.IsNotExist(err) })
 }

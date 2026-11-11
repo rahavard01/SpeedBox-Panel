@@ -9,7 +9,8 @@
     "scripts/tunnel-origin/go.mod": "7229046022a13890bd160be4ed3450b6795ba3e9060182e2c8c3d48f825b4ca9",
     "scripts/tunnel-origin/host.py": "9125d746bda87d31b0fa3f8456c58028a051c4a3d414a836fe23e85e7f179a16",
     "scripts/tunnel-origin/main.go": "6d91841587eb17ab5890b440f6cb5f11ead365ba09a517b07c73d5d399c74194",
-    "scripts/tunnel-origin/main_test.go": "5d6fa2f2f4d2b8285bc186bf112b7003ce63007ac36d31a8e3e4ab60796faeea",
+    "scripts/tunnel-origin/main_test.go": "621c5d8a5a14f9ebd7b2ddb61294f0a158c69848a3fb28a927e6de6b260185f5",
+    "scripts/tunnel-origin/port_helpers_test.go": "19ac9cda736f1ef440abb258233400aa1601ec43f8c2a2f2054d2dd542d50ce1",
     "scripts/tunnel-origin/probe.go": "da43f00bff829a55aa147a56b8df6731bb7503c74d34447003d65788a9c18df6",
     "scripts/tunnel-origin/tls.go": "bda06689015b8f9dae4da4e1d69f3b284fcd9c4609f94abde677c3660b762aaa",
     "scripts/tunnel-origin/udp.go": "c55aafeeee9fac629930bcfd4527fe6584d7424fd02e4bace75706dbca90abe4",
@@ -23,9 +24,9 @@
       "bytes": 5460130,
       "selftest": {
         "file": "selftest-linux-amd64.gz",
-        "sha256": "5f95b7c46df1a728066942c1fe5323f0868af4f47a721173817ab090ce0bc714",
-        "binary_sha256": "eb0acd34c2074e4ef48ba0248ecfa281ee5f46f979a36cc7459693b6c12b3121",
-        "bytes": 6439074
+        "sha256": "8ebdd15fe3aeb95200c065a82eed30246dc78ca7b420cae0914044da65eabb14",
+        "binary_sha256": "d6a9325471f93bb5ccdf7a4dfee22a010b2c3ac1702e81b928de5392bcd5cd4b",
+        "bytes": 6455458
       }
     },
     "arm64": {
@@ -35,9 +36,9 @@
       "bytes": 4980898,
       "selftest": {
         "file": "selftest-linux-arm64.gz",
-        "sha256": "8e22a915a265a1dddcbef9f844584ca02b9d52d2cdcffb9350740ef2edb32d41",
-        "binary_sha256": "e77b295cf8c6f4e2121e34d31452f03d92b56b3cd56bb7b79da8d674f75a250e",
-        "bytes": 5898402
+        "sha256": "09e3e4a92eed2a8e7f349ae717ac15ce239909f31d29cbc3fecd3f8a80256706",
+        "binary_sha256": "dabcf03359d9ed6d06a30c5089ed2ed0f3d79e62e292cea58db7971a64a3d9f4",
+        "bytes": 5963938
       }
     }
   }
