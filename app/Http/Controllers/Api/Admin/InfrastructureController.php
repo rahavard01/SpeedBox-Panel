@@ -29,13 +29,16 @@ class InfrastructureController extends Controller
     {
     }
 
-    public function overview(): JsonResponse
+    public function overview(Request $request): JsonResponse
     {
+        $resources = app(\App\Services\PanelHostResources::class)->snapshot();
+        if ($request->boolean('resources_only')) return response()->json(['data' => ['resources' => $resources]]);
         $machines = ServerMachine::withCount('nodes')->get();
         $nodes = ProxyServer::with('parent')->get();
         $tunnels = ServerTunnel::where('status', '!=', 'deleted')->get(['id', 'status']);
         return response()->json(['data' => [
             'managed_servers' => ManagedServer::count(),
+            'resources' => $resources,
             'machines' => $machines->count(),
             'online_machines' => $machines->filter(fn ($machine) => $machine->is_active && $machine->last_seen_at >= time() - 300)->count(),
             'nodes' => $nodes->count(),

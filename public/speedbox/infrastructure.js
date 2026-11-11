@@ -11,6 +11,7 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
   const timers = new Set();
   const viewCache = new Map();
   let savingCount = 0;
+  let panelResourceTimer = null, panelResourceVersion = 0, panelResourceRequest = null, panelResourceWarmup = 0;
   let serverPollTimer = null;
   let serverFetchVersion = 0;
   let nodePollTimer = null;
@@ -209,6 +210,7 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
 
   function renderOverview(o,initial=false){
     content.innerHTML=`
+      <section class="panel-card panel-host-resources" aria-labelledby="panel-host-resources-title"><div class="panel-head"><h2 class="dashboard-card-title" id="panel-host-resources-title">${dashboardIcon('Activity')}<span>وضعیت سرور پنل</span></h2><small data-panel-resource-time></small></div><div class="panel-resource-grid" data-panel-resource-grid></div></section>
       <div class="stats-grid">
         ${stat('سرورهای مدیریت‌شده',o.managed_servers,'server','servers')}
         ${stat('نودهای فعال',`${o.online_nodes} / ${o.nodes}`,'project-diagram','nodes')}
@@ -221,6 +223,7 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
       </div>
       <div class="traffic-rank-grid">${rankCard('node')}${rankCard('user')}</div>
       <div class="queue-grid"><article class="panel-card" id="queueStatusCard"></article><article class="panel-card" id="jobDetailsCard"></article></div>`;
+    renderPanelResources(o.resources);
     bindRankControls();
     renderQueue({status:'not_seen',wait:0,recentJobs:0,jobsPerMinute:0,peakJobsPerMinute:0,failedJobs:0,processes:0,workload:[],active_queues:[],queueWithMaxRuntime:null});
     content.querySelector('[data-go="servers"]')?.addEventListener('click',()=>switchView('servers'));
@@ -235,8 +238,44 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
     if(disposed||state.view!=='overview')return;
     state.overview=overview.data;state.servers=servers.data;state.machines=machines.data;state.nodes=nodes.data;
     renderOverview(state.overview);
+    panelResourceWarmup=0;
+    schedulePanelResources();
     await Promise.all([loadRank('node'),loadRank('user'),loadQueue()]);
   }
+  function renderPanelResources(resources,failed=false){
+    const grid=content.querySelector('[data-panel-resource-grid]');if(!grid)return;
+    const metrics=[['cpu','CPU','microchip',resources?.cpu,null],['memory','رم','memory',resources?.memory?.percent,resources?.memory],['disk','دیسک پنل','hdd',resources?.disk?.percent,resources?.disk]];
+    grid.innerHTML=metrics.map(([key,label,icon,percent,usage])=>{
+      const known=typeof percent==='number'&&Number.isFinite(percent),value=known?Math.max(0,Math.min(100,percent)):0;
+      const text=known?faDigits(value.toFixed(1))+'٪':'—';
+      const detail=usage?`${bytes(usage.used)} / ${bytes(usage.total)}`:key==='cpu'?(known?'مصرف پردازنده':resources?'در انتظار نمونه':'در انتظار اطلاعات'):'اطلاعات در دسترس نیست';
+      return `<div class="panel-resource-item"><div class="panel-resource-ring ${!known?'is-unknown':value>=90?'high':value>=70?'medium':''}" ${known?`role="meter" aria-label="${label}" aria-valuenow="${value.toFixed(1)}" aria-valuemin="0" aria-valuemax="100"`:`role="img" aria-label="${label}: اطلاعات در دسترس نیست"`}><svg viewBox="0 0 120 120" aria-hidden="true"><circle class="ring-track" cx="60" cy="60" r="50"/><circle class="ring-value" cx="60" cy="60" r="50" pathLength="100" stroke-dasharray="${value} 100"/></svg><strong>${text}</strong></div><div class="panel-resource-label"><i class="fas fa-${icon}" aria-hidden="true"></i><span>${label}</span></div><small class="panel-resource-detail" dir="${usage?'ltr':'rtl'}">${escape(faDigits(detail))}</small></div>`;
+    }).join('');
+    const stamp=content.querySelector('[data-panel-resource-time]');
+    stamp.textContent=failed?'به‌روزرسانی نشد؛ مقادیر آخرین دریافت نمایش داده می‌شوند':resources?.sampled_at?'آخرین دریافت: '+new Date(resources.sampled_at*1000).toLocaleTimeString('fa-IR',{hour:'2-digit',minute:'2-digit',second:'2-digit'}):'در حال دریافت اطلاعات';
+  }
+  function cancelPanelResources(){
+    clearTimeout(panelResourceTimer);timers.delete(panelResourceTimer);panelResourceTimer=null;
+    panelResourceVersion++;panelResourceRequest?.abort();panelResourceRequest=null;
+  }
+  function schedulePanelResources(){
+    clearTimeout(panelResourceTimer);timers.delete(panelResourceTimer);
+    if(disposed||state.view!=='overview'||document.hidden)return;
+    panelResourceTimer=later(loadPanelResources,state.overview?.resources?.cpu===null&&panelResourceWarmup++<2?2500:30000);
+  }
+  async function loadPanelResources(){
+    if(disposed||state.view!=='overview'||document.hidden)return;
+    const version=++panelResourceVersion;
+    panelResourceRequest?.abort();panelResourceRequest=new AbortController();
+    try{
+      const reply=await api('/overview?resources_only=1',{signal:panelResourceRequest.signal});
+      if(disposed||version!==panelResourceVersion||state.view!=='overview')return;
+      state.overview={...state.overview,resources:reply.data.resources};renderPanelResources(reply.data.resources);
+    }catch(error){if(error.name!=='AbortError'&&version===panelResourceVersion&&state.view==='overview')renderPanelResources(state.overview?.resources,true);}
+    finally{if(version===panelResourceVersion){panelResourceRequest=null;schedulePanelResources();}}
+  }
+  const onPanelResourceVisibility=()=>{if(document.hidden)cancelPanelResources();else if(state.view==='overview')loadPanelResources();};
+  document.addEventListener('visibilitychange',onPanelResourceVisibility);
   function rankCard(type) {
     const rank = rankState[type];
     return `<article class="panel-card traffic-rank-card" data-rank-card="${type}">
@@ -1170,6 +1209,7 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
   }
   function showView(view) {
     if (disposed) return;
+    cancelPanelResources();
     const selected = titles[view] ? view : 'overview';
     if(selected!==state.view)nodeTouchCleanup?.();
     emergencySession?.dispose(); emergencySession=null;
@@ -1187,6 +1227,7 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
   return {
     showView,
     dispose() {
+      cancelPanelResources();document.removeEventListener('visibilitychange',onPanelResourceVisibility);
       nodeTouchCleanup?.();
       closeRankCalendar();
       nodeEditorDispose?.();nodeEditorDispose=null;
