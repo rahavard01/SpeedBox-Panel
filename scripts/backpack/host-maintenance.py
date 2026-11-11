@@ -104,21 +104,33 @@ def read_sysctl(key):
 
 def reserved_ports(request):
     needed = {int(p) for p in request.get('ports', []) if 1 <= int(p) <= 65535}
-    # Include other services and manual tunnels, without touching their configs.
+    # UDP UNCONN includes transient outbound sockets (DNS/proxy traffic), not
+    # just service listeners. Only declared ports and TCP listeners are required
+    # reservations; a new outbound UDP socket must not invalidate optimization.
     ok, text = run(['ss', '-H', '-lntu'])
     if not ok:
         raise RuntimeError('could not inspect listening ports')
+    udp_ports = set()
     for line in text.splitlines():
         columns = line.split()
         if len(columns) >= 5:
             match = re.search(r':(\d+)$', columns[4])
             if match:
-                needed.add(int(match[1]))
+                port = int(match[1])
+                if columns[0] == 'tcp' and columns[1] == 'LISTEN':
+                    needed.add(port)
+                elif columns[0] == 'udp':
+                    udp_ports.add(port)
     current = ports(read_sysctl('net.ipv4.ip_local_reserved_ports') or '')
     owned = set(read_json(RESERVATIONS, {}).get('added', []))
     # Remove only ports this integration added; preserve all external reservations.
     external = current - owned
-    return needed, external | needed, sorted(needed - external)
+    # Preserve previous managed reservations while a UDP socket still uses them:
+    # an old automatically discovered port may belong to a manual UDP service.
+    # Never add newly observed UDP ports unless explicitly declared by the panel.
+    retained_udp = current & owned & udp_ports
+    combined = external | needed | retained_udp
+    return needed, combined, sorted(combined - external)
 
 
 def boot_settings():

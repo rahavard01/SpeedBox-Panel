@@ -7,13 +7,19 @@ import tempfile
 import tarfile
 import re
 import unittest
+import sys
 from pathlib import Path
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[2]
 spec = importlib.util.spec_from_file_location('maintenance', ROOT/'scripts/backpack/host-maintenance.py')
 m = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(m)
+if sys.platform == 'win32':
+    # Production uses POSIX locking; these isolated tests mock the host boundary.
+    with patch.dict(sys.modules, {'fcntl': unittest.mock.Mock()}):
+        spec.loader.exec_module(m)
+else:
+    spec.loader.exec_module(m)
 
 
 class HostMaintenanceTest(unittest.TestCase):
@@ -30,7 +36,8 @@ class HostMaintenanceTest(unittest.TestCase):
         self.restarts = []
         self.unit = 'speedbox-backpack-sb-'+'a'*32+'.service'
         self.running = [self.unit]
-        self.patches = [patch.object(m, 'ENGINE', self.engine), patch.object(m, 'STATE', root/'engine/installed.json'),
+        self.patches = [patch.object(m.os, 'geteuid', return_value=0, create=True),
+            patch.object(m, 'ENGINE', self.engine), patch.object(m, 'STATE', root/'engine/installed.json'),
             patch.object(m, 'SYSCTL', self.saved), patch.object(m, 'LIMITS', self.limits),
             patch.object(m, 'UPDATES', root/'engine/updates'), patch.object(m, 'RESERVATIONS', self.reserve),
             patch.object(m, 'run', side_effect=self.run_command), patch.object(m, 'boot_settings', side_effect=self.boot),
@@ -40,7 +47,7 @@ class HostMaintenanceTest(unittest.TestCase):
         self.archive = root/'package.gz'
         self.binary = b'new verified integration executable'
         self.archive.write_bytes(gzip.compress(self.binary))
-        self.request = {'action':'status', 'ports':[8000,8744], 'tuning':self.tuning,
+        self.request = {'action':'status', 'ports':[8000,8744,2053], 'tuning':self.tuning,
             'archive':str(self.archive), 'revision':'b'*32,
             'expected':{'version':'v1.9.0','protocol':1,'binary_sha256':hashlib.sha256(self.binary).hexdigest(),
                 'archive_sha256':m.digest(self.archive)}}
@@ -71,7 +78,7 @@ class HostMaintenanceTest(unittest.TestCase):
             if args[1]=='show':return True,'999999'
             if args[1]=='restart':
                 self.restarts.append(args[-1]);return not self.fail_restart,'restart result'
-        if args[0].endswith('/next'):
+        if Path(args[0]).name == 'next':
             return True,json.dumps({'ok':True,'data':{'protocol':1}})
         raise AssertionError(args)
 
@@ -114,6 +121,42 @@ class HostMaintenanceTest(unittest.TestCase):
         result=m.execute({**self.request,'action':'optimize'})
         self.assertFalse(result['status']['optimized'])
         self.assertTrue(any('permission denied' in line for line in result['logs']))
+
+    def test_new_outbound_udp_sockets_do_not_invalidate_optimization(self):
+        m.execute({**self.request,'action':'optimize'})
+        before = self.saved.read_bytes()
+        original = self.run_command
+        def changed(args, timeout=25):
+            if args[0] == 'ss':
+                return True, 'tcp LISTEN 0 128 0.0.0.0:22 0.0.0.0:*\n' + '\n'.join(
+                    f'udp UNCONN 0 0 [::]:{p} [::]:*' for p in range(33000,33154))
+            return original(args, timeout)
+        with patch.object(m, 'run', side_effect=changed):
+            result = m.execute(self.request)
+        self.assertTrue(result['status']['optimized'])
+        self.assertTrue(result['status']['reserved_ports_ok'])
+        self.assertEqual(before, self.saved.read_bytes())
+
+    def test_optimize_does_not_reserve_undeclared_udp_sockets(self):
+        request = {**self.request, 'ports':[8000,8744]}
+        m.execute({**request,'action':'optimize'})
+        reserved = m.ports(self.kernel['net.ipv4.ip_local_reserved_ports'])
+        self.assertNotIn(2053, reserved)
+        self.assertIn(22, reserved)
+
+    def test_previous_managed_udp_and_external_reservations_survive(self):
+        self.kernel['net.ipv4.ip_local_reserved_ports'] = '2053,40000-40002'
+        m.atomic(self.reserve, json.dumps({'added':[2053]}))
+        m.execute({**self.request,'action':'optimize','ports':[8000,8744]})
+        self.assertTrue({2053,40000,40001,40002} <= m.ports(
+            self.kernel['net.ipv4.ip_local_reserved_ports']))
+        self.assertIn(2053, m.read_json(self.reserve)['added'])
+
+    def test_missing_declared_udp_port_still_invalidates_optimization(self):
+        m.execute({**self.request,'action':'optimize'})
+        remaining = m.ports(self.kernel['net.ipv4.ip_local_reserved_ports']) - {2053}
+        self.kernel['net.ipv4.ip_local_reserved_ports'] = m.port_text(remaining)
+        self.assertFalse(m.execute(self.request)['status']['reserved_ports_ok'])
 
     def test_shared_host_new_ports_are_merged_and_only_owned_old_ports_removed(self):
         m.execute({**self.request,'action':'optimize'})
