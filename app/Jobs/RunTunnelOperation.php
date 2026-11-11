@@ -8,6 +8,7 @@ use Illuminate\Contracts\Queue\{ShouldBeEncrypted, ShouldQueue};
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\{InteractsWithQueue, SerializesModels};
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Throwable;
 
 class RunTunnelOperation implements ShouldQueue, ShouldBeEncrypted
@@ -22,9 +23,14 @@ class RunTunnelOperation implements ShouldQueue, ShouldBeEncrypted
         $lock = Cache::lock('speedbox-tunnel-operation-'.$this->operationId, 630);
         if (!$lock->get()) return;
         try {
-            $op = TunnelOperation::findOrFail($this->operationId);
-            if (!in_array($op->status,['queued','running'])) return;
-            $op->update(['status'=>'running']);
+            $op = DB::transaction(function () {
+                $op = TunnelOperation::lockForUpdate()->findOrFail($this->operationId);
+                if (!in_array($op->status, ['queued','running'])) return null;
+                $started = microtime(true);
+                $op->update(['status'=>'running', 'payload'=>[...($op->payload ?? []), '_execution_started'=>$op->payload['_execution_started'] ?? $started, '_queue_ms'=>$op->payload['_queue_ms'] ?? max(0, (int)round(($started-(float)$op->created_at->format('U.u'))*1000))]]);
+                return $op;
+            });
+            if (!$op) return;
             if ($op->action==='delete') { app(\App\Services\TunnelRemoval::class)->run($op,$remote,$manager);return; }
             if ($op->test_id) $this->test($op,$remote,$manager);
             else $this->tunnel($op,$remote,$manager);
@@ -163,7 +169,7 @@ class RunTunnelOperation implements ShouldQueue, ShouldBeEncrypted
             $snapshots=[];$policyChanged=false;$wasCdn=($t->settings['connection_mode']??'direct')==='cdn';
             try {
                 foreach ($servers as $side=>$server) {
-                    $remote->ensure($server);
+                    $this->timed($op, 'prepare_'.$side, fn() => $remote->ensure($server));
                     app(\App\Services\TunnelCdnRemote::class)->revision($t,$settings,$side,'snapshot',$revision);
                     $remote->call($server,['action'=>'snapshot','name'=>$t->remote_name,'revision'=>$revision]);
                     $snapshots[$side]=$server;
@@ -176,7 +182,7 @@ class RunTunnelOperation implements ShouldQueue, ShouldBeEncrypted
                     $op->update(['progress'=>$side===$order[0]?35:70,'message'=>'در حال اعمال تنظیمات سمت '.($side==='iran'?'ایران':'خارج').'…']);
                     $this->refreshReservations($servers[$side],$remote,$manager,$settings);
                     app(\App\Services\TunnelCdnRemote::class)->prepare($t,$settings,$side);
-                    $result[$side]=$remote->call($servers[$side],$this->applyRequest($t,$settings,$side));
+                    $result[$side]=$this->timed($op, 'apply_'.$side, fn() => $remote->call($servers[$side],$this->applyRequest($t,$settings,$side)));
                     if ((bool)($result[$side]['active']??false)!==(bool)($settings['enabled']??true)) throw new \RuntimeException('service_state_mismatch');
                 }
                 if(($settings['enabled']??true)&&($settings['connection_mode']??'direct')==='cdn'){
@@ -193,8 +199,8 @@ class RunTunnelOperation implements ShouldQueue, ShouldBeEncrypted
                 $t->update(['settings'=>$settings,'name'=>$op->payload['name'] ?? $t->name,'status'=>($settings['enabled']??true)?'checking':'stopped','remote_status'=>$result,'message'=>'تنظیمات دو سمت اعمال شد؛ وضعیت اتصال را بررسی کنید.']);
                 $policyChanged=true;
                 $op->update(['payload'=>[...$op->payload,'phase'=>'activate-origin']]);
-                app(\App\Services\TunnelOriginRemote::class)->refreshNodePolicy($t,$beforeSettings,$settings);
-                app(\App\Services\TunnelOriginRemote::class)->activate($t,$settings);
+                $this->timed($op, 'node_policy', fn() => app(\App\Services\TunnelOriginRemote::class)->refreshNodePolicy($t,$beforeSettings,$settings));
+                $this->timed($op, 'activate', fn() => app(\App\Services\TunnelOriginRemote::class)->activate($t,$settings));
                 $op->update(['payload'=>[...$op->payload,'phase'=>'origin-committed']]);
                 foreach ($servers as $side=>$server) { $this->refreshReservations($server,$remote,$manager);try {app(\App\Services\TunnelCdnRemote::class)->revision($t,$settings,$side,'commit',$revision,$wasCdn);$remote->call($server,['action'=>'commit','name'=>$t->remote_name,'revision'=>$revision]);} catch(Throwable) {} }
             } catch (Throwable $e) {
@@ -208,9 +214,20 @@ class RunTunnelOperation implements ShouldQueue, ShouldBeEncrypted
                 foreach($servers as $server)$this->refreshReservations($server,$remote,$manager);$manager->finish($op,'failed',$message,['rollback'=>$restored,'error'=>str_replace($t->secret,'[secret]',$e->getMessage())]);return;
             }
         } else {
+            $batch = null;
+            if ($op->action === 'status') {
+                $requests = [];
+                foreach ($servers as $side => $server) {
+                    $requests[$side] = ['action'=>'status', 'name'=>$t->remote_name,
+                        'enabled'=>$settings['enabled'] ?? true,
+                        'target_ports'=>$side==='foreign'?array_column($settings['mappings'],'target_port'):[],
+                        'udp'=>\App\Services\TrustedTunnelOrigin::udpOnlyBackpack($t)||(bool)($settings['accept_udp']??false)];
+                }
+                $batch = $remote->statuses($servers, $requests);
+            }
             foreach ($servers as $side=>$server) {
                 try {
-                    $result[$side]=$remote->call($server,['action'=>$op->action,'name'=>$t->remote_name,
+                    $result[$side]=$batch !== null ? $batch[$side] : $remote->call($server,['action'=>$op->action,'name'=>$t->remote_name,
                         'enabled'=>$op->action==='start'?true:($op->action==='stop'?false:($settings['enabled']??true)),
                         ...($op->action==='start'?['origin_plan'=>($plan=\App\Services\TrustedTunnelOrigin::plan($t,[...$settings,'enabled'=>true],$side))?[...$plan,'staged'=>true]:null]:[]),
                         'target_ports'=>$side==='foreign'?array_column($settings['mappings'],'target_port'):[], 'udp'=>\App\Services\TrustedTunnelOrigin::udpOnlyBackpack($t)||(bool)($settings['accept_udp']??false)]);
@@ -238,6 +255,20 @@ class RunTunnelOperation implements ShouldQueue, ShouldBeEncrypted
         }
         if($op->action==='delete')foreach($servers as $server)$this->refreshReservations($server,$remote,$manager);
         $manager->finish($op,'succeeded',$op->action==='logs'?'گزارش دو سمت دریافت شد.':$t->message,$result);
+    }
+
+    private function timed(TunnelOperation $op, string $phase, callable $callback): mixed
+    {
+        $start = microtime(true);
+        try { return $callback(); }
+        finally {
+            // Diagnostics must not turn a successful remote operation into a failure.
+            try {
+                $payload = $op->payload ?? [];
+                $payload['_phase_ms'][$phase] = (int)round((microtime(true)-$start)*1000);
+                $op->update(['payload'=>$payload]);
+            } catch (Throwable) {}
+        }
     }
 
     private function refreshReservations(ManagedServer $server,BackpackRemote $remote,TunnelManager $manager,array $extra=[]): void

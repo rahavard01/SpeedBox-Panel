@@ -7,7 +7,35 @@ use RuntimeException;
 /** The adapter has no public management API. Install and configure via SSH. */
 final class TunnelOriginRemote
 {
-    private array $ready=[];
+    // A receipt is usable only for this exact release, boot and current files.
+    private const INSTALLED_PROBE = <<<'PY'
+import hashlib,json,os,pathlib,shutil,stat,sys
+expected=json.load(sys.stdin)
+root=pathlib.Path(sys.argv[1])
+arch={'x86_64':'amd64','aarch64':'arm64','arm64':'arm64'}.get(os.uname().machine,'unknown')
+def safe(path,executable=False):
+    try:
+        s=path.lstat()
+        return stat.S_ISREG(s.st_mode) and s.st_uid==os.geteuid() and not s.st_mode&0o022 and (not executable or bool(s.st_mode&0o100))
+    except OSError:return False
+def digest(path):
+    try:return hashlib.sha256(path.read_bytes()).hexdigest()
+    except OSError:return ''
+binary=root/'tunnel-origin';helper=root/'host.py';receipt=root/'verified.json'
+current=digest(binary) if safe(binary,True) else ''
+ready=False
+try:
+    directory=root.lstat()
+    boot=pathlib.Path('/proc/sys/kernel/random/boot_id').read_text().strip()
+    entry=expected['archives'][arch]
+    ready=(stat.S_ISDIR(directory.st_mode) and directory.st_uid==os.geteuid() and not directory.st_mode&0o022
+        and safe(receipt) and stat.S_IMODE(receipt.stat().st_mode)==0o600
+        and safe(helper,True) and shutil.which('systemctl') is not None
+        and current==entry['binary_sha256'] and digest(helper)==expected['helper']
+        and json.loads(receipt.read_text())=={'release':expected['release'],'boot':boot})
+except (OSError,ValueError,KeyError):pass
+print(json.dumps({'arch':arch,'current':current,'ready':bool(ready)}))
+PY;
     public function __construct(private readonly SshExecutor $ssh) {}
 
     /** Expose a newly upgraded ingress only after the node loaded its policy. */
@@ -115,20 +143,24 @@ PY;
     {
         $manifest=json_decode(file_get_contents(base_path('origin-dist/manifest.json')),true,16,JSON_THROW_ON_ERROR);
         foreach($manifest['source_files'] as $file=>$hash)if(!hash_equals($hash,hash('sha256',str_replace("\r\n","\n",file_get_contents(base_path($file))))))throw new RuntimeException('سورس و بستهٔ بازیابی مبدأ هماهنگ نیستند.');
-        $key=$server->id.':'.hash('sha256',json_encode($manifest));if(isset($this->ready[$key]))return;
-        $arch=match(trim($this->ssh->run($server,'uname -m',15))){'x86_64'=>'amd64','aarch64','arm64'=>'arm64',default=>throw new RuntimeException('معماری بازیابی مبدأ پشتیبانی نمی‌شود.')};
+        $helper=base_path('scripts/tunnel-origin/host.py');$helperHash=hash_file('sha256',$helper);
+        $release=hash('sha256',json_encode([$manifest,$helperHash]));
+        $sudo=$server->ssh_user==='root'?'':'sudo -n ';
+        $probe=json_decode($this->ssh->run($server,$sudo.'python3 -c '.escapeshellarg(self::INSTALLED_PROBE).' /opt/speedbox-origin',15,
+            json_encode(['release'=>$release,'helper'=>$helperHash,'archives'=>$manifest['archives']],JSON_THROW_ON_ERROR)),true,16,JSON_THROW_ON_ERROR);
+        $arch=$probe['arch']??'';
+        if(!in_array($arch,['amd64','arm64'],true))throw new RuntimeException('معماری بازیابی مبدأ پشتیبانی نمی‌شود.');
         $entry=$manifest['archives'][$arch];$local=base_path('origin-dist/tunnel-origin-linux-'.$arch.'.gz');
         if(!hash_equals($entry['sha256'],hash_file('sha256',$local)))throw new RuntimeException('صحت بستهٔ بازیابی مبدأ تأیید نشد.');
-        $sudo=$server->ssh_user==='root'?'':'sudo -n ';
+        if(($probe['ready']??false)===true)return;
         $dir=trim($this->ssh->run($server,'umask 077; mktemp -d /tmp/speedbox-origin.XXXXXXXX',15));
         if(!preg_match('~^/tmp/speedbox-origin\.[A-Za-z0-9]+$~D',$dir))throw new RuntimeException('مسیر موقت بازیابی مبدأ معتبر نیست.');
         try {
-            $helper=base_path('scripts/tunnel-origin/host.py');$helperHash=hash_file('sha256',$helper);
             $this->ssh->upload($server,$helper,$dir.'/host.py');
             $test=$entry['selftest'];$testLocal=base_path('origin-dist/'.$test['file']);
             if(!hash_equals($test['sha256'],hash_file('sha256',$testLocal)))throw new RuntimeException('صحت تست محلی بازیابی مبدأ تأیید نشد.');
             $this->ssh->upload($server,$testLocal,$dir.'/selftest.gz');
-            $current=trim($this->ssh->run($server,$sudo.'sh -c '.escapeshellarg('if [ -f /opt/speedbox-origin/tunnel-origin ]; then sha256sum /opt/speedbox-origin/tunnel-origin | cut -d " " -f 1; fi'),15));
+            $current=$probe['current']??'';
             if($current!==$entry['binary_sha256'])$this->ssh->upload($server,$local,$dir.'/binary.gz');
             $script='set -eu; command -v python3 >/dev/null; command -v systemctl >/dev/null; install -d -m 0755 /opt/speedbox-origin; '
                 .'test "$(sha256sum '.escapeshellarg($dir.'/selftest.gz').' | cut -d " " -f 1)" = '.escapeshellarg($test['sha256']).'; gzip -dc '.escapeshellarg($dir.'/selftest.gz').' > '.escapeshellarg($dir.'/selftest').'; '
@@ -138,7 +170,9 @@ PY;
                 .'install -m 0700 '.escapeshellarg($dir.'/host.py').' /opt/speedbox-origin/host.py.new; mv /opt/speedbox-origin/host.py.new /opt/speedbox-origin/host.py; ';
             if($current!==$entry['binary_sha256'])$script.='test "$(sha256sum '.escapeshellarg($dir.'/binary.gz').' | cut -d " " -f 1)" = '.escapeshellarg($entry['sha256']).'; gzip -dc '.escapeshellarg($dir.'/binary.gz').' > /opt/speedbox-origin/tunnel-origin.new; '
                 .'test "$(sha256sum /opt/speedbox-origin/tunnel-origin.new | cut -d " " -f 1)" = '.escapeshellarg($entry['binary_sha256']).'; chmod 0755 /opt/speedbox-origin/tunnel-origin.new; mv /opt/speedbox-origin/tunnel-origin.new /opt/speedbox-origin/tunnel-origin; ';
-            $this->ssh->run($server,$sudo.'sh -c '.escapeshellarg($script),90);$this->ready[$key]=true;
+            $receiptCode='import json,os,pathlib,sys; p=pathlib.Path("/opt/speedbox-origin/verified.json"); q=p.with_suffix(".new"); q.write_text(json.dumps({"release":sys.argv[1],"boot":pathlib.Path("/proc/sys/kernel/random/boot_id").read_text().strip()})); q.chmod(0o600); os.replace(q,p)';
+            $script.='python3 -c '.escapeshellarg($receiptCode).' '.escapeshellarg($release).';';
+            $this->ssh->run($server,$sudo.'sh -c '.escapeshellarg($script),90);
         } finally {try{$this->ssh->run($server,'rm -f -- '.implode(' ',array_map('escapeshellarg',[$dir.'/host.py',$dir.'/binary.gz',$dir.'/selftest.gz',$dir.'/selftest'])).'; rmdir -- '.escapeshellarg($dir),15);}catch(\Throwable){}}
     }
 }

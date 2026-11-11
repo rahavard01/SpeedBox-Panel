@@ -77,7 +77,7 @@ window.__SPEEDBOX_PANEL_SWITCH__ = {
     ];
     const close = (focus = false) => { open.value = false; if (focus === true) trigger.value?.focus({preventScroll:true}); };
     const focusOption = index => nextTick(() => {
-      wrapper.value?.querySelectorAll('[role=menuitemradio]')[index]?.focus();
+      wrapper.value?.querySelectorAll('[role=menuitemradio]')[index]?.focus({preventScroll:true});
     });
     const show = () => { props.beforeOpen?.(); open.value = true; focusOption(props.serverMode ? 1 : 0); };
     const closeOnResize = () => close();
@@ -87,7 +87,9 @@ window.__SPEEDBOX_PANEL_SWITCH__ = {
       document.addEventListener('click', outside);
       window.addEventListener('scroll', scroll, true);
       window.addEventListener('resize', closeOnResize);
+      window.addEventListener('blur', closeOnResize);
       window.addEventListener('resize', placeAboveBar);
+      window.visualViewport?.addEventListener('resize', placeAboveBar);
       placementObserver = new ResizeObserver(placeAboveBar);
       panelBar = wrapper.value?.closest('.top-bar');
       // Anchor the selector in the document's header space, outside the bar's
@@ -101,7 +103,9 @@ window.__SPEEDBOX_PANEL_SWITCH__ = {
       document.removeEventListener('click', outside);
       window.removeEventListener('scroll', scroll, true);
       window.removeEventListener('resize', closeOnResize);
+      window.removeEventListener('blur', closeOnResize);
       window.removeEventListener('resize', placeAboveBar);
+      window.visualViewport?.removeEventListener('resize', placeAboveBar);
       placementObserver?.disconnect();
       floatingRoot?.remove();
     });
@@ -121,7 +125,8 @@ window.__SPEEDBOX_PANEL_SWITCH__ = {
       return element('div', {
         ref: wrapper, class: 'speedbox-panel-switch speedbox-panel-switch--above', dir: 'rtl',
         'data-speedbox-mode': props.serverMode ? 'servers' : 'main', onKeydown: keys,
-        onFocusout: event => { if (!event.currentTarget.contains(event.relatedTarget)) close(); }
+        // Safari can blur a pointer-clicked option with relatedTarget=null before click.
+        onFocusout: event => { if (event.relatedTarget && !event.currentTarget.contains(event.relatedTarget)) close(); }
       }, [
         mobile.value ? window.__SPEEDBOX_RENDER_NATIVE_SELECT__({ value: props.serverMode ? 'servers' : 'main',
           options: panels.map(panel => ({ value: panel.serverMode ? 'servers' : 'main', label: panel.label })),
@@ -193,7 +198,8 @@ window.__SPEEDBOX_TARIFF_PLAN_SELECT__ = {
         id: props.inputId, disabled: props.disabled, 'aria-label': props.label || 'پلن',
         surface: props.surface, controlClass: 'tariff-plan-select', change: value => emit('update:modelValue', value) });
       return element('div', { ref: wrapper, class: 'invoice-custom-select tariff-plan-select' + (props.surface === 'white' ? ' continuous-select-white' : '') + (props.surface === 'panel' ? ' continuous-select-panel' : '') + (open.value ? ' is-open' : ''), dir: 'rtl', onKeydown: keys,
-        onFocusout: event => { if (!event.currentTarget.contains(event.relatedTarget)) close(); }
+        // Safari can blur a pointer-clicked option with relatedTarget=null before click.
+        onFocusout: event => { if (event.relatedTarget && !event.currentTarget.contains(event.relatedTarget)) close(); }
       }, [
         element('button', { ref: trigger, id: props.inputId, disabled: props.disabled, type: 'button', class: 'invoice-custom-select__trigger', 'aria-label': props.label || 'پلن', 'aria-haspopup': 'listbox', 'aria-expanded': String(open.value), onClick: () => open.value ? close(true) : show() }, [
           element('span', null, selected?.label || 'انتخاب پلن'), element('i', { class: 'fas fa-chevron-down', 'aria-hidden': 'true' })

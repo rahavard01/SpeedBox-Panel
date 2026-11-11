@@ -77,6 +77,30 @@ class BackpackRemote
         return $answer['data'];
     }
 
+    /** Fetch both sides concurrently, through the same authenticated helpers. */
+    public function statuses(array $servers, array $requests): array
+    {
+        $commands = [];
+        foreach ($servers as $side => $server) {
+            if (($requests[$side]['action'] ?? '') !== 'status') throw new RuntimeException('invalid_status_request');
+            $command = 'if [ -x /opt/speedbox-origin/host.py ]; then python3 /opt/speedbox-origin/host.py backpack -; else /opt/speedbox-backpack/backpack speedbox-json -; fi';
+            $commands[$side] = ['server'=>$server, 'command'=>$this->sudo($server).'sh -c '.escapeshellarg($command), 'input'=>json_encode($requests[$side], JSON_THROW_ON_ERROR)];
+        }
+        $raw = $this->ssh->runParallel($commands, 15); $result = [];
+        foreach ($servers as $side => $server) {
+            try {
+                if (isset($raw[$side]['error'])) throw $raw[$side]['error'];
+                $answer = json_decode($raw[$side]['output'], true, 64, JSON_THROW_ON_ERROR);
+                if (($answer['ok'] ?? false) !== true || !is_array($answer['data'] ?? null)) throw new RuntimeException('invalid_response');
+                $result[$side] = $answer['data'];
+            } catch (\Throwable) {
+                $result[$side] = ['error'=>'ارتباط با این سمت کامل نشد.'];
+            }
+            $result[$side]['_timings_ms'] = $raw[$side]['timings_ms'] ?? [];
+        }
+        return $result;
+    }
+
     private function callUnbounded(ManagedServer $server, array $request): array
     {
         $binary=in_array($request['action']??'',['test-ready','spawn-host','spawn-peer','test-state','test-stop'],true)?$this->testBinary($server):'/opt/speedbox-backpack/backpack';

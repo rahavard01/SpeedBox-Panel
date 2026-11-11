@@ -335,6 +335,10 @@
 .speedbox-partner-history .reset-log-reason>i{flex:0 0 auto;margin-top:4px;color:#f5bb58;font-size:12px;line-height:1}
 .speedbox-partner-history .reset-log-reason>span{min-width:0;flex:1}
 
+/* Fit the code to its own circle at browser zoom and every viewport size. */
+#app .topbar-holder .code-circle{position:relative;container-type:inline-size}
+#app .topbar-holder .code-circle .user-code{position:static;transform:none;box-sizing:border-box;display:block;min-width:0;max-width:calc(100% - 16px);padding:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:center;font-size:16px;font-size:clamp(10px,calc(140cqi / var(--speedbox-code-chars,6)),var(--speedbox-code-font,16px))!important}
+
 /* Desktop reference: original 1366px layout, with one proportional scale.
    No CSS zoom or transforms: fixed overlays still use normal viewport coordinates. */
 #app .topbar-holder>.top-bar{box-sizing:border-box;width:100%;max-width:none;margin-inline:auto}
@@ -361,7 +365,7 @@ body:has(#app .topbar-holder) .side-drawer{right:0!important;max-width:100vw;box
  #app .topbar-holder{padding-top:4.685212vw}
  #app .topbar-holder>.top-bar{font-size:1.024890vw;padding:.732064vw 1.464129vw;border-radius:1.464129vw}
  #app .topbar-holder .code-circle{width:7.320644vw;height:7.320644vw}
- #app .topbar-holder .user-code{font-size:1.171303vw}
+ #app .topbar-holder .user-code{--speedbox-code-font:1.171303vw}
  #app .d-flex>.container>.row>.col-xl-5>.center-box{width:87.847731vw;max-width:87.847731vw;margin-top:5.856515vw;margin-bottom:1.464129vw;padding-block:2.196193vw;border-radius:1.830161vw}
  #app .center-box .topup-title{font-size:var(--speedbox-text-heading)}
  #app .center-box .table-shell>.table-scroll>table,
@@ -411,6 +415,36 @@ body:has(#app .topbar-holder) .side-drawer{right:0!important;max-width:100vw;box
 #app .speedbox-infrastructure .entity-toolbar :is(input.search,button.primary){box-sizing:border-box!important;height:var(--speedbox-list-control-height)!important;min-height:var(--speedbox-list-control-height)!important;line-height:20px!important;padding-block:0!important}
 #app .table-toolbar input.form-control,#app .speedbox-infrastructure .entity-toolbar input.search{appearance:none;-webkit-appearance:none}
 #app .table-toolbar:not(.invoice-billing-toolbar){align-items:flex-start}
+
+/* The switch is mounted under body, so it must not depend on #app ancestry. */
+@media(min-width:1367px){
+ .speedbox-panel-switch .speedbox-panel-switch__trigger{box-sizing:border-box;min-height:calc(30 * var(--speedbox-ui-unit,.07320644vw));height:auto;padding:calc(6 * var(--speedbox-ui-unit,.07320644vw)) calc(12 * var(--speedbox-ui-unit,.07320644vw));gap:calc(8 * var(--speedbox-ui-unit,.07320644vw));font-size:var(--speedbox-text-body,.878477vw);line-height:1.5}
+ .speedbox-panel-switch .speedbox-panel-switch__menu{width:calc(240 * var(--speedbox-ui-unit,.07320644vw));max-width:calc(100vw - 16px);max-height:min(60vh,calc(360 * var(--speedbox-ui-unit,.07320644vw)));overflow-y:auto}
+ .speedbox-panel-switch .speedbox-panel-switch__option{min-height:calc(38 * var(--speedbox-ui-unit,.07320644vw));padding:calc(9 * var(--speedbox-ui-unit,.07320644vw)) calc(10 * var(--speedbox-ui-unit,.07320644vw));gap:calc(10 * var(--speedbox-ui-unit,.07320644vw));font-size:var(--speedbox-text-body,.878477vw)}
+ .speedbox-panel-switch :is(.speedbox-panel-switch__trigger>i,.speedbox-panel-switch__option i){font-size:inherit}
+ :is(.speedbox-infrastructure,.speedbox-infrastructure-overlay){font-size:var(--speedbox-text-body,.878477vw)}
+ :is(.speedbox-infrastructure,.speedbox-infrastructure-overlay) :is(.button,.form-input,.search,.entity b,.entity small,.server-system,.server-last-seen,.stat-label,.tab,.nav-item){font-size:inherit!important}
+ .speedbox-infrastructure{padding-inline:calc(22 * var(--speedbox-ui-unit,.07320644vw))}
+ .speedbox-infrastructure :is(.stats-grid,.toolbar,.entity-toolbar,.panel-head,.entity){gap:calc(10 * var(--speedbox-ui-unit,.07320644vw))}
+ :is(.speedbox-infrastructure,.speedbox-infrastructure-overlay) .panel-card{padding:calc(16 * var(--speedbox-ui-unit,.07320644vw))}
+ :is(.speedbox-infrastructure,.speedbox-infrastructure-overlay) .panel-head h2{font-size:calc(14 * var(--speedbox-ui-unit,.07320644vw))}
+ :is(.speedbox-infrastructure,.speedbox-infrastructure-overlay) .button{padding:calc(9 * var(--speedbox-ui-unit,.07320644vw)) calc(14 * var(--speedbox-ui-unit,.07320644vw));border-radius:calc(10 * var(--speedbox-ui-unit,.07320644vw))}
+ .speedbox-infrastructure table{font-size:inherit;min-width:calc(650 * var(--speedbox-ui-unit,.07320644vw))}
+ .speedbox-infrastructure :is(th,td){height:calc(46 * var(--speedbox-ui-unit,.07320644vw));font-size:inherit;padding:calc(8 * var(--speedbox-ui-unit,.07320644vw))!important}
+ :is(.speedbox-infrastructure,.speedbox-infrastructure-overlay) :is(.badge,.chip,.status-pill){font-size:var(--speedbox-text-small,.805271vw)!important}
+ :is(.speedbox-infrastructure,.speedbox-infrastructure-overlay) .infrastructure-modal{font-size:inherit;padding:calc(24 * var(--speedbox-ui-unit,.07320644vw));min-width:min(33.674963vw,92vw);max-width:min(87.847731vw,92vw)}
+ .speedbox-infrastructure .stat-value{font-size:calc(22 * var(--speedbox-ui-unit,.07320644vw))}
+ .speedbox-infrastructure .entity-icon{font-size:1.333333em}
+ .speedbox-infrastructure .stat-label>i{font-size:1.166667em}
+ .speedbox-infrastructure .toolbar .search{width:min(calc(260 * var(--speedbox-ui-unit,.07320644vw)),100%);height:var(--speedbox-list-control-height)}
+ :is(.speedbox-infrastructure,.speedbox-infrastructure-overlay) .switch-line.ios input[type=checkbox]{width:calc(42 * var(--speedbox-ui-unit,.07320644vw));height:calc(24 * var(--speedbox-ui-unit,.07320644vw))}
+ :is(.speedbox-infrastructure,.speedbox-infrastructure-overlay) .switch-line.ios input[type=checkbox]:after{width:calc(20 * var(--speedbox-ui-unit,.07320644vw));height:calc(20 * var(--speedbox-ui-unit,.07320644vw));left:calc(2 * var(--speedbox-ui-unit,.07320644vw))}
+ :is(.speedbox-infrastructure,.speedbox-infrastructure-overlay) .switch-line.ios input[type=checkbox]:checked:after{left:calc(20 * var(--speedbox-ui-unit,.07320644vw))}
+ #app :is(.admin-invoices-root,.panel-invoices-root) :is(.invoice-billing-toolbar,.table-shell){box-sizing:border-box;width:90%!important;max-width:none;margin-inline:auto}
+ #app :is(.admin-invoices-root,.panel-invoices-root) .invoice-billing-toolbar :is(.form-control,.invoice-custom-select__trigger){font-size:var(--speedbox-text-body,.878477vw)!important;height:var(--speedbox-list-control-height)!important}
+ #app .admin-invoices-root .invoice-filter-selects{flex-basis:calc(420 * var(--speedbox-ui-unit,.07320644vw))!important;width:calc(420 * var(--speedbox-ui-unit,.07320644vw))!important;grid-template-columns:repeat(2,minmax(0,1fr))}
+ #app .panel-invoices-root .invoice-filter-selects{flex-basis:calc(220 * var(--speedbox-ui-unit,.07320644vw))!important;width:calc(220 * var(--speedbox-ui-unit,.07320644vw))!important}
+}
 
 /* Continue the existing 1366px desktop scale through nested table controls.
    This deliberately changes no modal heights or vertical scrolling behavior. */

@@ -50,6 +50,20 @@ class TunnelManager
             abort_unless($servers->count() === count($ids), 422, 'دو سرور متفاوت را از مدیریت سرورها انتخاب کنید.');
             abort_if($servers[0]->machine_id && $servers[0]->machine_id === $servers[1]->machine_id, 422, 'دو رکورد انتخاب‌شده متعلق به یک ماشین هستند.');
             abort_if($servers[0]->host === $servers[1]->host, 422, 'سرور ایران و خارج باید متفاوت باشند.');
+            // Server row locks serialize this check with concurrent enqueue requests.
+            if ($action === 'status' && $tunnel) {
+                $pending = TunnelOperation::where('tunnel_id',$tunnel->id)->where('action','status')->whereIn('status',['queued','running'])->first();
+                if ($pending) return $pending;
+            }
+            if (!$readOnly && $action !== 'status') {
+                $queuedChecks = TunnelOperation::where('action','status')->where('status','queued')
+                    ->whereIn('tunnel_id', ServerTunnel::where(fn($q) => $q->whereIn('iran_server_id',$ids)->orWhereIn('foreign_server_id',$ids))->pluck('id'))->get();
+                foreach ($queuedChecks as $check) {
+                    if (empty($check->payload['outage_probe'])) continue;
+                    if (!TunnelOperation::whereKey($check->id)->where('status','queued')->update(['status'=>'cancelled','progress'=>100,'message'=>'بررسی خودکار برای اجرای عملیات دستی کنار گذاشته شد.'])) continue;
+                    DB::table('speedbox_tunnel_leases')->where('operation_id',$check->id)->delete();
+                }
+            }
             foreach ($servers as $server) {
                 abort_if($server->status === 'removing' || (!$readOnly && (self::busy($server->id) || $server->deployments()->whereIn('status', ['queued','running'])->exists())), 409, 'عملیات دیگری روی یکی از این سرورها در حال اجراست.');
             }
@@ -147,6 +161,12 @@ class TunnelManager
     public function finish(TunnelOperation $op, string $status, string $message, array $result = []): void
     {
         DB::transaction(function () use ($op,$status,$message,$result) {
+            $payload = $op->payload ?? [];
+            if (isset($payload['_execution_started'])) $result['_timings_ms'] = [
+                'queue_wait'=>$payload['_queue_ms'] ?? 0,
+                'execution'=>(int)round((microtime(true)-$payload['_execution_started'])*1000),
+                'phases'=>$payload['_phase_ms'] ?? [],
+            ];
             $op->update(['status' => $status, 'progress' => 100, 'message' => $message, 'result' => $result]);
             DB::table('speedbox_tunnel_leases')->where('operation_id', $op->id)->delete();
         });

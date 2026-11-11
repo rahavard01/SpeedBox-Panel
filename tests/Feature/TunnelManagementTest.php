@@ -322,14 +322,14 @@ class TunnelManagementTest extends TestCase
     public function test_connected_without_backend_is_reported_separately():void
     {
         $t=$this->createTunnel();$op=app(TunnelManager::class)->queue('status',$t,null);
-        $remote=\Mockery::mock(BackpackRemote::class);$remote->shouldReceive('call')->andReturn(['active'=>true,'metrics'=>['connected'=>true],'targets'=>['5790'=>false]]);
+        $remote=\Mockery::mock(BackpackRemote::class);$remote->shouldReceive('statuses')->andReturn(['iran'=>['active'=>true,'metrics'=>['connected'=>true]],'foreign'=>['active'=>true,'metrics'=>['connected'=>true],'targets'=>['5790'=>false]]]);
         (new RunTunnelOperation($op->id))->handle($remote,app(TunnelManager::class));
         $this->assertSame('degraded',$t->fresh()->status);$this->assertStringContainsString('مقصد',$t->fresh()->message);
     }
     public function test_service_running_without_engine_evidence_is_not_connected():void
     {
         $t=$this->createTunnel();$op=app(TunnelManager::class)->queue('status',$t,null);
-        $remote=\Mockery::mock(BackpackRemote::class);$remote->shouldReceive('call')->andReturn(['active'=>true,'targets'=>['5790'=>true]]);
+        $remote=\Mockery::mock(BackpackRemote::class);$remote->shouldReceive('statuses')->andReturn(['iran'=>['active'=>true],'foreign'=>['active'=>true,'targets'=>['5790'=>true]]]);
         (new RunTunnelOperation($op->id))->handle($remote,app(TunnelManager::class));
         $this->assertSame('checking',$t->fresh()->status);
     }
@@ -427,4 +427,117 @@ class TunnelManagementTest extends TestCase
         $this->assertSame('failed',$op->fresh()->status);$this->assertSame(8,$t->fresh()->settings['conns']);
         $this->assertEqualsCanonicalizing(['iran','foreign'],$rolled);$this->assertSame(0,DB::table('speedbox_tunnel_leases')->count());
     }
+    public function test_duplicate_status_reuses_pending_operation(): void
+    {
+        $t=$this->createTunnel();$manager=app(TunnelManager::class);
+        $first=$manager->queue('status',$t,null,['outage_probe'=>true]);
+        $second=$manager->queue('status',$t,null,['outage_probe'=>true]);
+        $this->assertSame($first->id,$second->id);
+        $this->assertSame(2,DB::table('speedbox_tunnel_leases')->count());
+        Queue::assertPushed(RunTunnelOperation::class,1);
+    }
+
+    public function test_manual_action_supersedes_only_queued_automatic_checks(): void
+    {
+        $t=$this->createTunnel();$manager=app(TunnelManager::class);
+        $probe=$manager->queue('status',$t,null,['outage_probe'=>true]);
+        $manual=$manager->queue('apply',$t,null,['settings'=>$t->settings]);
+        $this->assertSame('cancelled',$probe->fresh()->status);
+        $this->assertSame(2,DB::table('speedbox_tunnel_leases')->where('operation_id',$manual->id)->count());
+        $this->assertSame(0,DB::table('speedbox_tunnel_leases')->where('operation_id',$probe->id)->count());
+        $remote=\Mockery::mock(BackpackRemote::class);$remote->shouldNotReceive('statuses');$remote->shouldNotReceive('call');
+        (new RunTunnelOperation($probe->id))->handle($remote,$manager);
+        $this->assertSame('cancelled',$probe->fresh()->status);
+    }
+
+    public function test_running_automatic_check_keeps_its_host_protection(): void
+    {
+        $t=$this->createTunnel();$manager=app(TunnelManager::class);
+        $probe=$manager->queue('status',$t,null,['outage_probe'=>true]);
+        $probe->update(['status'=>'running']);
+        try {$manager->queue('apply',$t,null,['settings'=>$t->settings]);$this->fail('running host lock was bypassed');}
+        catch (\Symfony\Component\HttpKernel\Exception\HttpException $e) {$this->assertSame(409,$e->getStatusCode());}
+        $this->assertSame('running',$probe->fresh()->status);
+        $this->assertSame(2,DB::table('speedbox_tunnel_leases')->where('operation_id',$probe->id)->count());
+    }
+
+    public function test_status_records_execution_and_queue_time(): void
+    {
+        $t=$this->createTunnel();$manager=app(TunnelManager::class);$op=$manager->queue('status',$t,null);
+        $remote=\Mockery::mock(BackpackRemote::class);
+        $remote->shouldReceive('statuses')->once()->andReturn(['iran'=>['active'=>true],'foreign'=>['active'=>true]]);
+        (new RunTunnelOperation($op->id))->handle($remote,$manager);
+        $timings=$op->fresh()->result['_timings_ms'];
+        $this->assertGreaterThanOrEqual(0,$timings['queue_wait']);
+        $this->assertGreaterThanOrEqual(0,$timings['execution']);
+    }
+
+    public function test_saved_ssh_key_must_match_endpoint_and_fingerprint(): void
+    {
+        $ssh=app(\App\Services\SshExecutor::class);
+        $endpoint=['host'=>$this->iran->host,'port'=>(int)$this->iran->ssh_port];
+        $blob="reviewed-test-key";
+        $this->iran->host_fingerprint='SHA256:'.rtrim(base64_encode(hash('sha256',$blob,true)),'=');
+        $path=storage_path('app/private/known-host-'.hash('sha256',json_encode([$this->iran->id,$endpoint])));
+        $key='speedbox-managed-'.$this->iran->id.' ssh-ed25519 '.base64_encode($blob)."\n";
+        file_put_contents($path,$key);chmod($path,0600);
+        try {
+            $method=new \ReflectionMethod($ssh,'storedHostKey');
+            if ((fileperms($path)&0022)!==0) $this->markTestSkipped('Host-key file permissions require POSIX');
+            $this->assertSame($key,$method->invoke($ssh,$this->iran,$endpoint));
+            $this->assertNull($method->invoke($ssh,$this->iran,[...$endpoint,'port'=>2222]));
+            $this->iran->host_fingerprint='SHA256:wrong';
+            $this->assertNull($method->invoke($ssh,$this->iran,$endpoint));
+        } finally {@unlink($path);}
+    }
+
+    public function test_parallel_status_preserves_a_healthy_side_when_the_peer_fails(): void
+    {
+        $ssh=\Mockery::mock(\App\Services\SshExecutor::class);
+        $ssh->shouldReceive('runParallel')->once()->withArgs(function($requests,$seconds){
+            $this->assertSame(15,$seconds);$this->assertCount(2,$requests);
+            foreach($requests as $request)$this->assertSame('status',json_decode($request['input'],true)['action']);
+            return true;
+        })->andReturn([
+            'iran'=>['output'=>json_encode(['ok'=>true,'data'=>['active'=>true]]),'timings_ms'=>['ssh'=>8]],
+            'foreign'=>['error'=>new \RuntimeException('private transport details')],
+        ]);
+        $remote=new BackpackRemote($ssh);
+        $result=$remote->statuses(['iran'=>$this->iran,'foreign'=>$this->foreign],['iran'=>['action'=>'status'],'foreign'=>['action'=>'status']]);
+        $this->assertTrue($result['iran']['active']);$this->assertSame(8,$result['iran']['_timings_ms']['ssh']);
+        $this->assertArrayHasKey('error',$result['foreign']);
+        $this->assertStringNotContainsString('private transport',json_encode($result));
+    }
+
+    public function test_parallel_status_ssh_commands_overlap_and_keep_host_pins(): void
+    {
+        if(PHP_OS_FAMILY==='Windows')$this->markTestSkipped('POSIX process fixtures; run this test on Linux');
+        $dir=sys_get_temp_dir().'/speedbox-parallel-'.bin2hex(random_bytes(8));mkdir($dir,0700);
+        $files=[];
+        $path=getenv('PATH');$serverPath=$_SERVER['PATH']??null;$envPath=$_ENV['PATH']??null;
+        file_put_contents($dir.'/sshpass',"#!/bin/sh\nshift\nexec \"\$@\"\n");
+        file_put_contents($dir.'/ssh',"#!/bin/sh\ncase \"\$*\" in *StrictHostKeyChecking=yes*) sleep 2; printf ready;; *) exit 99;; esac\n");
+        chmod($dir.'/sshpass',0700);chmod($dir.'/ssh',0700);
+        foreach([$this->iran,$this->foreign] as $server){
+            $blob='reviewed-'.$server->id;$server->host_fingerprint='SHA256:'.rtrim(base64_encode(hash('sha256',$blob,true)),'=');
+            $endpoint=['host'=>$server->host,'port'=>(int)$server->ssh_port];
+            $file=storage_path('app/private/known-host-'.hash('sha256',json_encode([$server->id,$endpoint])));
+            file_put_contents($file,'speedbox-managed-'.$server->id.' ssh-ed25519 '.base64_encode($blob)."\n");chmod($file,0600);$files[]=$file;
+        }
+        putenv('PATH='.$dir.':'.$path);$_SERVER['PATH']=$_ENV['PATH']=$dir.':'.$path;
+        try {
+            $start=microtime(true);
+            $result=app(\App\Services\SshExecutor::class)->runParallel([
+                'iran'=>['server'=>$this->iran,'command'=>'status'],
+                'foreign'=>['server'=>$this->foreign,'command'=>'status'],
+            ]);
+            $this->assertLessThan(3.5,microtime(true)-$start);
+            $this->assertSame('ready',$result['iran']['output']);$this->assertSame('ready',$result['foreign']['output']);
+        } finally {
+            putenv('PATH='.$path);if($serverPath===null)unset($_SERVER['PATH']);else $_SERVER['PATH']=$serverPath;
+            if($envPath===null)unset($_ENV['PATH']);else $_ENV['PATH']=$envPath;
+            foreach($files as $file)@unlink($file);foreach(glob($dir.'/*') as $file)unlink($file);rmdir($dir);
+        }
+    }
+
 }
