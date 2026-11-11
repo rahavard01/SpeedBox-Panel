@@ -175,7 +175,7 @@ func (s *server) forget(c net.Conn) { s.mu.Lock(); delete(s.conns, c); s.mu.Unlo
 func pipe(a, b net.Conn) {
 	done := make(chan struct{}, 2)
 	copyOne := func(dst, src net.Conn) {
-		_, e := io.Copy(dst, src)
+		_, e := copyOriginStream(dst, src)
 		if e != nil {
 			a.Close()
 			b.Close()
@@ -533,4 +533,20 @@ func main() {
 		fmt.Fprintln(os.Stderr, e)
 		os.Exit(1)
 	}
+}
+
+// Keep raw TCP's zero-copy path. TLS relays use one 16 KiB buffer per
+// direction instead of io.Copy's default 32 KiB fallback. The interface
+// wrappers prevent optional fast paths from allocating another buffer.
+type originReadOnly struct{ io.Reader }
+type originWriteOnly struct{ io.Writer }
+
+func copyOriginStream(dst, src net.Conn) (int64, error) {
+	if _, ok := dst.(*net.TCPConn); ok {
+		if _, ok := src.(*net.TCPConn); ok {
+			return io.Copy(dst, src)
+		}
+	}
+	buf := make([]byte, 16*1024)
+	return io.CopyBuffer(originWriteOnly{dst}, originReadOnly{src}, buf)
 }
