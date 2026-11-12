@@ -2,6 +2,12 @@
 :root:root body :is(.create-modal,.account-operation-modal,.user-list-filter-dialog){max-height:none!important;overflow:visible!important;overscroll-behavior:auto;--text-xs:calc(12 * var(--speedbox-ui-unit));--text-sm:calc(14 * var(--speedbox-ui-unit));--text-base:calc(16 * var(--speedbox-ui-unit))}
 :root:root body .modal-backdrop{overflow-y:auto!important;overscroll-behavior:contain}
 :root:root body .create-modal .btn-create-user1 :is(span,i){font-size:inherit!important}
+/* Inline filter spacing belongs to the baseline too; scale both panels alike. */
+:root:root body .segmented:is([style*="margin-bottom: 10px"],[style*="margin-bottom:10px"]){margin-bottom:calc(10 * var(--speedbox-ui-unit))!important}
+:root:root body .segmented:is([style*="margin-bottom: 25px"],[style*="margin-bottom:25px"]){margin-bottom:calc(25 * var(--speedbox-ui-unit))!important}
+/* The baseline flex-basis is 17px. Leaving it fixed squeezes the scaled square. */
+:root:root body .create-modal .custom-username-toggle input[type=checkbox]{box-sizing:border-box;flex:0 0 calc(17 * var(--speedbox-ui-unit));width:calc(17 * var(--speedbox-ui-unit));height:calc(17 * var(--speedbox-ui-unit));min-width:calc(17 * var(--speedbox-ui-unit));min-height:calc(17 * var(--speedbox-ui-unit));aspect-ratio:1}
+:root:root body .create-modal .custom-username-toggle input[type=checkbox]::after{border-left-width:calc(2 * var(--speedbox-ui-unit));border-bottom-width:calc(2 * var(--speedbox-ui-unit));transform:translateY(calc(-1 * var(--speedbox-ui-unit))) rotate(-45deg)}
 :root:root body :is(.create-modal,.account-operation-modal,.user-list-filter-dialog) :is(input,textarea,select){font-size:calc(12 * var(--speedbox-ui-unit))}
 :root:root body .speedbox-infrastructure-overlay .form-grid{min-width:0}
 :root:root body .speedbox-infrastructure:not(:has(.dashboard-overview)) .plan-user-count i{font-size:calc(11 * var(--speedbox-ui-unit))!important}

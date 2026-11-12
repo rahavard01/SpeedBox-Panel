@@ -55,6 +55,26 @@ check(declaration('.account-operation-modal,.user-list-filter-dialog)','max-heig
 check(declaration('.account-operation-modal,.user-list-filter-dialog)','overflow','visible'),'whole dialog grows instead of becoming an inner scroller');
 check(!css.includes('max-height:calc(100dvh - 2 * max('),'old global inner-scroll cap is removed');
 
+// Equal-specificity infrastructure rules used to win solely by source order.
+// Check the last declaration, rather than accepting an earlier correct rule.
+function lastOf(selectors,prop){
+  let value;
+  for(const r of rules)if(selectors.includes(r.selector))for(const d of r.nodes)if(d.type==='decl'&&d.prop===prop)value=d.value;
+  return value;
+}
+const shared=':root:root body .speedbox-infrastructure-overlay .infrastructure-modal ';
+const account=':root:root body .account-operation-modal ';
+assert.equal(lastOf([shared+'.form-grid',account+'.account-edit-grid[data-v-speedbox-actions-a1]'],'grid-template-columns'),'repeat(2,minmax(0,1fr))','account edit keeps two columns after shared infrastructure styles');checks++;
+assert.equal(lastOf([shared+'.field',account+'.field[data-v-speedbox-actions-a1]'],'grid-template-columns'),'minmax(0,1fr)','labels stay above controls');checks++;
+check(declaration('.custom-username-toggle input[type=checkbox]','flex','17 * var'),'checkbox flex-basis scales with its height');
+check(declaration('.custom-username-toggle input[type=checkbox]','min-width','17 * var'),'checkbox cannot shrink into a narrow pill');
+check(declaration('.segmented:is([style*="margin-bottom: 10px"]','margin-bottom','10 * var'),'inline filter bottom spacing scales in both panels');
+check(declaration('.table-toolbar','margin','10 * var'),'toolbar spacing below the filter scales');
+check(declaration('.topup-title','margin-bottom','10 * var'),'heading spacing above filters scales');
+check(declaration('.account-reservation .reservation-heading','font-size','12 * var')&&declaration('.reservation-facts dt','font-size','10 * var')&&declaration('.reservation-facts dd','font-size','11 * var'),'reservation heading and fact labels/values scale individually');
+check(declaration('.ban-text','font-size','13 * var'),'block-user label scales');
+check(declaration('.ios-toggle label:after','left','2 * var')&&declaration('.ios-toggle input:checked+label:after','transform','24 * var'),'toggle thumb offsets and checked travel scale with track');
+
 const js=readFileSync(path.join(root,'public/speedbox/wide-layout.js'),'utf8');
 const context=vm.createContext({window:{},document:{readyState:'loading',addEventListener(){}},innerWidth:1920,innerHeight:1080});
 vm.runInContext(js.replace('  function adjust(menu){','  window.testPosition=position;\n  function adjust(menu){'),context);
