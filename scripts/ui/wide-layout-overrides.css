@@ -1,5 +1,7 @@
-/* Caps remain viewport-relative, even when the contents scale up. */
-:root:root body :is(.create-modal,.account-operation-modal,.user-list-filter-dialog){max-height:calc(100dvh - 2 * max(16px,24 * var(--speedbox-ui-unit)))!important;overflow-y:auto!important;overscroll-behavior:contain;--text-xs:calc(12 * var(--speedbox-ui-unit));--text-sm:calc(14 * var(--speedbox-ui-unit));--text-base:calc(16 * var(--speedbox-ui-unit))}
+/* The backdrop scrolls the whole dialog; lists keep their own local scrolling. */
+:root:root body :is(.create-modal,.account-operation-modal,.user-list-filter-dialog){max-height:none!important;overflow:visible!important;overscroll-behavior:auto;--text-xs:calc(12 * var(--speedbox-ui-unit));--text-sm:calc(14 * var(--speedbox-ui-unit));--text-base:calc(16 * var(--speedbox-ui-unit))}
+:root:root body .modal-backdrop{overflow-y:auto!important;overscroll-behavior:contain}
+:root:root body .create-modal .btn-create-user1 :is(span,i){font-size:inherit!important}
 :root:root body :is(.create-modal,.account-operation-modal,.user-list-filter-dialog) :is(input,textarea,select){font-size:calc(12 * var(--speedbox-ui-unit))}
 :root:root body .speedbox-infrastructure-overlay .form-grid{min-width:0}
 :root:root body .speedbox-infrastructure:not(:has(.dashboard-overview)) .plan-user-count i{font-size:calc(11 * var(--speedbox-ui-unit))!important}

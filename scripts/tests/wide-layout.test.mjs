@@ -46,6 +46,14 @@ check(declaration('.hamburger-menu','font-size','20 * var'),'hamburger scales');
 check(declaration('.btn-toast-close','inline-size','26 * var'),'toast close control scales');
 check(declaration('.msg-icon svg','width','20 * var'),'toast icon scales');
 check(css.includes('.operation-danger{background:#835d16b3!important'),'UUID confirmation uses the existing amber confirmation colour');
+check(declaration('.segmented .seg-btn','font-size','12 * var'),'standalone page segments scale, including the user status filter');
+check(declaration('.btn-create-user1','font-size','12 * var'),'shared green create/save button text scales');
+check(declaration('.btn-create-user1','padding','54 * var'),'shared green button geometry scales with the text');
+check(declaration('.msg-text','font-size','14 * var'),'toast text itself scales, independently of its parent');
+check(declaration('.modal-backdrop','overflow-y','auto'),'the outer backdrop scrolls');
+check(declaration('.account-operation-modal,.user-list-filter-dialog)','max-height','none'),'dialog has no global height cap');
+check(declaration('.account-operation-modal,.user-list-filter-dialog)','overflow','visible'),'whole dialog grows instead of becoming an inner scroller');
+check(!css.includes('max-height:calc(100dvh - 2 * max('),'old global inner-scroll cap is removed');
 
 const js=readFileSync(path.join(root,'public/speedbox/wide-layout.js'),'utf8');
 const context=vm.createContext({window:{},document:{readyState:'loading',addEventListener(){}},innerWidth:1920,innerHeight:1080});
@@ -61,6 +69,8 @@ check(Number.parseFloat(style.left)+Number.parseFloat(style.width)<=1908,'menu s
 style=menuAt({top:20,bottom:50,right:25});check(style.left==='12px'&&style.bottom==='auto','menu stays inside left edge and opens down');
 style=menuAt({top:20,bottom:50,right:25},390,844);check(Object.keys(style).length===0,'mobile positioning remains untouched');
 const subscription=readFileSync(path.join(root,'resources/views/client/subscribe.blade.php'),'utf8');
+check(!subscription.includes('reservation-note-name'),'reservation notice omits the redundant plan name');
+check(subscription.includes("$reservation['traffic_label']")&&subscription.includes("$reservation['duration_days']"),'reservation retains traffic and duration');
 check(subscription.includes('viewport-fit=cover')&&subscription.includes('color-scheme: dark;')&&subscription.includes('background: #081014;'),'subscription has a dark root canvas and safe viewport');
 check((subscription.match(/padding-top: calc\([^\n]+safe-area-inset-top/g)||[]).length===3,'safe-area top padding survives every responsive breakpoint');
 console.log(`WIDE LAYOUT: ${checks} checks passed; ${result.rules} generated rules`);

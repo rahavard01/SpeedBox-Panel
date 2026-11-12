@@ -9,7 +9,7 @@ function parser(root){
   return require(require.resolve('postcss',{paths:[path.dirname(require.resolve('vite/package.json'))]}));
 }
 const geometry=/^(?:width|height|min-width|max-width|min-height|max-height|inline-size|block-size|min-inline-size|max-inline-size|padding(?:-.+)?|margin(?:-.+)?|gap|row-gap|column-gap|font-size|font|line-height|letter-spacing|border(?:-.+)?-radius|border-radius|flex-basis|grid-template-columns|grid-template-rows|background-size|text-indent)$/;
-const appRegions=/(?:modal|operation-|user-list-filter|user-row-actions|invoice-custom-select|account-plan-select|traffic-records|transaction-|speedbox-partner-history|user-actions|actions-select)/;
+const appRegions=/(?:modal|operation-|user-list-filter|user-row-actions|invoice-custom-select|account-plan-select|traffic-records|transaction-|speedbox-partner-history|user-actions|actions-select|segmented|seg-btn|btn-create-user1|save-btn|msg-text)/;
 const scope=':root:root body';
 
 export function scaleValue(value){

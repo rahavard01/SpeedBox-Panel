@@ -5,6 +5,8 @@
 .speedbox-infrastructure-overlay .account-operation-modal .button.operation-danger:focus-visible{outline:2px solid #e9bf64;outline-offset:3px}
 @media(min-width:1367px){
 :root{--speedbox-ui-unit:.07320644vw}
+:root:root body .msg-text{font-size:calc(14 * var(--speedbox-ui-unit))!important}
+:root:root body .save-btn[data-v-ffe683ee]{width:100%;padding:calc(14 * var(--speedbox-ui-unit)) 0;border-radius:calc(14 * var(--speedbox-ui-unit));font-size:calc(14 * var(--speedbox-ui-unit))!important;margin-top:calc(44 * var(--speedbox-ui-unit))}
 :root:root body .create-modal.reservation-account-modal:is(.reservation-admin-modal,.reservation-partner-modal){--reservation-parent-gap:calc(18 * var(--speedbox-ui-unit));width:min(calc(460 * var(--speedbox-ui-unit)),92vw);min-width:0;max-width:min(calc(460 * var(--speedbox-ui-unit)),92vw)}
 :root:root body .create-modal.reservation-account-modal>.final-result{width:100%;grid-template-columns:minmax(0,1fr);row-gap:var(--reservation-parent-gap)}
 :root:root body .reservation-account-modal :is(.final-result,.view-body,.view-body>div,.account-renew-pane,.account-topup-pane){min-width:0;max-width:100%}
@@ -98,12 +100,16 @@
 :root:root body .transaction-records-modal .tx-type-label{max-width:calc(100% - calc(16 * var(--speedbox-ui-unit)));line-height:1.35}
 :root:root body .transaction-records-modal .tx-arrow{font-size:calc(12 * var(--speedbox-ui-unit))!important;line-height:1;margin-left:0}
 :root:root body .transaction-records-modal .chip{min-width:calc(54 * var(--speedbox-ui-unit));padding:calc(3 * var(--speedbox-ui-unit)) calc(8 * var(--speedbox-ui-unit));border-radius:calc(999 * var(--speedbox-ui-unit));font-size:calc(10 * var(--speedbox-ui-unit))!important}
+:root:root body .segmented[data-v-984bc166]{gap:0;border-radius:calc(12 * var(--speedbox-ui-unit));margin:calc(10 * var(--speedbox-ui-unit))}
+:root:root body .seg-btn[data-v-984bc166]{padding:calc(10 * var(--speedbox-ui-unit)) calc(20 * var(--speedbox-ui-unit));font-size:calc(13 * var(--speedbox-ui-unit))!important}
 :root:root body .invoice-custom-select[data-v-f8294ed3]{width:100%;min-width:0}
 :root:root body .invoice-custom-select__trigger[data-v-f8294ed3]{grid-template-columns:1fr auto;gap:calc(8 * var(--speedbox-ui-unit));width:100%;height:calc(38 * var(--speedbox-ui-unit));padding:0 calc(12 * var(--speedbox-ui-unit));border-radius:calc(10 * var(--speedbox-ui-unit));font-size:calc(12 * var(--speedbox-ui-unit))!important}
 :root:root body .invoice-custom-select__trigger i[data-v-f8294ed3]{font-size:calc(10 * var(--speedbox-ui-unit))!important}
 :root:root body .is-open .invoice-custom-select__trigger[data-v-f8294ed3]{border-radius:calc(10 * var(--speedbox-ui-unit)) calc(10 * var(--speedbox-ui-unit)) 0 0}
 :root:root body .invoice-custom-select__menu[data-v-f8294ed3]{max-height:calc(260 * var(--speedbox-ui-unit));padding:calc(5 * var(--speedbox-ui-unit));border-radius:0 0 calc(10 * var(--speedbox-ui-unit)) calc(10 * var(--speedbox-ui-unit))}
 :root:root body .invoice-custom-select__option[data-v-f8294ed3]{width:100%;padding:calc(9 * var(--speedbox-ui-unit)) calc(10 * var(--speedbox-ui-unit));border-radius:calc(7 * var(--speedbox-ui-unit));font-size:calc(12 * var(--speedbox-ui-unit))!important}
+:root:root body .segmented[data-v-f834d3a7]{margin-top:calc(12 * var(--speedbox-ui-unit));border-radius:calc(12 * var(--speedbox-ui-unit))}
+:root:root body .segmented .seg-btn[data-v-f834d3a7]{font-size:calc(12 * var(--speedbox-ui-unit))!important;padding:calc(10 * var(--speedbox-ui-unit)) calc(16 * var(--speedbox-ui-unit))}
 :root:root body .modal-header[data-v-5daea513]{gap:calc(100 * var(--speedbox-ui-unit));margin-bottom:calc(8 * var(--speedbox-ui-unit))}
 :root:root body .modal-title[data-v-5daea513]{margin-top:0;font-size:calc(16 * var(--speedbox-ui-unit))!important}
 :root:root body .modal-date[data-v-5daea513]{font-size:calc(12 * var(--speedbox-ui-unit))!important}
@@ -115,8 +121,11 @@
 :root:root body .create-modal .modal-header[data-v-f387832b]{margin-bottom:calc(10 * var(--speedbox-ui-unit))!important}
 :root:root body .modal-header[data-v-f387832b]{padding:calc(12 * var(--speedbox-ui-unit)) calc(14 * var(--speedbox-ui-unit))}
 :root:root body .modal-title[data-v-f387832b]{gap:calc(10 * var(--speedbox-ui-unit));font-size:calc(15 * var(--speedbox-ui-unit))!important}
+:root:root body .segmented[data-v-f387832b]{margin-top:calc(12 * var(--speedbox-ui-unit));border-radius:calc(12 * var(--speedbox-ui-unit))}
+:root:root body .segmented .seg-btn[data-v-f387832b]{padding:calc(10 * var(--speedbox-ui-unit)) calc(16 * var(--speedbox-ui-unit))}
 :root:root body .dashboard-records-modal[data-v-b1d23287]{width:min(96vw,calc(860 * var(--speedbox-ui-unit)));max-width:calc(860 * var(--speedbox-ui-unit))}
 :root:root body .dashboard-records-modal .dashboard-trend-table th[data-v-b1d23287],:root:root body .dashboard-records-modal .dashboard-trend-table td[data-v-b1d23287],:root:root body .dashboard-records-modal .dashboard-wallet-table th[data-v-b1d23287],:root:root body .dashboard-records-modal .dashboard-wallet-table td[data-v-b1d23287]{width:33.333%!important}
+:root:root body .msg-text{line-height:1.5}
 :root:root body .modal-backdrop{padding:calc(24 * var(--speedbox-ui-unit)) calc(16 * var(--speedbox-ui-unit));margin-top:0}
 :root:root body .modal-backdrop::-webkit-scrollbar{width:0;height:0}
 :root:root body .modal-outer{min-height:calc(100dvh - calc(48 * var(--speedbox-ui-unit)))}
@@ -125,11 +134,14 @@
 :root:root body .create-modal .create-header h3{margin:0;font-size:calc(16 * var(--speedbox-ui-unit))!important}
 :root:root body .create-modal .segmented{margin-top:calc(12 * var(--speedbox-ui-unit));border-radius:calc(12 * var(--speedbox-ui-unit))}
 :root:root body .create-modal .segmented .seg-btn{padding:calc(10 * var(--speedbox-ui-unit)) calc(16 * var(--speedbox-ui-unit));font-size:calc(12 * var(--speedbox-ui-unit))!important}
+:root:root body .segmented{margin-top:calc(12 * var(--speedbox-ui-unit));border-radius:calc(12 * var(--speedbox-ui-unit))}
+:root:root body .segmented .seg-btn{padding:calc(10 * var(--speedbox-ui-unit)) calc(16 * var(--speedbox-ui-unit));font-size:calc(12 * var(--speedbox-ui-unit))!important}
 :root:root body .create-modal .plans{margin-top:calc(10 * var(--speedbox-ui-unit))}
 :root:root body .create-modal .btn{margin-top:calc(12 * var(--speedbox-ui-unit));padding:calc(10 * var(--speedbox-ui-unit)) calc(16 * var(--speedbox-ui-unit));border-radius:calc(10 * var(--speedbox-ui-unit));font-size:calc(12 * var(--speedbox-ui-unit))!important}
 :root:root body .create-modal .plan-test{width:50%;margin-top:calc(25 * var(--speedbox-ui-unit))}
 :root:root body .create-modal .plans-grid{grid-template-columns:1fr 1fr;gap:calc(10 * var(--speedbox-ui-unit)) calc(22 * var(--speedbox-ui-unit));margin-top:calc(8 * var(--speedbox-ui-unit))}
 :root:root body .create-modal .create-actions{margin:calc(16 * var(--speedbox-ui-unit));gap:calc(10 * var(--speedbox-ui-unit))}
+:root:root body .btn-create-user1{margin-top:calc(25 * var(--speedbox-ui-unit));padding:calc(8 * var(--speedbox-ui-unit)) calc(54 * var(--speedbox-ui-unit));border-radius:calc(12 * var(--speedbox-ui-unit));font-size:calc(12 * var(--speedbox-ui-unit))!important}
 :root:root body .create-modal .bulk-box{margin:calc(6 * var(--speedbox-ui-unit)) 0;gap:calc(10 * var(--speedbox-ui-unit))}
 :root:root body .create-modal .bulk-label{font-size:calc(12 * var(--speedbox-ui-unit))!important}
 :root:root body .create-modal .bulk-input{width:calc(80 * var(--speedbox-ui-unit));height:calc(25 * var(--speedbox-ui-unit));font-size:calc(10 * var(--speedbox-ui-unit))!important;border-radius:calc(10 * var(--speedbox-ui-unit));margin-bottom:calc(6 * var(--speedbox-ui-unit));margin-top:calc(-2 * var(--speedbox-ui-unit))}
@@ -171,6 +183,8 @@
 :root:root body .ticket-modal.detail[data-v-a4291483]{max-width:calc(900 * var(--speedbox-ui-unit));width:min(94vw,calc(900 * var(--speedbox-ui-unit)))}
 :root:root body .modal-actions-row[data-v-a4291483]{margin-top:calc(12 * var(--speedbox-ui-unit))}
 :root:root body .modal-actions-row .btn-create-user[data-v-a4291483]{min-width:calc(140 * var(--speedbox-ui-unit));width:auto}
+:root:root body .segmented[data-v-a4291483]{border-radius:calc(12 * var(--speedbox-ui-unit));margin:calc(15 * var(--speedbox-ui-unit)) calc(15 * var(--speedbox-ui-unit)) calc(5 * var(--speedbox-ui-unit))}
+:root:root body .segmented .seg-btn[data-v-a4291483]{padding:calc(10 * var(--speedbox-ui-unit)) calc(16 * var(--speedbox-ui-unit))}
 :root:root body .sms-events-modal-body[data-v-19a63443]::-webkit-scrollbar{width:0;height:0}
 :root:root body .sms-events-modal[data-v-19a63443]{width:min(calc(720 * var(--speedbox-ui-unit)),92vw);max-height:min(calc(760 * var(--speedbox-ui-unit)),calc(100dvh - calc(48 * var(--speedbox-ui-unit))));padding:calc(24 * var(--speedbox-ui-unit));border-radius:calc(24 * var(--speedbox-ui-unit))}
 :root:root body .sms-events-modal-head[data-v-19a63443]{margin-bottom:calc(18 * var(--speedbox-ui-unit))}
@@ -1844,8 +1858,10 @@
 :root:root body .message .msg-body{gap:calc(10 * var(--speedbox-ui-unit))}
 :root:root body .btn-toast-close{inline-size:calc(26 * var(--speedbox-ui-unit));block-size:calc(26 * var(--speedbox-ui-unit));border-radius:calc(999 * var(--speedbox-ui-unit))}
 :root:root body .btn-toast-close svg{width:calc(18 * var(--speedbox-ui-unit));height:calc(18 * var(--speedbox-ui-unit))}
-/* Caps remain viewport-relative, even when the contents scale up. */
-:root:root body :is(.create-modal,.account-operation-modal,.user-list-filter-dialog){max-height:calc(100dvh - 2 * max(16px,24 * var(--speedbox-ui-unit)))!important;overflow-y:auto!important;overscroll-behavior:contain;--text-xs:calc(12 * var(--speedbox-ui-unit));--text-sm:calc(14 * var(--speedbox-ui-unit));--text-base:calc(16 * var(--speedbox-ui-unit))}
+/* The backdrop scrolls the whole dialog; lists keep their own local scrolling. */
+:root:root body :is(.create-modal,.account-operation-modal,.user-list-filter-dialog){max-height:none!important;overflow:visible!important;overscroll-behavior:auto;--text-xs:calc(12 * var(--speedbox-ui-unit));--text-sm:calc(14 * var(--speedbox-ui-unit));--text-base:calc(16 * var(--speedbox-ui-unit))}
+:root:root body .modal-backdrop{overflow-y:auto!important;overscroll-behavior:contain}
+:root:root body .create-modal .btn-create-user1 :is(span,i){font-size:inherit!important}
 :root:root body :is(.create-modal,.account-operation-modal,.user-list-filter-dialog) :is(input,textarea,select){font-size:calc(12 * var(--speedbox-ui-unit))}
 :root:root body .speedbox-infrastructure-overlay .form-grid{min-width:0}
 :root:root body .speedbox-infrastructure:not(:has(.dashboard-overview)) .plan-user-count i{font-size:calc(11 * var(--speedbox-ui-unit))!important}
