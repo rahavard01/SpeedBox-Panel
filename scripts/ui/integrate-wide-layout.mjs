@@ -11,7 +11,8 @@ function parser(root){
 const geometry=/^(?:width|height|min-width|max-width|min-height|max-height|inline-size|block-size|min-inline-size|max-inline-size|padding(?:-.+)?|margin(?:-.+)?|gap|row-gap|column-gap|font-size|font|line-height|letter-spacing|border(?:-.+)?-radius|border-radius|flex-basis|grid-template-columns|grid-template-rows|background-size|text-indent)$/;
 const appRegions=/(?:modal|operation-|user-list-filter|user-row-actions|invoice-custom-select|account-plan-select|traffic-records|transaction-|speedbox-partner-history|user-actions|actions-select|segmented|seg-btn|btn-create-user1|save-btn|msg-text)/;
 const scope=':root:root body';
-const appSpacing=/(?:topup-title|table-toolbar)/;
+const appSpacing=/(?:topup-title|table-toolbar|page-actions)/;
+const appControls=/(?:\.btn-create-user[12]?(?![\w-])|\.table-toolbar\b.*\.form-control\b)/;
 const reservationRegions=/(?:account-reservation|reservation-heading|reservation-facts|reservation-activation|reservation-feedback|reservation-primary-actions|reservation-symbol)/;
 
 export function scaleValue(value){
@@ -40,9 +41,9 @@ function stylesheetRows(postcss,text,kind){
   postcss.parse(text).walkRules(rule=>{
     if(!desktopBranch(rule))return;
     const selectors=postcss.list.comma(rule.selector).filter(selector=>{
-      if(kind==='app'&&!appRegions.test(selector)&&!appSpacing.test(selector)&&!/(?:ban-row|ban-text|ios-toggle)/.test(selector))return false;
+      if(kind==='app'&&!appRegions.test(selector)&&!appSpacing.test(selector)&&!appControls.test(selector)&&!/(?:ban-row|ban-text|ios-toggle)/.test(selector))return false;
       if(kind==='reservation'&&!reservationRegions.test(selector))return false;
-      if(/dashboard-overview|speedbox-panel-switch|topbar-holder|side-drawer|hamburger-menu/.test(selector))return false;
+      if(/dashboard-overview|topbar-holder|side-drawer|hamburger-menu/.test(selector))return false;
       return !/^(?:html|body|:root|\*|from|to|\d+%)$/.test(selector.trim());
     }).map(selector=>{
       // The dashboard already has its own complete responsive treatment.
@@ -53,11 +54,14 @@ function stylesheetRows(postcss,text,kind){
     const declarations=[];
     rule.each(d=>{
       if(d.type!=='decl')return;
-      // Preserve the title/toolbar spacing around standalone filters without
+      // Preserve title/action/toolbar spacing around standalone filters without
       // replaying their unrelated field widths or layout declarations.
-      if(kind==='app'&&appSpacing.test(rule.selector)&&!appRegions.test(rule.selector)&&!/^(?:margin(?:-.+)?|gap|row-gap|column-gap)$/.test(d.prop))return;
+      if(kind==='app'&&appSpacing.test(rule.selector)&&!appRegions.test(rule.selector)&&!appControls.test(rule.selector)&&!/^(?:margin(?:-.+)?|gap|row-gap|column-gap)$/.test(d.prop))return;
       const toggleOffset=/\.ios-toggle\b/.test(rule.selector)&&/^(?:top|left|transform)$/.test(d.prop);
-      if(!geometry.test(d.prop)&&!toggleOffset&&!(d.prop.startsWith('--')&&/\d(?:px|rem)\b/.test(d.value)))return;
+      // Only the dropdown's baseline gap scales; script-placed wrapper anchors
+      // and unrelated menu positions must remain untouched.
+      const panelMenuOffset=/\.speedbox-panel-switch__menu\b/.test(rule.selector)&&d.prop==='top';
+      if(!geometry.test(d.prop)&&!toggleOffset&&!panelMenuOffset&&!(d.prop.startsWith('--')&&/\d(?:px|rem)\b/.test(d.value)))return;
       if(d.prop==='font'){
         const size=d.value.match(/(-?(?:\d*\.)?\d+)(px|rem)\b/);
         if(size)declarations.push(`font-size:${scaleValue(size[0])}!important`);

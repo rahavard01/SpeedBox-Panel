@@ -75,6 +75,25 @@ check(declaration('.account-reservation .reservation-heading','font-size','12 * 
 check(declaration('.ban-text','font-size','13 * var'),'block-user label scales');
 check(declaration('.ios-toggle label:after','left','2 * var')&&declaration('.ios-toggle input:checked+label:after','transform','24 * var'),'toggle thumb offsets and checked travel scale with track');
 
+for(const [selector,prop,value] of [
+  ['.table-toolbar .search-field .form-control','border-radius','10 * var'],
+  ['.btn-create-user','border-radius','10 * var'],
+  ['.btn-create-user','margin-bottom','18 * var'],
+  ['.btn-create-user','padding','54 * var'],
+  ['.btn-create-user i','font-size','12 * var'],
+  ['.speedbox-panel-switch .speedbox-panel-switch__trigger','height','28 * var'],
+  ['.speedbox-panel-switch .speedbox-panel-switch__trigger','min-height','28 * var'],
+  ['.speedbox-panel-switch .speedbox-panel-switch__trigger','font-size','11 * var'],
+  ['.speedbox-panel-switch .speedbox-panel-switch__trigger','padding','10 * var'],
+  ['.speedbox-panel-switch .speedbox-panel-switch__trigger','border-radius','10 * var'],
+  ['.speedbox-panel-switch .speedbox-panel-switch__menu','width','220 * var'],
+  ['.speedbox-panel-switch .speedbox-panel-switch__menu','top','12 * var'],
+  ['.speedbox-panel-switch .speedbox-panel-switch__option','font-size','11 * var'],
+  ['.speedbox-panel-switch__trigger>i','font-size','9 * var']
+])check(lastOf([':root:root body '+selector],prop)?.includes(value),'final control declaration: '+selector+' / '+prop);
+check(declaration('.page-actions','margin','15 * var')&&declaration('.page-actions','margin','-10 * var'),'baseline action rows retain their scaled top and bottom spacing');
+check(!rules.some(r=>r.selector===':root:root body .speedbox-panel-switch'&&r.nodes.some(d=>['top','left','right','transform','inset'].includes(d.prop))),'switch wrapper remains positioned by its existing script');
+
 const js=readFileSync(path.join(root,'public/speedbox/wide-layout.js'),'utf8');
 const context=vm.createContext({window:{},document:{readyState:'loading',addEventListener(){}},innerWidth:1920,innerHeight:1080});
 vm.runInContext(js.replace('  function adjust(menu){','  window.testPosition=position;\n  function adjust(menu){'),context);

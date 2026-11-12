@@ -49,7 +49,9 @@
 :root:root body .account-plan-select__menu[data-v-a3e97e89]{padding:calc(5 * var(--speedbox-ui-unit));border-radius:calc(10 * var(--speedbox-ui-unit))}
 :root:root body .account-plan-select__menu>button[data-v-a3e97e89]{width:100%;padding:calc(10 * var(--speedbox-ui-unit));border-radius:calc(7 * var(--speedbox-ui-unit));font-size:calc(12 * var(--speedbox-ui-unit))!important}
 :root:root body .table-toolbar{gap:calc(8 * var(--speedbox-ui-unit))!important;margin:calc(10 * var(--speedbox-ui-unit)) auto calc(-5 * var(--speedbox-ui-unit))!important}
-:root:root body .table-toolbar .search-field .form-control{margin-bottom:calc(17 * var(--speedbox-ui-unit));gap:calc(8 * var(--speedbox-ui-unit))}
+:root:root body .table-toolbar .search-field .form-control{width:100%;font-size:calc(12 * var(--speedbox-ui-unit))!important;border-radius:calc(10 * var(--speedbox-ui-unit));padding:calc(8 * var(--speedbox-ui-unit)) calc(14 * var(--speedbox-ui-unit));margin-bottom:calc(17 * var(--speedbox-ui-unit));gap:calc(8 * var(--speedbox-ui-unit))}
+:root:root body .btn-create-user2{gap:calc(8 * var(--speedbox-ui-unit));padding:calc(8 * var(--speedbox-ui-unit)) calc(54 * var(--speedbox-ui-unit));border-radius:calc(10 * var(--speedbox-ui-unit));font-size:calc(12 * var(--speedbox-ui-unit))!important;margin:calc(15 * var(--speedbox-ui-unit)) calc(15 * var(--speedbox-ui-unit)) calc(5 * var(--speedbox-ui-unit))}
+:root:root body .btn-create-user2 i{font-size:calc(12 * var(--speedbox-ui-unit))!important}
 :root:root body .create-modal{width:auto;max-width:min(calc(1200 * var(--speedbox-ui-unit)),92vw);min-width:min(calc(460 * var(--speedbox-ui-unit)),92vw);border-radius:calc(24 * var(--speedbox-ui-unit));padding:calc(24 * var(--speedbox-ui-unit));font-size:calc(12 * var(--speedbox-ui-unit))!important}
 :root:root body .create-modal .segmented{margin-top:calc(12 * var(--speedbox-ui-unit));border-radius:calc(12 * var(--speedbox-ui-unit))}
 :root:root body .create-modal .final-result{padding:calc(18 * var(--speedbox-ui-unit)) calc(16 * var(--speedbox-ui-unit));border-radius:calc(16 * var(--speedbox-ui-unit));gap:calc(10 * var(--speedbox-ui-unit))}
@@ -58,6 +60,7 @@
 :root:root body .create-modal .final-username .fu-value{padding:calc(6 * var(--speedbox-ui-unit)) calc(12 * var(--speedbox-ui-unit));gap:calc(6 * var(--speedbox-ui-unit));font-size:calc(13 * var(--speedbox-ui-unit))!important;margin-bottom:calc(5 * var(--speedbox-ui-unit));border-radius:calc(12 * var(--speedbox-ui-unit));letter-spacing:calc(0.3 * var(--speedbox-ui-unit))}
 :root:root body .table-toolbar .search-field{margin-bottom:0}
 @media (min-width:768px){:root:root body .table-toolbar{margin-inline:auto;gap:calc(12 * var(--speedbox-ui-unit))}}
+@media (min-width:768px){:root:root body .table-toolbar .search-field .form-control{width:100%}}
 :root:root body .create-modal .plans-grid1{grid-template-columns:1fr 1fr;gap:calc(10 * var(--speedbox-ui-unit)) calc(22 * var(--speedbox-ui-unit));margin-top:calc(-15 * var(--speedbox-ui-unit));margin-bottom:calc(15 * var(--speedbox-ui-unit))}
 :root:root body .create-modal .username-copy{gap:calc(6 * var(--speedbox-ui-unit));padding:0;margin:0}
 :root:root body .create-modal .username-copy .ic{width:calc(16 * var(--speedbox-ui-unit));height:calc(16 * var(--speedbox-ui-unit))}
@@ -134,7 +137,11 @@
 :root:root body .msg-text{line-height:1.5}
 :root:root body .table-toolbar{gap:calc(45 * var(--speedbox-ui-unit));margin:calc(6 * var(--speedbox-ui-unit)) auto calc(10 * var(--speedbox-ui-unit))}
 :root:root body .table-toolbar+table{margin-top:calc(4 * var(--speedbox-ui-unit))!important}
-:root:root body .table-toolbar .search-field .form-control{margin-bottom:calc(17 * var(--speedbox-ui-unit));gap:calc(8 * var(--speedbox-ui-unit))}
+:root:root body .table-toolbar .search-field .form-control{width:100%;font-size:calc(12 * var(--speedbox-ui-unit))!important;border-radius:calc(10 * var(--speedbox-ui-unit));padding:calc(8 * var(--speedbox-ui-unit)) calc(54 * var(--speedbox-ui-unit));margin-bottom:calc(17 * var(--speedbox-ui-unit));gap:calc(8 * var(--speedbox-ui-unit))}
+:root:root body .table-toolbar .search-field .form-control::placeholder{font-size:calc(12 * var(--speedbox-ui-unit))!important}
+:root:root body .table-toolbar .search-field .form-control:focus{font-size:calc(12 * var(--speedbox-ui-unit))!important}
+:root:root body .btn-create-user{gap:calc(8 * var(--speedbox-ui-unit));padding:calc(8 * var(--speedbox-ui-unit)) calc(54 * var(--speedbox-ui-unit));border-radius:calc(10 * var(--speedbox-ui-unit));font-size:calc(12 * var(--speedbox-ui-unit))!important;margin-bottom:calc(18 * var(--speedbox-ui-unit))}
+:root:root body .btn-create-user i{font-size:calc(12 * var(--speedbox-ui-unit))!important}
 :root:root body .modal-backdrop{padding:calc(24 * var(--speedbox-ui-unit)) calc(16 * var(--speedbox-ui-unit));margin-top:0}
 :root:root body .modal-backdrop::-webkit-scrollbar{width:0;height:0}
 :root:root body .modal-outer{min-height:calc(100dvh - calc(48 * var(--speedbox-ui-unit)))}
@@ -188,6 +195,7 @@
 :root:root body .update-modal-list li:not(:last-child):after{height:calc(1 * var(--speedbox-ui-unit))}
 :root:root body .update-modal-close{width:calc(34 * var(--speedbox-ui-unit));height:calc(34 * var(--speedbox-ui-unit));border-radius:calc(12 * var(--speedbox-ui-unit))}
 :root:root body .update-modal-close i{font-size:calc(14 * var(--speedbox-ui-unit))!important;line-height:1}
+:root:root body .tickets-filter-wrap .btn-create-user2[data-v-a4291483]{width:auto;min-width:0;margin-bottom:calc(10 * var(--speedbox-ui-unit));height:calc(38 * var(--speedbox-ui-unit))}
 :root:root body .create-modal .final-result1[data-v-a4291483]{max-width:80%;padding:calc(18 * var(--speedbox-ui-unit)) calc(19 * var(--speedbox-ui-unit));border-radius:calc(16 * var(--speedbox-ui-unit));gap:calc(14 * var(--speedbox-ui-unit))}
 :root:root body .create-modal .modal-title[data-v-a4291483]{font-size:calc(16 * var(--speedbox-ui-unit))!important}
 :root:root body .create-modal .modal-header[data-v-a4291483]{margin-bottom:calc(10 * var(--speedbox-ui-unit))!important}
@@ -207,6 +215,7 @@
 :root:root body .sms-events-modal-body[data-v-19a63443]{min-height:calc(180 * var(--speedbox-ui-unit));padding:calc(2 * var(--speedbox-ui-unit))}
 :root:root body .sms-events-modal-footer[data-v-19a63443]{padding:0}
 :root:root body .sms-events-modal-footer .sms-close-button[data-v-19a63443]{margin-top:calc(18 * var(--speedbox-ui-unit))}
+:root:root body .page-actions[data-v-e83b2fce]{gap:calc(10 * var(--speedbox-ui-unit))}
 :root:root body .toast-anchor-modal{width:100%}
 :root:root body .create-modal .custom-username-box{gap:calc(12 * var(--speedbox-ui-unit));width:min(100%,calc(220 * var(--speedbox-ui-unit)));margin:calc(18 * var(--speedbox-ui-unit)) auto;font-size:calc(12 * var(--speedbox-ui-unit))!important}
 :root:root body .create-modal .custom-username-toggle{gap:calc(9 * var(--speedbox-ui-unit));min-height:calc(24 * var(--speedbox-ui-unit));line-height:1.6}
@@ -861,6 +870,9 @@
 :root:root body .tx-arrow[data-v-d5ef1c17]{font-size:calc(12 * var(--speedbox-ui-unit))!important;line-height:1;margin-left:0}
 :root:root body .chip[data-v-d5ef1c17]{min-width:calc(54 * var(--speedbox-ui-unit));padding:calc(3 * var(--speedbox-ui-unit)) calc(8 * var(--speedbox-ui-unit));border-radius:calc(999 * var(--speedbox-ui-unit));font-size:calc(10 * var(--speedbox-ui-unit))!important}
 :root:root body :where(.speedbox-infrastructure:not(:has(.dashboard-overview)),.speedbox-infrastructure-overlay) .button{gap:calc(8 * var(--speedbox-ui-unit));padding:calc(8 * var(--speedbox-ui-unit)) calc(54 * var(--speedbox-ui-unit));border-radius:calc(10 * var(--speedbox-ui-unit));font-size:calc(12 * var(--speedbox-ui-unit))!important;margin-bottom:calc(18 * var(--speedbox-ui-unit))}
+:root:root body .speedbox-panel-switch .speedbox-panel-switch__trigger{gap:calc(8 * var(--speedbox-ui-unit));padding:calc(8 * var(--speedbox-ui-unit)) calc(54 * var(--speedbox-ui-unit));border-radius:calc(10 * var(--speedbox-ui-unit));font-size:calc(12 * var(--speedbox-ui-unit))!important;margin-bottom:calc(18 * var(--speedbox-ui-unit))}
+:root:root body .speedbox-panel-switch .speedbox-panel-switch__menu{top:calc(100% - calc(1 * var(--speedbox-ui-unit)));max-height:calc(260 * var(--speedbox-ui-unit));padding:calc(5 * var(--speedbox-ui-unit));border-radius:0 0 calc(10 * var(--speedbox-ui-unit)) calc(10 * var(--speedbox-ui-unit))}
+:root:root body .speedbox-panel-switch .speedbox-panel-switch__option{width:100%;padding:calc(9 * var(--speedbox-ui-unit)) calc(10 * var(--speedbox-ui-unit));border-radius:calc(7 * var(--speedbox-ui-unit));font-size:calc(12 * var(--speedbox-ui-unit))!important}
 :root:root body :where(.speedbox-infrastructure:not(:has(.dashboard-overview)),.speedbox-infrastructure-overlay) .panel-card{width:92%;border-radius:calc(12 * var(--speedbox-ui-unit));margin-inline:auto}
 :root:root body :where(.speedbox-infrastructure:not(:has(.dashboard-overview)),.speedbox-infrastructure-overlay) .stat-card{border-radius:calc(10 * var(--speedbox-ui-unit));padding:calc(10 * var(--speedbox-ui-unit)) calc(12 * var(--speedbox-ui-unit))}
 :root:root body :where(.speedbox-infrastructure:not(:has(.dashboard-overview)),.speedbox-infrastructure-overlay) .stat-label{font-size:calc(12.5 * var(--speedbox-ui-unit))!important;margin-bottom:calc(4 * var(--speedbox-ui-unit))}
@@ -1104,6 +1116,13 @@
 :root:root body :where(.speedbox-infrastructure:not(:has(.dashboard-overview)),.speedbox-infrastructure-overlay) .form-actions{gap:calc(10 * var(--speedbox-ui-unit));margin-top:calc(22 * var(--speedbox-ui-unit));padding-top:calc(18 * var(--speedbox-ui-unit))}
 :root:root body :where(.speedbox-infrastructure:not(:has(.dashboard-overview)),.speedbox-infrastructure-overlay) .log-box{border-radius:calc(10 * var(--speedbox-ui-unit));padding:calc(12 * var(--speedbox-ui-unit));font-size:calc(11 * var(--speedbox-ui-unit))!important;max-height:none}
 :root:root body :where(.speedbox-infrastructure:not(:has(.dashboard-overview)),.speedbox-infrastructure-overlay) .infrastructure-native-select{width:calc(1 * var(--speedbox-ui-unit));height:calc(1 * var(--speedbox-ui-unit));min-height:0!important;padding:0!important}
+:root:root body .speedbox-panel-switch{line-height:1}
+:root:root body .speedbox-panel-switch .speedbox-panel-switch__trigger{gap:calc(8 * var(--speedbox-ui-unit));height:calc(28 * var(--speedbox-ui-unit));padding:0 calc(10 * var(--speedbox-ui-unit));margin:0;font-size:calc(11 * var(--speedbox-ui-unit))!important;line-height:1.5}
+:root:root body .speedbox-panel-switch.speedbox-panel-switch--above .speedbox-panel-switch__trigger{max-width:calc(100vw - calc(32 * var(--speedbox-ui-unit)))}
+:root:root body .speedbox-panel-switch__trigger>i{font-size:calc(9 * var(--speedbox-ui-unit))!important}
+:root:root body .speedbox-panel-switch .speedbox-panel-switch__menu{top:calc(100% + calc(12 * var(--speedbox-ui-unit)));width:calc(220 * var(--speedbox-ui-unit));max-height:none;border-radius:calc(10 * var(--speedbox-ui-unit))}
+:root:root body .speedbox-panel-switch .speedbox-panel-switch__option{gap:calc(10 * var(--speedbox-ui-unit));min-height:calc(38 * var(--speedbox-ui-unit));font-size:calc(11 * var(--speedbox-ui-unit))!important}
+:root:root body .speedbox-panel-switch__option.is-selected .fa-check{width:calc(18 * var(--speedbox-ui-unit));height:calc(18 * var(--speedbox-ui-unit));border-radius:50%;font-size:calc(9 * var(--speedbox-ui-unit))!important}
 :root:root body .tariff-plan-select{width:100%;min-width:0}
 :root:root body .tariff-plan-select .invoice-custom-select__trigger{grid-template-columns:1fr auto;gap:calc(8 * var(--speedbox-ui-unit));width:100%;height:calc(30 * var(--speedbox-ui-unit));padding:0 calc(10 * var(--speedbox-ui-unit));border-radius:calc(8 * var(--speedbox-ui-unit));font-size:calc(11 * var(--speedbox-ui-unit))!important}
 :root:root body .tariff-plan-select .invoice-custom-select__trigger span{min-width:0}
@@ -1897,6 +1916,9 @@
 :root:root body :is(.create-modal,.account-operation-modal,.user-list-filter-dialog){max-height:none!important;overflow:visible!important;overscroll-behavior:auto;--text-xs:calc(12 * var(--speedbox-ui-unit));--text-sm:calc(14 * var(--speedbox-ui-unit));--text-base:calc(16 * var(--speedbox-ui-unit))}
 :root:root body .modal-backdrop{overflow-y:auto!important;overscroll-behavior:contain}
 :root:root body .create-modal .btn-create-user1 :is(span,i){font-size:inherit!important}
+/* Complete the switch's baseline 28px height. An older wide rule adds a 30px
+   minimum but leaves text/width fixed; the generated baseline now owns both. */
+:root:root body .speedbox-panel-switch .speedbox-panel-switch__trigger{box-sizing:border-box;min-height:calc(28 * var(--speedbox-ui-unit))}
 /* Inline filter spacing belongs to the baseline too; scale both panels alike. */
 :root:root body .segmented:is([style*="margin-bottom: 10px"],[style*="margin-bottom:10px"]){margin-bottom:calc(10 * var(--speedbox-ui-unit))!important}
 :root:root body .segmented:is([style*="margin-bottom: 25px"],[style*="margin-bottom:25px"]){margin-bottom:calc(25 * var(--speedbox-ui-unit))!important}
