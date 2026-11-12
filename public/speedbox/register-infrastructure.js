@@ -54,7 +54,7 @@ window.__SPEEDBOX_PANEL_SWITCH__ = {
     const { element, ref, nextTick, onMounted, onUnmounted } = speedboxPanelVue;
     const open = ref(false), wrapper = ref(null), trigger = ref(null);
     const mobile = window.__SPEEDBOX_USE_MOBILE__();
-    let placementObserver, panelBar, headerTop, floatingRoot;
+    let placementObserver, panelBar, headerAnchor, floatingRoot;
     const placeAboveBar = () => {
       const bar = panelBar || wrapper.value?.closest('.top-bar');
       const hamburger = bar?.querySelector('.hamburger-menu');
@@ -64,9 +64,10 @@ window.__SPEEDBOX_PANEL_SWITCH__ = {
       const width = control?.getBoundingClientRect().width || 0;
       const height = control?.getBoundingClientRect().height || 0;
       const left = Math.max(8, Math.min(anchor.right - width, window.innerWidth - width - 8));
-      // Remember the header's document boundary, rather than a sticky bar's
-      // current screen position. Recompute the midpoint when control size changes.
-      headerTop ??= window.scrollY + rect.top;
+      // Measure the normal-flow header slot on every layout change. A cached
+      // boundary goes stale on browser zoom; the bar itself may be fixed while
+      // scrolled, so its current screen rectangle is not a stable reference.
+      const headerTop = window.scrollY + (headerAnchor?.getBoundingClientRect().top ?? rect.top);
       const placementTop = Math.max(0, (headerTop - height) / 2);
       wrapper.value.style.left = `${window.scrollX + left}px`;
       wrapper.value.style.top = `${placementTop}px`;
@@ -95,7 +96,17 @@ window.__SPEEDBOX_PANEL_SWITCH__ = {
       // Anchor the selector in the document's header space, outside the bar's
       // backdrop-filter containing block. It scrolls out with the header and
       // never follows the bar's sticky/fixed position. The unmount hook cleans up.
-      if (panelBar) { placementObserver.observe(panelBar); placeAboveBar(); floatingRoot = wrapper.value; document.body.appendChild(floatingRoot); }
+      if (panelBar) {
+        headerAnchor = document.createElement('span');
+        headerAnchor.setAttribute('aria-hidden', 'true');
+        headerAnchor.style.cssText = 'display:block;width:0;height:0;margin:0;padding:0;border:0;font-size:0;line-height:0;pointer-events:none';
+        panelBar.before(headerAnchor);
+        placementObserver.observe(panelBar);
+        if (headerAnchor.parentElement) placementObserver.observe(headerAnchor.parentElement);
+        placeAboveBar();
+        floatingRoot = wrapper.value;
+        document.body.appendChild(floatingRoot);
+      }
       if (trigger.value) placementObserver.observe(trigger.value);
       nextTick(placeAboveBar);
     });
@@ -108,6 +119,7 @@ window.__SPEEDBOX_PANEL_SWITCH__ = {
       window.visualViewport?.removeEventListener('resize', placeAboveBar);
       placementObserver?.disconnect();
       floatingRoot?.remove();
+      headerAnchor?.remove();
     });
     const keys = event => {
       if (mobile.value) return;
