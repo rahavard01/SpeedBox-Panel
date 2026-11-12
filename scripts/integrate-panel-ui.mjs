@@ -11,6 +11,7 @@ import { integrateFinalPolish } from './ui/integrate-final-polish.mjs';
 import { integrateReviewFixes } from './ui/integrate-review-fixes.mjs';
 import { integrateLastPolish } from './ui/integrate-last-polish.mjs';
 import { integrateBranding } from './ui/integrate-branding.mjs';
+import { integrateWideLayout } from './ui/integrate-wide-layout.mjs';
 
 // The imported Panel repository ships its Vue build, without the Vue source tree.
 // Keep this bridge reproducible and fail if that build changes rather than silently
@@ -185,6 +186,7 @@ write('public/speedbox/panel-controls.css', read('public/speedbox/panel-controls
 write('public/speedbox/panel-controls.css', read('public/speedbox/panel-controls.css') + '\n/*speedbox-last-polish-styles*/\n' + read('scripts/ui/last-polish.css'));
 write('public/speedbox/panel-controls.css', read('public/speedbox/panel-controls.css') + '\n/*speedbox-visual-review-styles*/\n' + read('scripts/ui/visual-review.css'));
 console.log('Panel shell and shared controls integrated:', newName);
+console.log('Wide layout integrated:', integrateWideLayout(root));
 
 
 

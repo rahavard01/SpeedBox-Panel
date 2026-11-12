@@ -1,0 +1,18 @@
+/* Caps remain viewport-relative, even when the contents scale up. */
+:root:root body :is(.create-modal,.account-operation-modal,.user-list-filter-dialog){max-height:calc(100dvh - 2 * max(16px,24 * var(--speedbox-ui-unit)))!important;overflow-y:auto!important;overscroll-behavior:contain;--text-xs:calc(12 * var(--speedbox-ui-unit));--text-sm:calc(14 * var(--speedbox-ui-unit));--text-base:calc(16 * var(--speedbox-ui-unit))}
+:root:root body :is(.create-modal,.account-operation-modal,.user-list-filter-dialog) :is(input,textarea,select){font-size:calc(12 * var(--speedbox-ui-unit))}
+:root:root body .speedbox-infrastructure-overlay .form-grid{min-width:0}
+:root:root body .speedbox-infrastructure:not(:has(.dashboard-overview)) .plan-user-count i{font-size:calc(11 * var(--speedbox-ui-unit))!important}
+:root:root body .speedbox-infrastructure:not(:has(.dashboard-overview)) .node-traffic>span{font-size:calc(12 * var(--speedbox-ui-unit))!important}
+:root:root body .speedbox-infrastructure:not(:has(.dashboard-overview)) .resource-label i{font-size:calc(10 * var(--speedbox-ui-unit))!important}
+:root:root body .speedbox-infrastructure-overlay .protocol-badge i{font-size:inherit!important}
+.speedbox-infrastructure .dashboard-summary .dashboard-card-title>i{font-size:calc(18 * var(--speedbox-ui-unit))}
+
+/* Footer lives outside the panel's center-box. */
+:root:root body .speedbox-brand-footer{font-size:calc(11 * var(--speedbox-ui-unit));gap:calc(6 * var(--speedbox-ui-unit));padding:calc(16 * var(--speedbox-ui-unit)) calc(16 * var(--speedbox-ui-unit)) calc(22 * var(--speedbox-ui-unit))}
+:root:root body .speedbox-brand-footer .speedbox-brand-logo{width:calc(18 * var(--speedbox-ui-unit));height:calc(18 * var(--speedbox-ui-unit));transform:translateY(calc(-1 * var(--speedbox-ui-unit)))}
+
+/* Put invoice header fills on the cells, so the group blur cannot cover seams. */
+:root:root body :is(.billing-table,.transaction-records-table)>thead{background:transparent!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
+:root:root body :is(.billing-table,.transaction-records-table)>thead>tr>th{background:rgba(255,255,255,.10)!important;background-clip:padding-box;backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
+:root{--panel-table-heading-height:calc(48 * var(--speedbox-ui-unit))}

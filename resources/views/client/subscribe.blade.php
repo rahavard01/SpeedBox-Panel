@@ -2,7 +2,10 @@
 <html lang="fa" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="dark">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="robots" content="noindex,nofollow,noarchive">
     <meta name="referrer" content="no-referrer">
     <meta name="theme-color" content="#081014">
@@ -78,6 +81,8 @@
         }
 
         html {
+            color-scheme: dark;
+            background: #081014;
             -webkit-text-size-adjust: 100%;
         }
 
@@ -88,6 +93,7 @@
 
         body {
             min-height: 100vh;
+            min-height: 100svh;
             overflow-x: hidden;
             color: #f5f7fa;
             background:
@@ -125,7 +131,12 @@
             z-index: 1;
             width: 100%;
             min-height: 100vh;
+            min-height: 100svh;
             padding: 34px 24px 58px;
+            padding-top: calc(34px + env(safe-area-inset-top, 0px));
+            padding-bottom: calc(58px + env(safe-area-inset-bottom, 0px));
+            padding-left: max(24px, env(safe-area-inset-left, 0px));
+            padding-right: max(24px, env(safe-area-inset-right, 0px));
         }
 
         .container {
@@ -842,6 +853,10 @@
         @media (max-width: 800px) {
             .page {
                 padding: 25px 14px 42px;
+                padding-top: calc(25px + env(safe-area-inset-top, 0px));
+                padding-bottom: calc(42px + env(safe-area-inset-bottom, 0px));
+                padding-left: max(14px, env(safe-area-inset-left, 0px));
+                padding-right: max(14px, env(safe-area-inset-right, 0px));
             }
 
             .subscription-layout {
@@ -865,6 +880,10 @@
         @media (max-width: 560px) {
             .page {
                 padding: 18px 10px 32px;
+                padding-top: calc(18px + env(safe-area-inset-top, 0px));
+                padding-bottom: calc(32px + env(safe-area-inset-bottom, 0px));
+                padding-left: max(10px, env(safe-area-inset-left, 0px));
+                padding-right: max(10px, env(safe-area-inset-right, 0px));
             }
 
             .card {

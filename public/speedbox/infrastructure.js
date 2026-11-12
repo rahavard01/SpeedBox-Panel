@@ -213,7 +213,7 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
       <div class="dashboard-overview">
       <section class="panel-card panel-host-resources" aria-labelledby="panel-host-resources-title"><div class="panel-head"><h2 class="dashboard-card-title" id="panel-host-resources-title">${dashboardIcon('Activity')}<span>وضعیت سرور پنل</span></h2></div><div class="panel-resource-grid" data-panel-resource-grid></div><small data-panel-resource-time></small></section>
       <section class="panel-card dashboard-summary" aria-labelledby="dashboard-summary-title">
-      <div class="panel-head"><h2 class="dashboard-card-title" id="dashboard-summary-title">${dashboardIcon('Network')}<span>صورت وضعیت زیرساخت</span></h2></div>
+      <div class="panel-head"><h2 class="dashboard-card-title" id="dashboard-summary-title"><i class="fas fa-list" aria-hidden="true"></i><span>صورت وضعیت زیرساخت</span></h2></div>
       <div class="stats-grid">
         ${stat('سرورهای مدیریت‌شده',o.managed_servers,'server','servers')}
         ${stat('نودهای فعال',`${o.online_nodes} / ${o.nodes}`,'project-diagram','nodes')}

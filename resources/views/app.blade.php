@@ -60,6 +60,8 @@
   <link rel="stylesheet" href="/speedbox/tunnels.css?v={{ filemtime(public_path('speedbox/tunnels.css')) }}">
   <link rel="stylesheet" href="/speedbox/emergency-configs.css?v={{ filemtime(public_path('speedbox/emergency-configs.css')) }}">
   <link rel="stylesheet" href="/speedbox/partner-statistics.css?v={{ filemtime(public_path('speedbox/partner-statistics.css')) }}">
+  <link rel="stylesheet" href="/speedbox/wide-layout.css?v={{ filemtime(public_path('speedbox/wide-layout.css')) }}">
+  <script defer src="/speedbox/wide-layout.js?v={{ filemtime(public_path('speedbox/wide-layout.js')) }}"></script>
 
   {{-- Icons & PWA (RELATIVE) --}}
   <link rel="icon" type="image/x-icon" href="/favicon.ico">
