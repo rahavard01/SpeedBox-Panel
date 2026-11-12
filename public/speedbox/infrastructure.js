@@ -211,9 +211,9 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
   function renderOverview(o,initial=false){
     content.innerHTML=`
       <div class="dashboard-overview">
-      <section class="panel-card panel-host-resources" aria-labelledby="panel-host-resources-title"><div class="panel-head"><h2 class="dashboard-card-title" id="panel-host-resources-title">${dashboardIcon('Activity')}<span>وضعیت سرور پنل</span></h2><small data-panel-resource-time></small></div><div class="panel-resource-grid" data-panel-resource-grid></div></section>
+      <section class="panel-card panel-host-resources" aria-labelledby="panel-host-resources-title"><div class="panel-head"><h2 class="dashboard-card-title" id="panel-host-resources-title">${dashboardIcon('Activity')}<span>وضعیت سرور پنل</span></h2></div><div class="panel-resource-grid" data-panel-resource-grid></div><small data-panel-resource-time></small></section>
       <section class="panel-card dashboard-summary" aria-labelledby="dashboard-summary-title">
-      <div class="panel-head"><h2 class="dashboard-card-title" id="dashboard-summary-title">${dashboardIcon('Network')}<span>آمار زیرساخت</span></h2></div>
+      <div class="panel-head"><h2 class="dashboard-card-title" id="dashboard-summary-title">${dashboardIcon('Network')}<span>صورت وضعیت زیرساخت</span></h2></div>
       <div class="stats-grid">
         ${stat('سرورهای مدیریت‌شده',o.managed_servers,'server','servers')}
         ${stat('نودهای فعال',`${o.online_nodes} / ${o.nodes}`,'project-diagram','nodes')}
@@ -222,8 +222,8 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
       </div>
       </section>
       <div class="dashboard-grid">
-        <article class="panel-card"><div class="panel-head"><div><h2>آخرین سرورها</h2></div><button class="button secondary small invoice-surface-button" data-go="servers">مشاهده همه</button></div>${initial?loading():recentServerCards(state.servers.slice(0,6))}</article>
-        <article class="panel-card"><div class="panel-head"><div><h2>وضعیت سرورها</h2></div></div><div class="machine-list">${initial?loading():state.machines.length?state.machines.slice(0,5).map(machineCard).join(''):empty('ماشینی وجود ندارد')}</div></article>
+        <article class="panel-card"><div class="panel-head"><h2 class="dashboard-card-title">${dashboardIcon('Server')}<span>آخرین سرورها</span></h2><button class="button secondary small invoice-surface-button" data-go="servers">مشاهده همه</button></div>${initial?loading():recentServerCards(state.servers.slice(0,6))}</article>
+        <article class="panel-card"><div class="panel-head"><h2 class="dashboard-card-title">${dashboardIcon('Activity')}<span>وضعیت سرورها</span></h2></div><div class="machine-list">${initial?loading():state.machines.length?state.machines.slice(0,5).map(machineCard).join(''):empty('ماشینی وجود ندارد')}</div></article>
       </div>
       <div class="traffic-rank-grid">${rankCard('node')}${rankCard('user')}</div>
       <div class="queue-grid"><article class="panel-card" id="queueStatusCard"></article><article class="panel-card" id="jobDetailsCard"></article></div>

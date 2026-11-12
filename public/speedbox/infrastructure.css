@@ -615,3 +615,77 @@
 .speedbox-infrastructure .dashboard-overview button.queue-metric:hover,
 .speedbox-infrastructure .dashboard-overview button.queue-metric:focus-visible{background:rgba(0,0,0,.48);border-color:rgba(0,180,255,.45)}
 @media(max-width:540px){.speedbox-infrastructure .dashboard-overview .panel-resource-grid{gap:8px}.speedbox-infrastructure .dashboard-overview .panel-resource-item{padding:12px 6px}}
+
+/* Match the admin dashboard's 10px outer gap + 14px top inset. */
+.speedbox-infrastructure .dashboard-overview{--dashboard-unit:1px;padding-top:14px;font-size:calc(12 * var(--dashboard-unit))}
+.speedbox-infrastructure .dashboard-overview .panel-card{padding:0 calc(14 * var(--dashboard-unit)) calc(14 * var(--dashboard-unit))}
+.speedbox-infrastructure .dashboard-overview .panel-card>.panel-head{margin:0 calc(-14 * var(--dashboard-unit)) calc(12 * var(--dashboard-unit));padding:calc(24 * var(--dashboard-unit)) calc(14 * var(--dashboard-unit));border-bottom:1px dashed rgba(255,255,255,.15);gap:calc(10 * var(--dashboard-unit))}
+.speedbox-infrastructure .dashboard-overview :is(.panel-host-resources,.dashboard-summary)>.panel-head{justify-content:center}
+.speedbox-infrastructure .dashboard-overview .panel-head h2{font-size:calc(14.5 * var(--dashboard-unit));font-weight:600;line-height:1.5}
+.speedbox-infrastructure .dashboard-overview .dashboard-card-title{gap:calc(10 * var(--dashboard-unit))}
+.speedbox-infrastructure .dashboard-overview .dashboard-icon{width:calc(16 * var(--dashboard-unit));height:calc(16 * var(--dashboard-unit))}
+.speedbox-infrastructure .dashboard-overview .panel-head .dashboard-icon{width:calc(18 * var(--dashboard-unit));height:calc(18 * var(--dashboard-unit))}
+.speedbox-infrastructure .dashboard-overview [data-panel-resource-time]{display:block;margin-top:calc(10 * var(--dashboard-unit));text-align:left;font-size:calc(10 * var(--dashboard-unit))}
+
+/* Use the same 1366px reference as the surrounding admin layout on wide displays. */
+@media(min-width:1367px){
+ .speedbox-infrastructure .dashboard-overview{--dashboard-unit:var(--speedbox-ui-unit,.07320644vw)}
+ .speedbox-infrastructure .dashboard-overview :is(.panel-host-resources,.dashboard-summary){margin-bottom:calc(18 * var(--dashboard-unit))}
+ .speedbox-infrastructure .dashboard-overview :is(.dashboard-grid,.traffic-rank-grid,.queue-grid){gap:calc(18 * var(--dashboard-unit))}
+ .speedbox-infrastructure .dashboard-overview :is(.traffic-rank-grid,.queue-grid){margin-top:calc(18 * var(--dashboard-unit))}
+ .speedbox-infrastructure .dashboard-overview :is(.stats-grid,.panel-resource-grid,.recent-server-list,.machine-list){gap:calc(10 * var(--dashboard-unit))}
+ .speedbox-infrastructure .dashboard-overview :is(.panel-card,.panel-resource-item,.stat-card,.machine-item,.recent-server-item,.rank-row,.queue-metric,.queue-lane){border-radius:calc(10 * var(--dashboard-unit))}
+ .speedbox-infrastructure .dashboard-overview .panel-resource-item{padding:calc(16 * var(--dashboard-unit)) calc(10 * var(--dashboard-unit))}
+ .speedbox-infrastructure .dashboard-overview .panel-resource-ring{width:min(calc(120 * var(--dashboard-unit)),100%);margin-bottom:calc(12 * var(--dashboard-unit))}
+ .speedbox-infrastructure .dashboard-overview .panel-resource-ring strong{font-size:calc(23 * var(--dashboard-unit))}
+ .speedbox-infrastructure .dashboard-overview .panel-resource-label{gap:calc(6 * var(--dashboard-unit));font-size:calc(12 * var(--dashboard-unit))}
+ .speedbox-infrastructure .dashboard-overview .panel-resource-label i{font-size:calc(13 * var(--dashboard-unit))}
+ .speedbox-infrastructure .dashboard-overview .panel-resource-detail{margin-top:calc(6 * var(--dashboard-unit));font-size:calc(10 * var(--dashboard-unit))}
+ .speedbox-infrastructure .dashboard-overview .stat-card{padding:calc(10 * var(--dashboard-unit)) calc(12 * var(--dashboard-unit))}
+ .speedbox-infrastructure .dashboard-overview .stat-label{font-size:calc(12.5 * var(--dashboard-unit))!important;margin-bottom:calc(4 * var(--dashboard-unit))}
+ .speedbox-infrastructure .dashboard-overview .stat-value{font-size:calc(21 * var(--dashboard-unit));margin:calc(8 * var(--dashboard-unit)) 0 calc(4 * var(--dashboard-unit))}
+ .speedbox-infrastructure .dashboard-overview :is(.machine-item,.recent-server-item,.queue-running,.queue-metric,.queue-processes,.queue-lane){padding:calc(12 * var(--dashboard-unit))}
+ .speedbox-infrastructure .dashboard-overview :is(.recent-server-item>header,.machine-top){margin-bottom:calc(10 * var(--dashboard-unit));gap:calc(12 * var(--dashboard-unit))}
+ .speedbox-infrastructure .dashboard-overview .machine-top{min-height:calc(38 * var(--dashboard-unit));margin-bottom:0}
+ .speedbox-infrastructure .dashboard-overview :is(.recent-server-name b,.machine-meta b,.rank-name){font-size:calc(12 * var(--dashboard-unit))}
+ .speedbox-infrastructure .dashboard-overview :is(.recent-server-name small,.recent-server-item>footer,.machine-meta){font-size:calc(10 * var(--dashboard-unit))}
+ .speedbox-infrastructure .dashboard-overview .machine-meta{gap:calc(8 * var(--dashboard-unit));margin-bottom:calc(10 * var(--dashboard-unit))}
+ .speedbox-infrastructure .dashboard-overview .machine-meta b{margin-top:calc(5 * var(--dashboard-unit))}
+ .speedbox-infrastructure .dashboard-overview .meter{height:calc(6 * var(--dashboard-unit));margin-top:calc(7 * var(--dashboard-unit))}
+ .speedbox-infrastructure .dashboard-overview :is(.rank-range,.rank-row-bottom){gap:calc(7 * var(--dashboard-unit))}
+ .speedbox-infrastructure .dashboard-overview .rank-range .invoice-custom-select{width:calc(125 * var(--dashboard-unit))}
+ .speedbox-infrastructure .dashboard-overview .rank-list{height:calc(400 * var(--dashboard-unit));gap:calc(12 * var(--dashboard-unit));padding:calc(2 * var(--dashboard-unit))}
+ .speedbox-infrastructure .dashboard-overview .rank-row{padding:calc(10 * var(--dashboard-unit))}
+ .speedbox-infrastructure .dashboard-overview :is(.rank-row-top,.rank-row-bottom){gap:calc(10 * var(--dashboard-unit))}
+ .speedbox-infrastructure .dashboard-overview :is(.rank-change,.rank-traffic,.queue-lane-identity b,.queue-active-names,.queue-running>div){font-size:calc(11 * var(--dashboard-unit))}
+ .speedbox-infrastructure .dashboard-overview .rank-change .dashboard-icon{width:calc(12 * var(--dashboard-unit));height:calc(12 * var(--dashboard-unit))}
+ .speedbox-infrastructure .dashboard-overview .rank-row-bottom{margin-top:calc(7 * var(--dashboard-unit))}
+ .speedbox-infrastructure .dashboard-overview .rank-bar{height:calc(7 * var(--dashboard-unit))}
+ .speedbox-infrastructure .dashboard-overview .queue-running{gap:calc(12 * var(--dashboard-unit));margin-bottom:calc(14 * var(--dashboard-unit))}
+ .speedbox-infrastructure .dashboard-overview .queue-metrics{gap:calc(12 * var(--dashboard-unit))}
+ .speedbox-infrastructure .dashboard-overview .queue-metric{gap:calc(8 * var(--dashboard-unit))}
+ .speedbox-infrastructure .dashboard-overview .queue-metric>b{font-size:calc(22 * var(--dashboard-unit))}
+ .speedbox-infrastructure .dashboard-overview .queue-metric>span{font-size:calc(11 * var(--dashboard-unit))}
+ .speedbox-infrastructure .dashboard-overview .queue-metric .queue-metric-meta{font-size:calc(10 * var(--dashboard-unit))}
+ .speedbox-infrastructure .dashboard-overview .queue-mini-progress{height:calc(4 * var(--dashboard-unit))}
+ .speedbox-infrastructure .dashboard-overview .queue-processes{margin-top:calc(14 * var(--dashboard-unit))}
+ .speedbox-infrastructure .dashboard-overview .queue-lanes{gap:calc(10 * var(--dashboard-unit));margin-top:calc(16 * var(--dashboard-unit));padding-top:calc(14 * var(--dashboard-unit))}
+ .speedbox-infrastructure .dashboard-overview .queue-lane-icon{width:calc(31 * var(--dashboard-unit));height:calc(31 * var(--dashboard-unit));border-radius:calc(8 * var(--dashboard-unit))}
+ .speedbox-infrastructure .dashboard-overview .queue-lane-counts{gap:calc(8 * var(--dashboard-unit));margin-top:calc(10 * var(--dashboard-unit));font-size:calc(10 * var(--dashboard-unit))}
+ .speedbox-infrastructure .dashboard-overview .queue-lane-counts bdi{font-size:calc(12 * var(--dashboard-unit))}
+ .speedbox-infrastructure .dashboard-overview .queue-lane-counts>span{gap:calc(5 * var(--dashboard-unit))}
+ .speedbox-infrastructure .dashboard-overview .queue-lane-heading{gap:calc(10 * var(--dashboard-unit))}
+ .speedbox-infrastructure .dashboard-overview .queue-lane-identity{gap:calc(9 * var(--dashboard-unit))}
+ .speedbox-infrastructure .dashboard-overview .queue-lane-identity code{font-size:calc(10 * var(--dashboard-unit))}
+ .speedbox-infrastructure .dashboard-overview :is(.invoice-custom-select__trigger,.rank-date-trigger){height:calc(38 * var(--dashboard-unit));font-size:inherit;padding:0 calc(12 * var(--dashboard-unit));border-radius:calc(10 * var(--dashboard-unit))}
+ .speedbox-infrastructure .dashboard-overview .invoice-custom-select__option{font-size:inherit;padding:calc(9 * var(--dashboard-unit)) calc(10 * var(--dashboard-unit))}
+ .speedbox-infrastructure .dashboard-overview .rank-dates{gap:calc(12 * var(--dashboard-unit));margin:calc(20 * var(--dashboard-unit)) 0}
+ .speedbox-infrastructure .dashboard-overview .rank-date-control{gap:calc(8 * var(--dashboard-unit));font-size:calc(11 * var(--dashboard-unit))}
+ .speedbox-infrastructure .dashboard-overview .rank-calendar-menu{padding:calc(10 * var(--dashboard-unit))}
+ .speedbox-infrastructure .dashboard-overview .jalali-calendar{max-width:calc(340 * var(--dashboard-unit))}
+ .speedbox-infrastructure .dashboard-overview .jalali-weekday{font-size:calc(10 * var(--dashboard-unit))}
+ .speedbox-infrastructure .dashboard-overview .button.small{font-size:calc(11 * var(--dashboard-unit))!important;padding:calc(6 * var(--dashboard-unit)) calc(10 * var(--dashboard-unit))}
+ .speedbox-infrastructure .dashboard-overview .empty{padding:calc(36 * var(--dashboard-unit)) calc(12 * var(--dashboard-unit));font-size:inherit}
+ .speedbox-infrastructure .dashboard-overview .loading{min-height:calc(220 * var(--dashboard-unit));font-size:inherit}
+ .speedbox-infrastructure .dashboard-overview .loading.compact{min-height:calc(340 * var(--dashboard-unit))}
+}
