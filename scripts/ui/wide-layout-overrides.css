@@ -13,6 +13,14 @@
 :root:root body .speedbox-brand-footer .speedbox-brand-logo{width:calc(18 * var(--speedbox-ui-unit));height:calc(18 * var(--speedbox-ui-unit));transform:translateY(calc(-1 * var(--speedbox-ui-unit)))}
 
 /* Put invoice header fills on the cells, so the group blur cannot cover seams. */
-:root:root body :is(.billing-table,.transaction-records-table)>thead{background:transparent!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
-:root:root body :is(.billing-table,.transaction-records-table)>thead>tr>th{background:rgba(255,255,255,.10)!important;background-clip:padding-box;backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
+#app .center-box :is(.billing-table,.transaction-records-table)>thead,:root:root body .create-modal .transaction-records-table>thead{background:transparent!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
+#app .center-box :is(.billing-table,.transaction-records-table)>thead>tr>th,:root:root body .create-modal .transaction-records-table>thead>tr>th{background:rgba(255,255,255,.10)!important;background-clip:padding-box;backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
 :root{--panel-table-heading-height:calc(48 * var(--speedbox-ui-unit))}
+
+/* Complete toolbar text and native overlay selects, without scaling twice. */
+#app .center-box :is(.table-toolbar,.entity-toolbar,.invoice-billing-toolbar) :is(.form-control,.search,.invoice-custom-select__trigger,.invoice-custom-select__option,.speedbox-native-select,.infrastructure-native-select){font-size:calc(12 * var(--speedbox-ui-unit))!important}
+#app .center-box :is(.table-toolbar,.entity-toolbar,.invoice-billing-toolbar) :is(input.form-control,input.search)::placeholder{font-size:calc(12 * var(--speedbox-ui-unit))!important}
+#app .topbar-holder .hamburger-menu{font-size:calc(20 * var(--speedbox-ui-unit));margin-left:calc(20 * var(--speedbox-ui-unit))}
+#app .topbar-holder .hamburger-menu :is(.notif-badge,.hamburger-badge){top:calc(-7 * var(--speedbox-ui-unit));right:calc(-9 * var(--speedbox-ui-unit));height:calc(15 * var(--speedbox-ui-unit));min-width:calc(14 * var(--speedbox-ui-unit));border-radius:calc(10 * var(--speedbox-ui-unit));font-size:calc(9 * var(--speedbox-ui-unit));line-height:calc(16 * var(--speedbox-ui-unit))}
+:root{--toast-gap:calc(10 * var(--speedbox-ui-unit))}
+:root:root body .toast-container.pos-top-right{right:calc(16 * var(--speedbox-ui-unit))}

@@ -422,6 +422,23 @@
             font-size: 11px;
         }
 
+        .reservation-note {
+            margin-top: 13px;
+            padding: 13px 14px;
+            border: 1px dashed rgba(255, 255, 255, 0.12);
+            border-radius: 10px;
+            background: rgba(0, 0, 0, 0.37);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .reservation-note > svg { width: 22px; height: 22px; flex: none; color: #e4b367; }
+        .reservation-note-content { min-width: 0; display: grid; gap: 5px; }
+        .reservation-note-heading { color: #e4b367; font-size: 12px; font-weight: 750; }
+        .reservation-note-name { color: rgba(255,255,255,.95); font-size: 12px; overflow-wrap: anywhere; }
+        .reservation-note-details { color: rgba(255,255,255,.75); font-size: 11px; }
+        .reservation-note-hint { margin: 0; color: rgba(255,255,255,.56); font-size: 10.5px; line-height: 1.9; }
+
         .stat-value {
             direction: rtl;
             font-size: 14px;
@@ -1093,6 +1110,17 @@
                         <div class="progress-bar"></div>
                     </div>
                 </div>
+                @if(!empty($reservation))
+                    <aside class="reservation-note" aria-label="طرح رزرو">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg>
+                        <div class="reservation-note-content">
+                            <span class="reservation-note-heading">طرح رزرو</span>
+                            <strong class="reservation-note-name">{{ $reservation['title'] }}</strong>
+                            <span class="reservation-note-details">{{ $faNumber($reservation['traffic_label']) }}@if(($reservation['duration_days'] ?? 0) > 0) · {{ $faNumber($reservation['duration_days']) }} روزه@endif</span>
+                            <p class="reservation-note-hint">{{ $reservation['activation_label'] }}</p>
+                        </div>
+                    </aside>
+                @endif
             </div>
         </section>
 

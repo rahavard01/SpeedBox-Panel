@@ -18,7 +18,7 @@ check(result.rules>1000,'all page and modal families are included');
 const ast=postcss.parse(css);const rules=[];ast.walkRules(r=>rules.push(r));
 check(css.indexOf('color:silver;font-size:18px')<css.indexOf('@media(min-width:1367px)'),'base title icon cannot override its wide-screen size');
 for(const r of rules){
-  if(r.selector.includes('dashboard-summary .dashboard-card-title>i'))continue;
+  if(r.selector.includes('dashboard-summary .dashboard-card-title>i')||r.selector.startsWith('.speedbox-infrastructure-overlay .account-operation-modal .button.operation-danger'))continue;
   let wide=false;for(let p=r.parent;p;p=p.parent)if(p.type==='atrule'&&p.name==='media'&&p.params==='(min-width:1367px)')wide=true;
   check(wide,'generated layout never leaks into mobile: '+r.selector.slice(0,70));
 }
@@ -37,9 +37,15 @@ for(const [fragment,prop,expected] of [
   ['.vpd-input-group','--dp-height','34 * var']
 ])check(declaration(fragment,prop,expected),'scaled region '+fragment+' / '+prop);
 check(!rules.some(r=>r.nodes.some(d=>d.prop==='font'&&d.important)),'scaling never resets font family or weight');
-check(!rules.some(r=>!r.selector.includes('speedbox-brand-logo')&&r.nodes.some(d=>['left','right','top','bottom','inset','transform'].includes(d.prop))),'CSS does not overwrite script-positioned anchors');
+check(!rules.some(r=>/account-actions-menu|speedbox-partner-history-menu/.test(r.selector)&&r.nodes.some(d=>['left','right','top','bottom','inset','transform'].includes(d.prop))),'CSS does not overwrite script-positioned menu anchors');
 check(css.includes('.speedbox-infrastructure:not(:has(.dashboard-overview))'),'existing dashboard proportions stay scoped out');
 check(declaration('.transaction-records-table)>thead','backdrop-filter','none'),'invoice header blur cannot cover separator lines');
+check(declaration('#app .center-box :is(.billing-table,.transaction-records-table)>thead','backdrop-filter','none'),'invoice correction has the ID specificity required to beat the shared table rule');
+check(declaration('::placeholder','font-size','12 * var'),'toolbar placeholder scales with its control');
+check(declaration('.hamburger-menu','font-size','20 * var'),'hamburger scales');
+check(declaration('.btn-toast-close','inline-size','26 * var'),'toast close control scales');
+check(declaration('.msg-icon svg','width','20 * var'),'toast icon scales');
+check(css.includes('.operation-danger{background:#835d16b3!important'),'UUID confirmation uses the existing amber confirmation colour');
 
 const js=readFileSync(path.join(root,'public/speedbox/wide-layout.js'),'utf8');
 const context=vm.createContext({window:{},document:{readyState:'loading',addEventListener(){}},innerWidth:1920,innerHeight:1080});

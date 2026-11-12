@@ -196,12 +196,15 @@ class SubscriptionController extends Controller
         $used = max(0, (int) $user->u + (int) $user->d);
         $total = max(0, (int) $user->transfer_enable);
         $remaining = max(0, $total - $used);
+        $reservation = app(\App\Services\SubscriptionReservationService::class)->current((int) $user->id);
         // One canonical URL for text, clipboard and QR, including URL hooks.
         // Request::url() loses ?token= on the legacy endpoint.
         $url = Helper::getSubscribeUrl((string) $user->token);
         $writer = new \BaconQrCode\Writer(new \BaconQrCode\Renderer\ImageRenderer(new \BaconQrCode\Renderer\RendererStyle\RendererStyle(256), new \BaconQrCode\Renderer\Image\SvgImageBackEnd()));
         return response()->view('client.subscribe', [
             'username' => str_replace(['@', '.com'], ['-', ''], $user->email),
+            'reservation' => ($reservation['state'] ?? null) === 'reserved'
+                ? array_intersect_key($reservation, array_flip(['title', 'traffic_label', 'duration_days', 'activation_label'])) : null,
             'status' => !$user->banned && $remaining > 0 && \App\Services\SubscriptionValidity::unexpired($user->expired_at) ? 'active' : 'inactive',
             'data_used' => round($used / 1073741824, 2).' GB', 'data_limit' => round($total / 1073741824, 2).' GB',
             'data_remaining' => round($remaining / 1073741824, 2).' GB', 'usage_percent' => $total ? min(100, round($used / $total * 100, 1)) : 0,
