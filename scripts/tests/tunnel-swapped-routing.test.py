@@ -49,11 +49,14 @@ with socket.create_connection(('127.0.0.1',60443),2) as c:
  assert out==payload
 s=socket.socket(type=socket.SOCK_DGRAM);s.settimeout(3);s.sendto(b'udp-proof',('127.0.0.1',60443));assert s.recv(100)==b'udp-proof'
 '''
-            for transport in ['tcp','tcpmux','stealth','ws','wss','wsmux','wssmux','kcp','quic','udp','pck']:
+            for index,transport in enumerate(['tcp','tcpmux','stealth','ws','wss','wsmux','wssmux','kcp','quic','udp','pck']):
+                # Raw PCK reserves its TCP source port exclusively; an earlier
+                # TCP case can leave TIME_WAIT on that port after it exits.
+                tunnel_port=58443+index
                 current=[]
                 try:
                     for ns,role,local,peer in [(foreign,'client','10.203.250.2','10.203.250.1'),(iran,'server','10.203.250.1','10.203.250.2')]:
-                        request={'action':'render-swapped','name':'sb-'+'a'*32,'kind':'reverse','swapped':True,'role':role,'transport':transport,'host':'192.0.2.2','port':58443,'bridge_port':55211,'token':'b'*64,'ports':'60443=61443','udp':True,'local_ip':local+'/30','peer_ip':peer}
+                        request={'action':'render-swapped','name':'sb-'+'a'*32,'kind':'reverse','swapped':True,'role':role,'transport':transport,'host':'192.0.2.2','port':tunnel_port,'bridge_port':55211,'token':'b'*64,'ports':'60443=61443','udp':True,'local_ip':local+'/30','peer_ip':peer}
                         path=root/(ns+'.request');path.write_text(json.dumps(request))
                         answer=json.loads(run([binary,'speedbox-json',str(path)]))
                         assert answer['ok'],answer

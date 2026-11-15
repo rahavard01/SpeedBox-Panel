@@ -12,7 +12,7 @@ class ServerTunnel extends Model
     public function attributesToArray(): array
     {
         $data=parent::attributesToArray();
-        if(is_array($data['settings']??null))$data['settings']=\App\Services\TunnelCdn::publicSettings($data['settings']);
+        if(is_array($data['settings']??null))$data['settings']=\App\Services\BackpackManaged::publicSettings(\App\Services\TunnelCdn::publicSettings($data['settings']));
         return $data;
     }
     public function getEngineAttribute($value): string { return $value ?: 'backpack'; }

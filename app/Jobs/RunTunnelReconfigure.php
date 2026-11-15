@@ -54,7 +54,9 @@ class RunTunnelReconfigure implements ShouldQueue,ShouldBeEncrypted
         if(!str_starts_with($phase,'rollback') && !in_array($phase,['cleanup-failed','commit'],true) && $op->deadline->isPast())throw new \RuntimeException('deadline');
         $candidate=clone $t;$candidate->forceFill($p['method']);
         if($phase==='ensure') {
-            if(isset($sides[$i])){$remote->ensure($servers[$sides[$i]]);$this->next($op,[...$p,'index'=>$i+1],'در حال بررسی موتور دو سرور…',5);return;}
+            if(isset($sides[$i])){$remote->ensure($servers[$sides[$i]]);
+                if(\App\Services\BackpackManaged::supported($candidate->transport))$remote->prepareManaged($servers[$sides[$i]],$candidate->transport,$sides[$i]==='iran'?'server':'client');
+                $this->next($op,[...$p,'index'=>$i+1],'در حال بررسی موتور دو سرور…',5);return;}
             $this->next($op,[...$p,'phase'=>'baseline','index'=>0],'در حال ذخیرهٔ تنظیمات قبلی…',10);return;
         }
         if($phase==='baseline') {
@@ -73,6 +75,7 @@ class RunTunnelReconfigure implements ShouldQueue,ShouldBeEncrypted
         if($phase==='reserve') {
             if(isset($sides[$i])) {
                 $side=$sides[$i];$ports=[...$manager->reservedPorts($servers[$side]),(int)$p['settings']['tunnel_port']];
+                if(\App\Services\BackpackManaged::supported($candidate->transport))$ports[]=40000+(int)$t->subnet;
                 if(!empty($p['settings']['source_identity_port']))$ports[]=(int)$p['settings']['source_identity_port'];
                 foreach($p['settings']['mappings'] as $map)$ports[]=(int)$map[$side==='iran'?'public_port':'target_port'];
                 $answer=$remote->maintenance($servers[$side],'reserve',$ports);

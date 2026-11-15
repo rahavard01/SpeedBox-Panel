@@ -82,7 +82,7 @@ try{
   check(await page.locator('[data-test-form]>.form-actions [data-close]').innerText()==='انصراف','native cancel at bottom');
   check(await page.evaluate(()=>getComputedStyle(document.querySelector('#modalTitle')).textAlign)==='center','native centered title');
   const spacing=await page.evaluate(()=>{
-    const form=document.querySelector('[data-test-form]'),surface=form.querySelector('.modal-fields').getBoundingClientRect(),intro=form.querySelector('.tunnel-help').getBoundingClientRect(),first=form.querySelector('.field').getBoundingClientRect(),toggle=form.querySelector('.switch-field').getBoundingClientRect(),note=form.querySelector('.tunnel-test-note span').getBoundingClientRect();
+    const form=document.querySelector('[data-test-form]'),surface=form.querySelector('.modal-fields').getBoundingClientRect(),intro=form.querySelector('.tunnel-help').getBoundingClientRect(),first=form.querySelector('.field').getBoundingClientRect(),toggle=[...form.querySelectorAll('.switch-field')].at(-1).getBoundingClientRect(),note=form.querySelector('.tunnel-test-note span').getBoundingClientRect();
     return {top:intro.top-surface.top,gap:first.top-intro.bottom,center:Math.abs((note.top+note.bottom)/2-(toggle.bottom+surface.bottom)/2)};
   });
   await screenshot(page,'create-layout',width);
@@ -206,6 +206,24 @@ try{
  check(await externalPage.locator('.tunnel-preview-banner').count()===0,'preview is ignored on a non-local hostname');
  check(await externalPage.evaluate(()=>calls.some(c=>c.url==='/tunnels')),'normal API behavior remains on non-local hostname');
  await externalPage.evaluate(()=>session.dispose());await externalPage.close();
+ for(const mode of ['naive','xhttp','reality']){
+  const managedPage=await context.newPage();await mount(managedPage,2);
+  await managedPage.locator('[data-new-tunnel]').click();await managedPage.locator('[data-engine=backpack]').click();
+  await managedPage.locator('#tunnel-iran').selectOption('1',{force:true});await managedPage.locator('#tunnel-foreign').selectOption('2',{force:true});
+  await managedPage.locator('[data-manual-backpack]').click();
+  await managedPage.locator('[data-manual-method=transport]').selectOption(mode,{force:true});
+  check(await managedPage.locator('[name=managed_server_name]').isVisible(),mode+' has explicit secure host settings');
+  check(!await managedPage.locator('[name=accept_udp]').isChecked(),mode+' keeps unsupported UDP off');
+  await managedPage.locator('[name=managed_server_name]').fill('tunnel.example.com');
+  if(mode==='reality')await managedPage.locator('[name=managed_target]').fill('cover.example.com:443');
+  if(mode==='xhttp')await managedPage.locator('[name=managed_path]').fill('/private-test');
+  await managedPage.locator('[data-tunnel-setup] button[type=submit]').click();
+  await managedPage.locator('[data-tunnel-card="1"]').waitFor();
+  const payload=await managedPage.evaluate(()=>calls.find(c=>c.url==='/tunnels'&&c.method==='POST').payload);
+  check(payload.transport===mode&&payload.orientation==='normal'&&payload.managed.server_name==='tunnel.example.com',mode+' submits its own settings with correct method and direction');
+  check(!payload.accept_udp&&!('sealed' in payload.managed),mode+' sends neither unsupported UDP nor stored secrets');
+  await managedPage.evaluate(()=>session.dispose());await managedPage.close();
+ }
  console.log(`PASS: ${assertions} assertions using real infrastructure modal at 1280, 1920 and 390px`);
 }finally{await browser.close();await new Promise(r=>server.close(r));}
 

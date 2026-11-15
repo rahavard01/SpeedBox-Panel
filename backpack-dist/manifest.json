@@ -1,28 +1,59 @@
 {
   "protocol": 1,
-  "upstream_commit": "ff86354bcafbd054e7888e48343145323c9b2207",
-  "upstream_version": "v1.8.5",
-  "upstream_release": "v1.8.5",
-  "speed_measurement": "round_trip_1mib",
-  "source_sha256": "e11b3f81f8cfb485a01491db523a1947c1d0c02f740ecc8d98d8a4ab4116b491",
+  "upstream_commit": "266440e61fa35aa78d5854cb831ee4f59d00c741",
+  "upstream_version": "v2.0.0",
+  "upstream_release": null,
+  "upstream_status": "development",
+  "speed_measurement": "sustained_directional",
+  "legacy_l3": [
+    "udp",
+    "quic",
+    "pck"
+  ],
+  "static_pcap": true,
+  "source_sha256": "947fb9d9fb5e94c91af37973e913eba7043b11d612a0eca8803446f82b52af69",
   "integration_sources": {
-    "speedbox.go": "2ec225e9fcf8889f9e927bbddb9f041f9b1548c3f76bf9e0c6744455fcd438e6",
-    "bridge.go": "4bc5a37ecc1718186ee667679980b9519cdc801877337748bd1455c3475babfe",
+    "bridge.go": "dc347506d2145c46e90d05090350f58c2f3f3a616184b853fc0e6b2367aeb60a",
     "bridge_test.go": "8af3055bd5c02a63a4586dc305bc929e95b30fb96df7f03734247f6d88c4b50d",
-    "build.py": "3bf6f94cef96a4e313b2b84673a723e9ee9fcc1bdd5aae235525ff83c02e2a9e",
-    "l3_confirm.py": "80a0c3dceb1edfe4b5829a0518bbc099163657e978292481e243337df8a58a23",
+    "build.py": "0433def955e0ed6873c2f4e2f3042ce32d9c82eee78f0e89b026e2d4ccf7a6ac",
+    "compat/l3/batchread_linux.go": "574c428729ec84a0339012c3de27774be9f5f92193048069674da4a4a0240cba",
+    "compat/l3/batchread_other.go": "33d43f9faef79796d94d791353e9a4b347733da53eb7f41183ffdb48f7fc2930",
+    "compat/l3/carrier_quic.go": "78aba67991c28d9f27d30b2ad1145c17a233e1116e18bd9363f918dbe07b4e3e",
+    "compat/l3/carrier_quic_reconnect_test.go": "3f91e1180807513dcfe4fb7bb15efbd0c59d0458264b2b0d35ff2b5f927cf104",
+    "compat/l3/carrier_quic_test.go": "5f84e22e2e284815226d4b95b477616042e8194fc6d3b54515f46eed25f265cf",
+    "compat/l3/gso.go": "d5807dbc1e353ee684325bf589f8280f821abfefd5d6491f08efe4e542386195",
+    "compat/l3/gso_linux.go": "0afd776fbfaa66822da92ced717b1abd680eeb7abe903f74352f8f82ea017bb7",
+    "compat/l3/gso_other.go": "f15a284c0433793d345d1a455327209a44161e0785b0660db250971ba987992d",
+    "compat/l3/multipath.go": "70e68b6c3e84fd27b487c0f8c3111137aefdad3063465f80d70f3f809639b112",
+    "compat/l3/multipath_test.go": "25afcbfe2861ec8142967257470d47aa5f4933c2f98dc40b576fd38ae87d2408",
+    "compat/l3/quicevict_test.go": "3d8a074352fed950366385f1611ebaabcbbe48185cb759ea0fdee650d9e779c9",
+    "compat/l3/udp.go": "b0a7d441db802650a812654582a8b999b740f6fcd3840dc1056f89f3be42db1b",
+    "compat/l3/udppeerpin_test.go": "111b7bb46b36d8fcc1a70a7e8429d9f587093fab147161abc523106a2d209f6b",
+    "helper-install.py": "c8ee1ebd8d3663e5217d0b2b9e7ec5956e68d75dce25228dec51c9d067f9c438",
+    "helpers.json": "a8e68b1423fd5f60c670b5b34bb9a7a8fa0aa64187e4436ace6688c77ed6d4cf",
+    "host-maintenance.py": "a3f5906057b03f33382a44a2727b16432425c3a3941576bef3f12a99eeda708e",
+    "integration.py": "fef48ffa8445771d491ad25da0aaf0b8588a80c1f223be10e30974107212614f",
+    "l3_confirm.py": "bebff4c4ff20c6ebec3cd21505e2c84e9743250162a1f196c6d2645f3d5db4ce",
     "l3_confirm_test.go": "74c2d577ff1086339443d1ae2895f8d86ab70427c2ef4eba69fe7eb5fc405b05",
     "l3_keepalive.go": "b8110b53ed880563f6e85410868d9d1502a5aca096bb676c37af202bbf197825",
-    "l3_keepalive_test.go": "2e52ee492b162ada0438cc5701a81efd8800792bd05e67089cc60f83eaa6734c"
+    "l3_keepalive_test.go": "2d7ff16f8ffe77dc85e56f0b8c2dee0ab9a501903f9951d5f8da95bb63044f11",
+    "legacy.go": "3789a403c8e65b7c49e1b2ab7fd2b9e75187dcf8da705b6907da8d695741453a",
+    "legacy_test.go": "169e765071a56f95b9c67811b8dee203b0f465b749c1de70fd5bac38c21f88ac",
+    "managed.go": "31ebfe8df0bb813e5516c0bc7e9bd3d7bb8edb88aff2f4049db937451a26a0b3",
+    "managed_test.go": "8a63a37be6de951364e5a757bcc8b3938a947f1d06470207c5ffca275a551db1",
+    "speedbox.go": "2ec225e9fcf8889f9e927bbddb9f041f9b1548c3f76bf9e0c6744455fcd438e6",
+    "toolchain.py": "2e9ed919364fcedfcfce097bd3342cb9e8e4c08351c1c78fdca35aeb2c56b17e",
+    "tuning.json": "29cae74663ac2ef49c0d14d2be381369663b99195858187e49c5edc93eb364b9",
+    "upstream.json": "e77b2105b545e9d0efa70642de26610c6c27b3c40d757afebcb6e61011404b34"
   },
   "archives": {
     "amd64": {
-      "sha256": "799c79fafdd2bd403c8c80f5950332697674e72731cd14d9230305ddc32f956c",
-      "binary_sha256": "bf8358388c533edae9e4dd4c365fd889c733b9c834cf474838b03186c5b19ee0"
+      "sha256": "9a24c8a9db8dd39ac451be457854559bc02a2c30247d50c985b09fd08839483e",
+      "binary_sha256": "0a6f9e6544513c3bd07ddb0374d029347fd852b8ab2652a8840b13b4f5cfe3e8"
     },
     "arm64": {
-      "sha256": "9d2d874b34adf3862ac24a190dddf1b7bf541406692e749b2a454c83ae10b8bf",
-      "binary_sha256": "274c760f9ce63558ee846ecb16b829fa250718e54f020ac9bbb59e71897a499c"
+      "sha256": "91eb74348b8ea7d26668376c0b2f68a0ab9ec438bbda1bde79a9875d8ff67089",
+      "binary_sha256": "96748e109d6a75aac1ebd358a5ce252cc35a2711d7cf38eff9d4b88a0c243ede"
     }
   }
 }

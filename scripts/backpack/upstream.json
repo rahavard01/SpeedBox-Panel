@@ -1,0 +1,14 @@
+{
+  "commit": "266440e61fa35aa78d5854cb831ee4f59d00c741",
+  "version": "v2.0.0",
+  "release": null,
+  "status": "development",
+  "go": "1.26.11",
+  "source_sha256": "947fb9d9fb5e94c91af37973e913eba7043b11d612a0eca8803446f82b52af69",
+  "compatibility_source": "9d58f8449ac04705b2b47f4869dc9f6db0e034af",
+  "zig": {
+    "version": "0.17.1",
+    "url": "https://ziglang.org/download/0.17.1/zig-x86_64-linux-0.17.1.tar.xz",
+    "sha256": "3581863e3cbcfd0fce0efc682ce7e9e93da96668a977791d356a26d2a7e9b17a"
+  }
+}

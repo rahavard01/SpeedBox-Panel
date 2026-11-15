@@ -30,27 +30,28 @@ var sbName = regexp.MustCompile(`^sb-[a-f0-9]{32}$`)
 var sbID = regexp.MustCompile(`^[a-f0-9]{32}$`)
 
 type SpeedboxRequest struct {
-	Action      string       `json:"action"`
-	ID          string       `json:"id"`
-	Name        string       `json:"name"`
-	Host        string       `json:"host"`
-	Link        string       `json:"link"`
-	Role        string       `json:"role"`
-	Kind        string       `json:"kind"`
-	Transport   string       `json:"transport"`
-	Token       string       `json:"token"`
-	Port        int          `json:"port"`
-	Ports       string       `json:"ports"`
-	UDP         bool         `json:"udp"`
-	Enabled     *bool        `json:"enabled,omitempty"`
-	LocalIP     string       `json:"local_ip"`
-	PeerIP      string       `json:"peer_ip"`
-	TargetPorts []int        `json:"target_ports"`
-	Revision    string       `json:"revision"`
-	Swapped     bool         `json:"swapped"`
-	Side        string       `json:"side"`
-	BridgePort  int          `json:"bridge_port"`
-	CDN         *SpeedboxCDN `json:"cdn,omitempty"`
+	Action      string           `json:"action"`
+	ID          string           `json:"id"`
+	Name        string           `json:"name"`
+	Host        string           `json:"host"`
+	Link        string           `json:"link"`
+	Role        string           `json:"role"`
+	Kind        string           `json:"kind"`
+	Transport   string           `json:"transport"`
+	Token       string           `json:"token"`
+	Port        int              `json:"port"`
+	Ports       string           `json:"ports"`
+	UDP         bool             `json:"udp"`
+	Enabled     *bool            `json:"enabled,omitempty"`
+	LocalIP     string           `json:"local_ip"`
+	PeerIP      string           `json:"peer_ip"`
+	TargetPorts []int            `json:"target_ports"`
+	Revision    string           `json:"revision"`
+	Swapped     bool             `json:"swapped"`
+	Side        string           `json:"side"`
+	BridgePort  int              `json:"bridge_port"`
+	CDN         *SpeedboxCDN     `json:"cdn,omitempty"`
+	Managed     *SpeedboxManaged `json:"managed,omitempty"`
 }
 type SpeedboxCDN struct {
 	Domain   string `json:"domain"`
@@ -60,12 +61,13 @@ type SpeedboxCDN struct {
 	KeyFile  string `json:"key_file"`
 }
 type sbTestState struct {
-	State   string           `json:"state"`
-	Link    string           `json:"link,omitempty"`
-	Rows    []ConnTestResult `json:"rows,omitempty"`
-	Error   string           `json:"error,omitempty"`
-	Updated int64            `json:"updated"`
-	Total   int              `json:"total,omitempty"`
+	State       string           `json:"state"`
+	Measurement string           `json:"measurement"`
+	Link        string           `json:"link,omitempty"`
+	Rows        []ConnTestResult `json:"rows,omitempty"`
+	Error       string           `json:"error,omitempty"`
+	Updated     int64            `json:"updated"`
+	Total       int              `json:"total,omitempty"`
 }
 
 func sbTestPath(id string) string { return filepath.Join(app.ConfigDir, "speedbox-tests", id+".json") }
@@ -74,6 +76,7 @@ func sbPeerPath(id string) string {
 }
 func sbWritePeer(id string, s sbTestState) error {
 	s.Updated = time.Now().Unix()
+	s.Measurement = "sustained_directional"
 	raw, err := json.Marshal(s)
 	if err != nil {
 		return err
@@ -82,6 +85,7 @@ func sbWritePeer(id string, s sbTestState) error {
 }
 func sbWriteTest(id string, s sbTestState) error {
 	s.Updated = time.Now().Unix()
+	s.Measurement = "sustained_directional"
 	raw, err := json.Marshal(s)
 	if err != nil {
 		return err
@@ -95,7 +99,7 @@ func SpeedboxExecute(r SpeedboxRequest) (any, error) {
 	logrus.SetOutput(os.Stderr)
 	switch r.Action {
 	case "version", "test-ready":
-		return map[string]any{"protocol": speedboxProtocol, "upstream": app.Version, "source": "ff86354bcafbd054e7888e48343145323c9b2207"}, nil
+		return map[string]any{"protocol": speedboxProtocol, "upstream": app.Version, "source": speedboxUpstreamCommit, "speed_measurement": "sustained_directional", "legacy_l3": true}, nil
 	case "spawn-host", "spawn-peer":
 		if !sbID.MatchString(r.ID) {
 			return nil, fmt.Errorf("invalid test id")
@@ -184,7 +188,7 @@ func SpeedboxExecute(r SpeedboxRequest) (any, error) {
 			return nil, err
 		}
 		return map[string]string{"carrier": carrier.Render(), "main": main.Render()}, nil
-	case "apply":
+	case "apply", "render":
 		return sbApply(r)
 	case "snapshot", "rollback", "commit":
 		companion := r
@@ -239,6 +243,9 @@ func SpeedboxExecute(r SpeedboxRequest) (any, error) {
 			if err := Delete(r.Name); err != nil {
 				return nil, err
 			}
+		}
+		if err := os.RemoveAll(sbManagedDir(r.Name)); err != nil {
+			return nil, err
 		}
 		return map[string]bool{"deleted": true}, nil
 	case "status":
@@ -315,6 +322,9 @@ func sbApply(r SpeedboxRequest) (any, error) {
 		if err != nil {
 			return nil, err
 		}
+		if r.Action == "render" {
+			return map[string]string{"carrier": carrier.Render(), "main": main.Render()}, nil
+		}
 		if _, exists := Find(r.Name); !exists && len(main.Ports) > 0 {
 			if busy := busyForwardPorts(main.Ports, main.PeerIP); len(busy) > 0 {
 				return nil, fmt.Errorf("Iran entry ports already in use: %s", strings.Join(busy, ", "))
@@ -347,6 +357,9 @@ func sbApply(r SpeedboxRequest) (any, error) {
 		if err != nil {
 			return nil, err
 		}
+		if r.Action == "render" {
+			return map[string]string{"main": body}, nil
+		}
 		if err = writeDirectConfig(name, body); err != nil {
 			return nil, err
 		}
@@ -359,7 +372,11 @@ func sbApply(r SpeedboxRequest) (any, error) {
 				return nil, err
 			}
 		}
-		form := NewTunnel{Role: r.Role, Transport: r.Transport, Name: r.Name, Token: r.Token, ServerAddr: r.Host, TunnelPort: strconv.Itoa(r.Port), Ports: r.Ports, Preset: PresetTurbo}
+		transport := r.Transport
+		if sbManagedTransport(transport) {
+			transport = "tcp"
+		}
+		form := NewTunnel{Role: r.Role, Transport: transport, Name: r.Name, Token: r.Token, ServerAddr: r.Host, TunnelPort: strconv.Itoa(r.Port), Ports: r.Ports, Preset: PresetTurbo}
 		if r.Role == "server" {
 			form.Tune = &FineTune{}
 			raw := []byte(fmt.Sprintf(`{"acceptUDP":%t}`, r.UDP))
@@ -369,8 +386,16 @@ func sbApply(r SpeedboxRequest) (any, error) {
 		if err != nil {
 			return nil, err
 		}
+		if sbManagedTransport(r.Transport) {
+			if err = sbConfigureManaged(&spec, r); err != nil {
+				return nil, err
+			}
+		}
 		if err = sbConfigureCDN(&spec, r.CDN); err != nil {
 			return nil, err
+		}
+		if r.Action == "render" {
+			return map[string]string{"main": spec.Render()}, nil
 		}
 		if !fileExists(app.ConfigPath(spec.Name)) {
 			if err = refuseBusyForwards(spec); err != nil {
@@ -583,13 +608,20 @@ func sbRevision(r SpeedboxRequest) (any, error) {
 
 // Dial/listen placement is independent from the physical Iran ingress.
 func sbDirectSpec(r SpeedboxRequest) (l3Spec, error) {
+	nativePCK := r.Transport == "paqet"
+	if nativePCK {
+		if r.Swapped {
+			return l3Spec{}, fmt.Errorf("native PCK requires normal orientation; legacy PCK supports swapped tunnels")
+		}
+		r.Transport = "pck"
+	}
 	if !sbName.MatchString(r.Name) {
 		return l3Spec{}, fmt.Errorf("invalid owned name")
 	}
 	if r.Role != "iran" && r.Role != "kharej" {
 		return l3Spec{}, fmt.Errorf("invalid physical side")
 	}
-	if !offeredCarrier(r.Transport) || r.Transport == "spoof" {
+	if (!offeredCarrier(r.Transport) && r.Transport != "udp" && r.Transport != "quic") || r.Transport == "spoof" {
 		return l3Spec{}, fmt.Errorf("unsupported carrier")
 	}
 	if err := l3.CheckTunnelEnds(r.LocalIP, r.PeerIP); err != nil {
@@ -611,6 +643,13 @@ func sbDirectSpec(r SpeedboxRequest) (l3Spec, error) {
 	}
 	spec := l3Spec{Name: r.Name, Side: side, Carrier: r.Transport, Encap: "gre", Addr: addr, Token: r.Token, Iface: "sbp" + r.Name[3:14], LocalIP: r.LocalIP, PeerIP: r.PeerIP, MTU: defaultL3MTU}
 	findL3Preset(PresetTurbo).apply(&spec)
+	if nativePCK {
+		// The v2 PCK engine forwards ports without a TUN interface.
+		spec.Iface = ""
+		spec.Preset = PresetTurbo
+		spec.FECData, spec.FECParity = 0, 0
+		spec.SockBuf, spec.TxQueueLen, spec.Qdisc = 0, 0, ""
+	}
 	old, oldErr := DirectSettingsOf(r.Name)
 	if oldErr == nil && strings.HasPrefix(old.Iface, "sbp") {
 		spec.Iface = old.Iface

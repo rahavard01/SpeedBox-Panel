@@ -10,6 +10,11 @@ class BackpackRemote
     private array $testPaths = [];
     public function __construct(private readonly SshExecutor $ssh) {}
 
+    public function prepareManaged(ManagedServer $server,string $transport,string $role): void
+    {
+        app(BackpackHelperRemote::class)->ensure($server,$transport,$role);
+    }
+
     /** Tests use an immutable binary of their own; active tunnels keep running. */
     private function testBinary(ManagedServer $server): string
     {
@@ -69,6 +74,9 @@ class BackpackRemote
 
     public function call(ManagedServer $server, array $request): array
     {
+        if (($request['action']??'')==='apply' && isset($request['managed'])) {
+            $this->prepareManaged($server,$request['transport'],$request['role']);
+        }
         if (!in_array($request['action']??'', ['delete','status'], true)) return $this->callUnbounded($server,$request);
         $command='if [ -x /opt/speedbox-origin/host.py ]; then python3 /opt/speedbox-origin/host.py backpack -; else /opt/speedbox-backpack/backpack speedbox-json -; fi';
         $raw=$this->ssh->withinBudget(15,fn()=>$this->ssh->run($server,$this->sudo($server).'sh -c '.escapeshellarg($command),15,json_encode($request,JSON_THROW_ON_ERROR)));

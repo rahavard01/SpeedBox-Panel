@@ -357,3 +357,5 @@
 /* A separate action from green tested creation and neutral navigation. */
 :is(.speedbox-infrastructure,.speedbox-infrastructure-overlay) .button.tunnel-create-untested{background:rgba(59,130,246,.22);border-color:rgba(96,165,250,.65);color:#e3efff}
 :is(.speedbox-infrastructure,.speedbox-infrastructure-overlay) .button.tunnel-create-untested:hover:not(:disabled){background:rgba(59,130,246,.38);border-color:#93c5fd;color:#fff}
+
+.tunnel-speed-peak{display:block;font-size:.75rem;font-weight:400;opacity:.72;margin-top:.15rem}

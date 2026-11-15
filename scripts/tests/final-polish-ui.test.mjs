@@ -12,6 +12,8 @@ const listeners = new Set();
 const media = { matches: false, addEventListener: (_, fn) => listeners.add(fn), removeEventListener: (_, fn) => listeners.delete(fn) };
 win.matchMedia = () => media; win.ResizeObserver = class { observe() {} disconnect() {} };
 win.HTMLElement.prototype.getBoundingClientRect = function () {
+  // The selector measures the normal-flow marker inserted before the bar.
+  if (this.tagName === 'SPAN' && this.nextElementSibling?.classList.contains('top-bar')) return {top:120,right:0,left:0,height:0,width:0};
   if (this.classList.contains('top-bar')) return {top:120,right:400,left:0,height:50,width:400};
   if (this.classList.contains('hamburger-menu')) return {right:360,left:340,top:120,height:30,width:20};
   if (this.classList.contains('speedbox-panel-switch__trigger')) return {height:media.matches?30:28,width:160};

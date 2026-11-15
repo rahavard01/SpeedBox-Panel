@@ -1,0 +1,53 @@
+{
+  "naive": {
+    "version": "v154.0.8037.49-5",
+    "archives": {
+      "amd64": {
+        "url": "https://github.com/klzgrad/naiveproxy/releases/download/v154.0.8037.49-5/naiveproxy-v154.0.8037.49-5-linux-x64.tar.xz",
+        "sha256": "80214dfea1767f6ecf63a3a79dc9f48b203460f51abc609357fff48dd5844c7d",
+        "format": "tar",
+        "binary": "naive"
+      },
+      "arm64": {
+        "url": "https://github.com/klzgrad/naiveproxy/releases/download/v154.0.8037.49-5/naiveproxy-v154.0.8037.49-5-linux-arm64.tar.xz",
+        "sha256": "8f4d917fa39a5d8cf1c17fc12ffd99ba84c015b62b43461d09cc074ca4114d8d",
+        "format": "tar",
+        "binary": "naive"
+      }
+    }
+  },
+  "sing-box": {
+    "version": "v1.14.2",
+    "archives": {
+      "amd64": {
+        "url": "https://github.com/SagerNet/sing-box/releases/download/v1.14.2/sing-box-1.14.2-linux-amd64.tar.gz",
+        "sha256": "a684484d7477d1437282ee411f4d131d0340aaad60a7868841ebd5d87dd8a0c6",
+        "format": "tar",
+        "binary": "sing-box"
+      },
+      "arm64": {
+        "url": "https://github.com/SagerNet/sing-box/releases/download/v1.14.2/sing-box-1.14.2-linux-arm64.tar.gz",
+        "sha256": "b43a1fb1bda131c6653576741ce527eb2bdeab7c9308ca90ee8b972abb7e4a7f",
+        "format": "tar",
+        "binary": "sing-box"
+      }
+    }
+  },
+  "xray": {
+    "version": "v26.3.27",
+    "archives": {
+      "amd64": {
+        "url": "https://github.com/XTLS/Xray-core/releases/download/v26.3.27/Xray-linux-64.zip",
+        "sha256": "23cd9af937744d97776ee35ecad4972cf4b2109d1e0fe6be9930467608f7c8ae",
+        "format": "zip",
+        "binary": "xray"
+      },
+      "arm64": {
+        "url": "https://github.com/XTLS/Xray-core/releases/download/v26.3.27/Xray-linux-arm64-v8a.zip",
+        "sha256": "4d30283ae614e3057f730f67cd088a42be6fdf91f8639d82cb69e48cde80413c",
+        "format": "zip",
+        "binary": "xray"
+      }
+    }
+  }
+}

@@ -109,7 +109,7 @@ async function liveCases(page,width){
     }else if(pathname.endsWith(endpoint+'/700')){
      liveReads++;
      if(liveReads===1)throw Error('temporary poll interruption');
-     liveTest.results=engine==='backpack'?Array.from({length:16},(_,i)=>({...row,id:row.id+'-'+i,label:row.label+' '+i})):[row,...liveTest.results.slice(1)];
+     liveTest.results=engine==='backpack'?Array.from({length:18},(_,i)=>({...row,id:row.id+'-'+i,label:row.label+' '+i})):[row,...liveTest.results.slice(1)];
      answer={data:liveTest,operation:{id:700,status:'running',progress:32}};
     }else throw Error('unexpected fixture endpoint '+pathname);
     return {ok:true,status:200,json:async()=>structuredClone(answer)};
@@ -122,7 +122,7 @@ async function liveCases(page,width){
   await page.locator(form+' [name=foreign_server_id]').selectOption(String(fixture.servers[1].id),{force:true});
   await page.locator(form+' button[type=submit]').click();
   await page.locator('.tunnel-result-row').first().waitFor();
-  check(await page.locator('.tunnel-result-row').count()===(engine==='backpack'?16:12),engine+' candidate cards exist before any sample');
+  check(await page.locator('.tunnel-result-row').count()===(engine==='backpack'?18:12),engine+' candidate cards exist before any sample');
   check((await page.locator('.tunnel-result-row').first().textContent()).includes('—'),engine+' unmeasured values are unknown');
   const positions=await page.evaluate(()=>{
    const elements=[document.querySelector('#modalBackdrop'),document.querySelector('.infrastructure-modal'),document.querySelector('#modalBody'),document.querySelector('#modalBody .modal-fields')];
@@ -280,7 +280,8 @@ try {
   await choose(page,'gre');await page.locator('[data-network-test] button[type=submit]').click();
   await page.locator('.network-test-results .deployment-progress .progress-value').waitFor();
   check(await page.locator('.network-test-results [role=progressbar]').count()===1,'test uses existing deployment meter with percentage');
-  check(await page.locator('.network-test-results .progress-value').textContent()==='42%','percentage reflects the actual operation value');
+  const percentage=(await page.locator('.network-test-results .progress-value').textContent()).replace(/[۰-۹]/g,c=>String('۰۱۲۳۴۵۶۷۸۹'.indexOf(c))).replace('٪','%');
+  check(percentage==='42%'&&await page.locator('.network-test-results [role=progressbar]').getAttribute('aria-valuenow')==='42','localized percentage reflects the actual operation value');
   if(process.env.SPEEDBOX_TEST_SCREENSHOT_DIR){mkdirSync(process.env.SPEEDBOX_TEST_SCREENSHOT_DIR,{recursive:true});await page.screenshot({path:path.join(process.env.SPEEDBOX_TEST_SCREENSHOT_DIR,'tunnel-progress-'+width+'.png'),fullPage:true});}
   check(await page.locator('.network-test-results .log-box').count()===0,'no extra operations log underneath tunnel tests');
   await page.keyboard.press('Escape');

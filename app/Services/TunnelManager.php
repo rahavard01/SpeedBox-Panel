@@ -8,8 +8,8 @@ use Illuminate\Support\Facades\Schema;
 
 class TunnelManager
 {
-    public const REVERSE = ['tcp','tcpmux','stealth','pck','ws','wss','wsmux','wssmux','kcp','quic','udp'];
-    public const DIRECT = ['xdi','pck','udp','quic','sni'];
+    public const REVERSE = ['tcp','tcpmux','stealth','pck','ws','wss','wsmux','wssmux','kcp','quic','udp','naive','xhttp','reality'];
+    public const DIRECT = ['xdi','paqet','pck','udp','quic','sni'];
     public const READ_ONLY = ['logs','preview','history','maintenance-status'];
 
     public static function busy(int $serverId): bool
@@ -114,7 +114,7 @@ class TunnelManager
                 continue;
             }
             $listenerIran=$t->kind==='reverse'?$t->orientation==='normal':$t->orientation==='swapped';
-            if($t->kind==='reverse'&&$t->orientation==='swapped')$ports[]=40000+(int)$t->subnet;
+            if($t->kind==='reverse'&&($t->orientation==='swapped'||BackpackManaged::supported($t->transport)))$ports[]=40000+(int)$t->subnet;
             if($iran===$listenerIran)$ports[]=(int)$t->settings['tunnel_port'];
             foreach($t->settings['mappings'] as $map)$ports[]=(int)$map[$iran?'public_port':'target_port'];
         }
@@ -128,23 +128,36 @@ class TunnelManager
             ['snapshot'=>json_encode($snapshot,JSON_THROW_ON_ERROR),'checked_at'=>now()]);
     }
 
-    public function rows(array $raw, string $orientation): array
+    public function rows(array $raw, string $orientation, string $measurement = 'round_trip_1mib'): array
     {
         $rows = [];
+        $directional = $measurement === 'sustained_directional';
         foreach ($raw as $r) {
             $kind = $r['k'] ?? ''; $transport = $r['t'] ?? '';
+            if ($directional && $kind === 'direct' && $transport === 'pck') $transport = 'paqet';
             if (!in_array($kind, ['reverse','direct'], true) || !is_string($transport)) continue;
-            $supported = in_array($transport, $kind === 'reverse' ? self::REVERSE : self::DIRECT, true);
+            $supported = in_array($transport, $kind === 'reverse' ? self::REVERSE : self::DIRECT, true) && !($orientation === 'swapped' && ($transport === 'paqet' || BackpackManaged::supported($transport)));
             // Swapped carriers keep Iran ingress via the bridge's private L3 adapter.
             $status = in_array($r['s'] ?? '', ['ok','unstable','down','skipped','testing'], true) ? $r['s'] : 'down';
             $rows[] = ['id' => $orientation.':'.$kind.':'.$transport, 'kind' => $kind, 'transport' => $transport,
-                'label' => ($kind === 'reverse' ? 'Reverse ' : 'Direct ').strtoupper($transport), 'orientation' => $orientation,
+                'label' => ($kind === 'reverse' ? 'Reverse ' : 'Direct ').($transport === 'paqet' ? 'PCK v2' : strtoupper($transport)), 'orientation' => $orientation,
                 'cdn_selectable'=>TunnelCdn::supported('backpack',$kind,$transport),
                 'status' => $status, 'selectable' => $supported && in_array($status, ['ok','unstable'], true),
                 'reason' => !$supported ? 'ساخت خودکار این روش به تنظیمات تکمیلی نیاز دارد و در این نسخه فعال نیست.'
                     : ($status === 'skipped' ? 'این روش روی دو سرور آمادهٔ آزمایش نبود.' : ''),
                 'ok' => max(0, (int) ($r['o'] ?? 0)), 'total' => max(0, (int) ($r['z'] ?? $r['n'] ?? 0)),
-                'rtt' => max(0, (int) ($r['r'] ?? 0)), 'speed' => max(0, (float) ($r['m'] ?? 0)), 'download' => max(0, (float) ($r['m'] ?? 0)), 'measurement'=>'round_trip_1mib',
+                'rtt' => max(0, (int) ($r['r'] ?? 0)),
+                'speed' => max(0, (float) ($r['m'] ?? 0)),
+                'download' => max(0, (float) ($r['m'] ?? 0)),
+                ...($directional ? [
+                    'upload' => max(0, (float) ($r['upload_mbps'] ?? 0)),
+                    'download_peak' => max(0, (float) ($r['peak_mbps'] ?? 0)),
+                    'upload_peak' => max(0, (float) ($r['upload_peak_mbps'] ?? 0)),
+                    'speed_streams' => max(0, (int) ($r['speed_streams'] ?? 0)),
+                    'speed_stable' => (bool) ($r['speed_stable'] ?? false),
+                ] : []),
+                'phase' => in_array($r['phase'] ?? '', ['speed','speed-queued'], true) ? $r['phase'] : '',
+                'measurement'=>$directional ? 'sustained_directional' : 'round_trip_1mib',
                 'recommended' => false];
         }
         return $rows;

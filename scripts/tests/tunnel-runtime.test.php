@@ -56,10 +56,23 @@ for($attempt=0;$attempt<3;$attempt++){
 $assert($op->fresh()->status==='failed'&&$op->fresh()->result['cleanup_pending']===['iran'],'unconfirmed cleanup is recorded as failure');
 $assert(count(array_filter($calls,fn($id)=>$id===81))===3,'a failed first cleanup never skips the other side');
 
+[$prepTest,$prepOp]=$make();$p=$prepOp->payload;unset($p['test_id']);$p['prepare_https']=true;$prepOp->update(['payload'=>$p]);
+$prep=Mockery::mock(BackpackRemote::class);$prep->shouldReceive('prepareManaged')->once()->with(Mockery::on(fn($s)=>$s->id===80),'naive','server');$prep->shouldNotReceive('call');
+(new RunTunnelOperation($prepOp->id))->handle($prep,$manager);
+$assert($prepOp->fresh()->payload['helper_prepare_index']===1,'HTTPS preparation checkpoints after one helper');
+$assert($prepTest->fresh()->status==='running'&&$prepOp->fresh()->status==='running','helper preparation is a durable continuation before engine startup');
+$close($prepOp);
+
 foreach(TunnelManager::REVERSE as $transport){
     $rows=$manager->rows([['k'=>'reverse','t'=>$transport,'s'=>'ok','o'=>60,'n'=>60]],'swapped');
-    $assert($rows[0]['selectable'],'supported swapped '.$transport.' is available with Iran ingress adapter');
+    $assert($rows[0]['selectable']===!\App\Services\BackpackManaged::supported($transport),'swapped support follows the carrier capabilities for '.$transport);
 }
+$rows=$manager->rows([['k'=>'direct','t'=>'pck','s'=>'ok','m'=>80.5,'upload_mbps'=>65.2,'peak_mbps'=>101.1,'upload_peak_mbps'=>72.4,'speed_streams'=>16,'speed_stable'=>true]],'normal','sustained_directional');
+$assert($rows[0]['transport']==='paqet'&&$rows[0]['label']==='Direct PCK v2','native PCK has an identity separate from legacy PCK');
+$assert($rows[0]['download']===80.5&&$rows[0]['upload']===65.2&&$rows[0]['download_peak']===101.1,'directional speed and peaks survive without rescaling');
+$assert($rows[0]['measurement']==='sustained_directional'&&$rows[0]['speed_streams']===16,'measurement metadata is preserved');
+$assert(!$manager->rows([['k'=>'direct','t'=>'pck','s'=>'ok']],'swapped','sustained_directional')[0]['selectable'],'native PCK cannot move physical ingress abroad');
+
 $assert(!$manager->rows([['k'=>'reverse','t'=>'tcp','s'=>'skipped']],'swapped')[0]['selectable'],'skipped rows stay unavailable');
 
 $t=App\Models\ServerTunnel::where('engine','backpack')->first()->load(['iran','foreign']);

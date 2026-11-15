@@ -37,12 +37,13 @@ class TunnelController extends Controller
     {
         $data = $request->validate([
             'iran_server_id' => ['required','integer','different:foreign_server_id','exists:speedbox_managed_servers,id'],
-            'foreign_server_id' => ['required','integer','exists:speedbox_managed_servers,id'], 'compare_both' => 'sometimes|boolean',
+            'foreign_server_id' => ['required','integer','exists:speedbox_managed_servers,id'], 'compare_both' => 'sometimes|boolean', 'prepare_https'=>'sometimes|boolean',
         ], [], ['iran_server_id' => 'سرور ایران', 'foreign_server_id' => 'سرور خارج']);
         [$test,$op] = DB::transaction(function () use ($data,$manager) {
             $this->lockServers($data['iran_server_id'], $data['foreign_server_id']);
+            $prepare=(bool)($data['prepare_https']??false);unset($data['prepare_https']);
             $test = TunnelConnectionTest::create($data);
-            return [$test, $manager->queue('test', null, $test)];
+            return [$test, $manager->queue('test', null, $test,['prepare_https'=>$prepare])];
         });
         return response()->json(['message' => 'بررسی روش‌های اتصال در صف قرار گرفت.', 'data' => $test, 'operation' => $op], 202);
     }
@@ -181,9 +182,10 @@ class TunnelController extends Controller
             'peer_host' => ['nullable','string','max:253',function ($a,$v,$fail) { if ($v && !filter_var($v,FILTER_VALIDATE_IP) && !filter_var($v,FILTER_VALIDATE_DOMAIN,FILTER_FLAG_HOSTNAME)) $fail('آدرس ارتباط دو سرور معتبر نیست.'); }],
         ], [], ['name'=>'نام تونل','public_host'=>'آدرس اتصال کاربران','tunnel_port'=>'پورت ارتباط بین دو سرور','mappings'=>'پورت‌ها']);
         abort_if(in_array((int)$data['tunnel_port'], array_map('intval',array_column($data['mappings'],'public_port')),true), 422, 'پورت ارتباط بین دو سرور باید با پورت کاربران متفاوت باشد.');
+        abort_if($transport === 'paqet' && $orientation === 'swapped', 422, 'PCK جدید در جهت معمول قابل استفاده است؛ برای جهت برعکس از PCK قدیمی استفاده کنید.');
         // Reverse UDP is datagram-only in the pinned engine; do not sell it as a TCP tunnel.
         abort_if($kind === 'reverse' && $transport === 'udp' && $orientation==='normal' && !$data['accept_udp'], 422, 'این روش فقط UDP را منتقل می‌کند؛ برای نود TCP روش دیگری انتخاب کنید.');
-        if($existing&&$kind==='reverse'&&$orientation==='swapped') {
+        if($existing&&$kind==='reverse'&&($orientation==='swapped'||\App\Services\BackpackManaged::supported($transport))) {
             $ports=[(int)$data['tunnel_port'],...array_map('intval',array_column($data['mappings'],'public_port')),...array_map('intval',array_column($data['mappings'],'target_port'))];
             abort_if(in_array(40000+(int)$existing->subnet,$ports,true),422,'یکی از پورت‌ها با پورت داخلی این تونل تداخل دارد؛ پورت دیگری انتخاب کنید.');
         }
@@ -191,7 +193,7 @@ class TunnelController extends Controller
         $data['enabled']=$existing?(bool)($existing->settings['enabled']??true):true;
         $data['preserve_client_ip']=(bool)($data['preserve_client_ip']??$existing?->settings['preserve_client_ip']??true);
         unset($data['name']); $data['peer_host'] = $data['peer_host'] ?? '';
-        $data=[...$data,...\App\Services\TunnelCdn::normalize($request,'backpack',$kind,$transport,$existing)];
+        $data=[...$data,...\App\Services\TunnelCdn::normalize($request,'backpack',$kind,$transport,$existing),...\App\Services\BackpackManaged::normalize($request,$kind,$transport,$orientation,$existing)];
         return $data;
     }
 

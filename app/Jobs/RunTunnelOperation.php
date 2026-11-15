@@ -60,6 +60,20 @@ class RunTunnelOperation implements ShouldQueue, ShouldBeEncrypted
         $orientation = $payload['orientation'] ?? 'normal';
         $host = $orientation === 'normal' ? $iran : $foreign;
         $peer = $orientation === 'normal' ? $foreign : $iran;
+        if (!isset($payload['test_id']) && !empty($payload['prepare_https'])) {
+            // One bounded preparation per continuation; active tunnels keep running.
+            $steps=[[$iran,'naive','server'],[$iran,'naive','client'],[$iran,'xhttp','server'],
+                [$foreign,'naive','server'],[$foreign,'naive','client'],[$foreign,'xhttp','client']];
+            $index=(int)($payload['helper_prepare_index']??0);
+            if(isset($steps[$index])) {
+                $remote->prepareManaged(...$steps[$index]);
+                $payload['helper_prepare_index']=$index+1;
+                $message='در حال آماده‌سازی روش‌های HTTPS روی دو سرور…';
+                $op->update(['payload'=>$payload,'progress'=>max((int)$op->progress,(int)(5*($index+1)/count($steps))),'message'=>$message]);
+                $test->update(['status'=>'running','message'=>$message]);
+                self::dispatch($op->id)->delay(now()->addSeconds(1));return;
+            }
+        }
         if (!isset($payload['test_id'])) {
             $prepareStarted=microtime(true);
             $op->update(['progress'=>max((int)$op->progress,$orientation==='normal'?5:50),'message'=>'در حال آماده‌سازی BackPack روی دو سرور…']);
@@ -96,14 +110,18 @@ class RunTunnelOperation implements ShouldQueue, ShouldBeEncrypted
             $op->update(['payload'=>$payload]);
         }
         $existing = array_values(array_filter($test->results ?? [],fn($r)=>$r['orientation']!==$orientation));
-        $rows = [...$existing,...$manager->rows($answer['rows'] ?? [],$orientation)];
+        $rows = [...$existing,...$manager->rows($answer['rows'] ?? [],$orientation,$answer['measurement'] ?? 'round_trip_1mib')];
         $test->update(['results'=>$rows]);
         $rawRows=$answer['rows']??[];
-        $done=array_sum(array_map(fn($row)=>in_array($row['s']??'',['ok','unstable','down','skipped'],true)?1:
-            min(.99,max(0,(int)($row['n']??0))/max(1,(int)($row['z']??60))),$rawRows));
+        $directional=($answer['measurement']??'')==='sustained_directional';
+        $done=array_sum(array_map(fn($row)=>($row['phase']??'')==='speed-queued'?.8:
+            (($row['phase']??'')==='speed'?.9:
+                (in_array($row['s']??'',['ok','unstable','down','skipped'],true)?1:
+                    ($directional?.8:.99)*min(1,max(0,(int)($row['n']??0))/max(1,(int)($row['z']??60))))),$rawRows));
         $total=max(count($rawRows),(int)($answer['total']??19),1);
         $base=$orientation==='normal'?10:55;
-        $message=($answer['state']??'')==='running'?'در حال بررسی روش‌های اتصال…':'در حال برقراری ارتباط اولیهٔ تست…';
+        $speedPhase=collect($rawRows)->contains(fn($row)=>in_array($row['phase']??'',['speed','speed-queued'],true));
+        $message=$speedPhase?'در حال اندازه‌گیری جداگانهٔ سرعت دریافت و ارسال…':(($answer['state']??'')==='running'?'در حال بررسی روش‌های اتصال…':'در حال برقراری ارتباط اولیهٔ تست…');
         $progress=max((int)$op->progress,$base+(int)(40*$done/$total));
         $test->update(['message'=>$message]);
         $op->update(['progress'=>min(95,$progress),'message'=>$message]);
@@ -170,6 +188,7 @@ class RunTunnelOperation implements ShouldQueue, ShouldBeEncrypted
             try {
                 foreach ($servers as $side=>$server) {
                     $this->timed($op, 'prepare_'.$side, fn() => $remote->ensure($server));
+                    if(\App\Services\BackpackManaged::supported($t->transport))$remote->prepareManaged($server,$t->transport,$side==='iran'?'server':'client');
                     app(\App\Services\TunnelCdnRemote::class)->revision($t,$settings,$side,'snapshot',$revision);
                     $remote->call($server,['action'=>'snapshot','name'=>$t->remote_name,'revision'=>$revision]);
                     $snapshots[$side]=$server;
@@ -307,6 +326,7 @@ class RunTunnelOperation implements ShouldQueue, ShouldBeEncrypted
             'role'=>$t->kind==='reverse'?($side==='iran'?'server':'client'):($side==='iran'?'iran':'kharej'),
             'swapped'=>!$normal,'host'=>$peerHost,'port'=>$settings['tunnel_port'],'ports'=>$maps,'udp'=>(bool)($settings['accept_udp']??false),
             'local_ip'=>($side==='iran'?$a:$b).'/30','peer_ip'=>$side==='iran'?$b:$a];
+        if(\App\Services\BackpackManaged::supported($t->transport))$request['managed']=\App\Services\BackpackManaged::request($settings,$side);
         if(($settings['connection_mode']??'direct')==='cdn')$request['cdn']=['domain'=>$settings['cdn']['domain'],'port'=>(int)$settings['cdn']['port'],'edge_ip'=>$settings['cdn']['edge_ip']??'','cert_file'=>'/etc/speedbox-tunnel-cdn/'.$t->remote_name.'/fullchain.pem','key_file'=>'/etc/speedbox-tunnel-cdn/'.$t->remote_name.'/privkey.pem'];
         return $request;
     }

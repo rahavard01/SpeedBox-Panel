@@ -99,6 +99,12 @@ Subsystem sftp internal-sftp
                 except OSError:
                     if time.monotonic()>deadline:raise
                     time.sleep(.05)
+            # A cached key mismatch stops this operation before its command runs.
+            # The next explicit operation scans and authenticates the replacement.
+            rotated_marker=tmp/'rotation-command'
+            r=check('reinstalled-host-first',command='printf x >> '+str(rotated_marker))
+            assert r.returncode!=0 and not rotated_marker.exists(),(r.stdout,r.stderr)
+            assert not list(sentinel.parent.glob('known-host-*')),'changed cached host key was retained'
             r=check('reinstalled-host',command='printf REINSTALLED_OK');assert r.returncode==0 and r.stdout=='REINSTALLED_OK',(r.stdout,r.stderr)
             assert any(f.read_bytes()!=saved.get(f.name) for f in sentinel.parent.glob('known-host-*')),'replacement was not persisted'
             assert sentinel.read_text()=='other-host ssh-ed25519 unrelated-key\n'

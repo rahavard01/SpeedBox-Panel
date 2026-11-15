@@ -1,11 +1,16 @@
 # Tunnel runtime
 
-BackPack is based on the official v1.8.5 release at commit
-`ff86354bcafbd054e7888e48343145323c9b2207`. This is a modified integration
-build, with isolated paths and a JSON bridge, rather than the unmodified
-upstream executable. `scripts/backpack/build.py` builds both architectures;
-`scripts/verify-backpack.py` verifies the source archive and executable hashes.
-Upstream upgrades must select an official release and rebuild verified bundles.
+BackPack is built from the reviewed development snapshot
+`266440e61fa35aa78d5854cb831ee4f59d00c741` (upstream `v2.0.0`, not a
+published release). `scripts/backpack/upstream.json` locks the source checksum
+and compiler version. Both static Linux builds include libpcap; PCK must not be
+silently omitted by building with CGO disabled. The JSON bridge and isolated
+paths remain SpeedBox integrations. Future updates select a new immutable
+snapshot, review the overlay, rebuild both architectures and verify the bundles.
+
+The source overlay is checked against exact snippets and fails if the pinned
+source no longer matches. Source verification includes every overlay and
+compatibility file. Host tuning still requires the explicit maintenance action.
 
 ## Tests and active tunnels
 
@@ -14,9 +19,31 @@ binaries on both hosts precedes the 30-second coordinator handshake. A peer
 failure is observed on the next queue continuation. Both test services must
 stop before trying the other orientation. Measurement has its own time budget.
 
-The v1.8.5 measurement sends and verifies 1 MiB in a round trip. The reported
-speed counts both legs and is displayed once; it is not a directional download
-or upload result. Historical directional results retain their original labels.
+New tests run stability first, then measure healthy transports one at a time.
+Download and upload have separate sustained rates and one-second peaks, using
+four and sixteen concurrent streams. The authenticated local JSON result names
+this measurement `sustained_directional`; older results without that marker
+remain `round_trip_1mib` and are never relabelled as directional measurements.
+The queue reports the speed phase separately from stability progress.
+The optional HTTPS preparation switch installs pinned helpers in separate queue
+continuations before starting the test; already-installed helpers are reused.
+
+The removed UDP/QUIC L3 carriers and the former raw PCK carrier are retained
+only for interfaces matching the bridge-owned `sbp` namespace. This preserves
+existing settings and the private swapped adapter without changing ordinary
+upstream configurations or automatically changing a tunnel's wire format.
+Native PCK v2 is a separate `paqet` selection in the panel. It uses the new
+port-forwarding engine with no TUN and currently requires normal orientation;
+existing PCK tunnels retain their raw carrier until explicitly reconfigured.
+GRE remains available through the panel's dedicated GRE engine. Naive/XHTTP/REALITY are selectable as normal-orientation Reverse TCP methods.
+The panel generates and encrypts credentials, sends private keys only to Iran,
+and provisions digest-pinned official helpers on the selected hosts. TLS uses
+a private per-tunnel certificate/trust anchor; REALITY uses a generated X25519
+pair and an explicit TLS 1.3/H2 cover. These wrappers do not accept UDP or the
+panel's CDN mode. A Naive hostname must resolve to Iran because its HTTPS URL
+also supplies certificate verification. Existing helper processes belong to the
+upstream generation supervisor. The outer activation probe still gates apply
+and rollback. Source helper versions and archive digests are in helpers.json.
 
 Existing active panel-managed engines are updated with the card's engine
 maintenance action, including the connected host group and rollback. A host

@@ -1,43 +1,109 @@
-name: BackPack stable integration build
+name: BackPack upstream integration
 on:
-  push:
-    branches: [fix/live-tunnel-tests]
-    paths: ['scripts/backpack/**', 'scripts/tests/tunnel-swapped-routing.test.py', '.github/workflows/backpack-integration.yml']
+  pull_request:
+    paths: ['scripts/backpack/**', 'backpack-dist/**', 'app/Services/Backpack*.php', 'app/Services/TunnelManager.php', 'app/Jobs/RunTunnel*.php', 'public/speedbox/tunnels.*', '.github/workflows/backpack-integration.yml']
   workflow_dispatch:
 permissions:
-  contents: write
+  contents: read
 jobs:
   build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.11'
+          cache: false
+      - name: Build prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends flex bison bc netcat-openbsd tcpdump iptables
+          sudo install -d -o "$(id -u)" -g "$(id -g)" -m 0700 /etc/speedbox-backpack
+          python3 scripts/backpack/toolchain.py "$RUNNER_TEMP/zig" >> "$GITHUB_PATH"
+          echo "PCAP_ROOT=$RUNNER_TEMP/pcap" >> "$GITHUB_ENV"
+          echo "GOFLAGS=-buildvcs=false" >> "$GITHUB_ENV"
+      - name: Prepare native libpcap
+        run: |
+          python3 scripts/backpack/build.py --prepare-only "$RUNNER_TEMP/native-source"
+          bash "$RUNNER_TEMP/native-source/BackPack/scripts/build-libpcap.sh" "$RUNNER_TEMP/pcap/native"
+          echo "CGO_ENABLED=1" >> "$GITHUB_ENV"
+          echo "CGO_CFLAGS=-I$RUNNER_TEMP/pcap/native/include" >> "$GITHUB_ENV"
+          echo "CGO_LDFLAGS=-L$RUNNER_TEMP/pcap/native/lib -lpcap" >> "$GITHUB_ENV"
+      - name: Build and verify both static architectures
+        run: |
+          python3 scripts/backpack/build.py
+          python3 scripts/verify-backpack.py
+          python3 scripts/tests/backpack-helper-install.test.py
+      - name: Race regressions
+        working-directory: ${{ runner.temp }}/native-source/BackPack
+        run: go test -race ./internal/client/transport ./internal/server/transport ./internal/tunnel/l3 ./internal/utils/handlers ./internal/utils/network ./internal/web -count=1 -timeout=15m
+      - uses: actions/upload-artifact@v4
+        with:
+          name: verified-backpack-bundles
+          path: backpack-dist
+  network:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version: '1.26.6'
-      - name: Isolated upstream TLS fixture directory
-        run: sudo install -d -o "$(id -u)" -g "$(id -g)" -m 0700 /etc/speedbox-backpack
-      - run: python3 scripts/backpack/build.py --refresh-source
-      - run: python3 scripts/verify-backpack.py
-      - name: Standard input request protocol
+          go-version: '1.26.11'
+          cache: false
+      - name: Prepare bundled engine checks
+        id: engine
         run: |
-          gzip -dc backpack-dist/backpack-linux-amd64.gz > "$RUNNER_TEMP/backpack"
-          chmod 700 "$RUNNER_TEMP/backpack"
-          printf '%s' '{"action":"test-ready"}' | "$RUNNER_TEMP/backpack" speedbox-json -
-      - name: Real tunnel forwarding
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libpcap-dev bc netcat-openbsd tcpdump iptables
+          sudo install -d -o "$(id -u)" -g "$(id -g)" -m 0700 /etc/speedbox-backpack
+          python3 scripts/verify-backpack.py
+          python3 scripts/backpack/build.py --prepare-only "$RUNNER_TEMP/native-source"
+          echo "CGO_ENABLED=1" >> "$GITHUB_ENV"
+          echo "GOFLAGS=-buildvcs=false" >> "$GITHUB_ENV"
+      - name: Real forwarding and swapped routing
+        if: ${{ !cancelled() && steps.engine.outcome == 'success' }}
         run: |
           gzip -dc backpack-dist/backpack-linux-amd64.gz > "$RUNNER_TEMP/backpack"
           chmod 700 "$RUNNER_TEMP/backpack"
           python3 scripts/tests/tunnel-live-routing.test.py "$RUNNER_TEMP/backpack"
-      - name: Real swapped carrier routing
-        run: sudo python3 scripts/tests/tunnel-swapped-routing.test.py "$RUNNER_TEMP/backpack"
-      - name: Commit verified bundles to the working branch
-        if: github.ref == 'refs/heads/fix/live-tunnel-tests'
+          sudo python3 scripts/tests/tunnel-swapped-routing.test.py "$RUNNER_TEMP/backpack"
+      - name: Native PCK v2 over a real path
+        if: ${{ !cancelled() && steps.engine.outcome == 'success' }}
+        working-directory: ${{ runner.temp }}/native-source/BackPack
         run: |
-          git config user.name 'SpeedBox build'
-          git config user.email 'build@users.noreply.github.com'
-          git add backpack-dist scripts/backpack/upstream-source.tar.gz
-          if ! git diff --cached --quiet; then
-            git commit -m 'build: bundle verified BackPack v1.8.5 integration'
-            git push origin HEAD:fix/live-tunnel-tests
-          fi
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          BP_L3_LIVE=1 BACKPACK_CURRENT_BINARY="$RUNNER_TEMP/backpack" go test ./internal/e2e -run '^TestL3CarriersOverARealTUN/pck$' -count=1 -timeout=10m -v
+      - name: Official managed HTTPS helpers
+        if: ${{ !cancelled() && steps.engine.outcome == 'success' }}
+        run: |
+          sudo install -d -o "$(id -u)" -g "$(id -g)" /opt/speedbox-backpack/helpers
+          python3 scripts/tests/backpack-managed-live.test.py "$RUNNER_TEMP/backpack" --download-helpers
+  panel:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: PHP prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y php-cli php-sqlite3 php-bcmath php-mbstring php-xml php-curl php-gd php-zip
+          composer install --no-interaction --prefer-dist --no-progress
+          mkdir -p storage/framework/{cache,views,sessions} storage/logs bootstrap/cache
+      - name: Panel regressions
+        run: |
+          php scripts/tests/tunnel-runtime.test.php
+          php scripts/tests/backpack-managed.test.php
+          php scripts/tests/tunnel-reconfigure.test.php
+          php scripts/tests/tunnel-maintenance.test.php
+          php vendor/bin/phpunit --filter TunnelManagementTest
+      - name: Browser regressions
+        run: |
+          npm ci
+          npm run build
+          npm install --no-save --package-lock=false playwright@1.62.1
+          npx playwright install --with-deps chromium-headless-shell
+          node scripts/tests/tunnel-management-ui.test.mjs

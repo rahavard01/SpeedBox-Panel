@@ -95,14 +95,14 @@ func speedboxPairAcrossIdleBridge(t *testing.T) (*pair, *speedboxIdleBridge) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 	var err error
-	p.listener, err = New(Config{Mode: ModeListen, Addr: "127.0.0.1:0", Token: "idle-bridge-test", Encap: "gre", LocalIP: "10.10.0.2/30", PeerIP: "10.10.0.1", MTU: 1400}, quietLogger())
+	p.listener, err = New(Config{Iface: "sbp0123456789a", Carrier: CarrierUDP, Mode: ModeListen, Addr: "127.0.0.1:0", Token: "idle-bridge-test", Encap: "gre", LocalIP: "10.10.0.2/30", PeerIP: "10.10.0.1", MTU: 1400}, quietLogger())
 	if err != nil {
 		t.Fatal(err)
 	}
 	p.listener.openDevice = func(deviceSpec) (packetDevice, error) { return p.listenDev, nil }
 	start(t, ctx, cancel, p.listener, p.listenDev)
 	b := speedboxNewIdleBridge(t, awaitBind(t, p.listener))
-	p.dialer, err = New(Config{Mode: ModeDial, Addr: b.edge.LocalAddr().String(), Token: "idle-bridge-test", Encap: "gre", LocalIP: "10.10.0.1/30", PeerIP: "10.10.0.2", MTU: 1400}, quietLogger())
+	p.dialer, err = New(Config{Iface: "sbp0123456789a", Carrier: CarrierUDP, Mode: ModeDial, Addr: b.edge.LocalAddr().String(), Token: "idle-bridge-test", Encap: "gre", LocalIP: "10.10.0.1/30", PeerIP: "10.10.0.2", MTU: 1400}, quietLogger())
 	if err != nil {
 		t.Fatal(err)
 	}

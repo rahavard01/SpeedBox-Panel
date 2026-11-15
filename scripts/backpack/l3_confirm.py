@@ -40,22 +40,4 @@ def apply(source: Path):
         raise RuntimeError('Pinned L3 handshake loop does not match')
     path.write_text(text.replace(before, after))
 
-    # The in-memory TUN can deliver a packet before the sender increments its
-    # counters. Await both asynchronous pumps before asserting exact totals.
-    path = source / 'internal/tunnel/l3/tunnel_test.go'
-    text = path.read_text()
-    before = '\n\tout := p.dialer.Stats()\n'
-    after = '''
-\tdeadline := time.Now().Add(time.Second)
-\tfor time.Now().Before(deadline) {
-\t\tif p.dialer.Stats().PacketsOut >= 1 && p.listener.Stats().PacketsIn >= 1 {
-\t\t\tbreak
-\t\t}
-\t\ttime.Sleep(time.Millisecond)
-\t}
-\tout := p.dialer.Stats()
-'''
-    if text.count(before) != 1:
-        raise RuntimeError('Pinned L3 statistics test does not match')
-    path.write_text(text.replace(before, after))
-
+    # Upstream already waits for asynchronous TUN counters in the new snapshot.
