@@ -121,12 +121,22 @@ namespace {
         $session->state=$state; $session->state_data=['plans'=>$plans];
         $keyboard=$keyboardMethod->invoke($controller,$session);
         check($keyboard['keyboard'][0][0]==='📁 ۳۰ گیگ - VIP','multi-duration group keeps its name');
-        $singleLabel = $state === 'buy_select_group' ? '📁 ۶۰ گیگ - VIP / یک‌ماهه' : '📁 ۶۰ گیگ - VIP';
-        check($keyboard['keyboard'][1][0] === $singleLabel, 'single duration appears in purchase only');
+        check($keyboard['keyboard'][1][0] === '📁 ۶۰ گیگ - VIP / یک‌ماهه', 'single duration appears in purchase and renewal');
         $send($keyboard['keyboard'][0][0]);
         check($session->state===$next && count($session->state_data['plans'])===2,'actual '.$state.' handler preserves the selected tariff');
         check($session->state_data['plans'][0]['plan_key']==='7_1m','selected plan key stays stable');
     }
+    $session = Session::$current = new Session;
+    $session->state = 'renew_select_group';
+    $session->state_data = ['plans' => [$plans[2]]];
+    $keyboard = $keyboardMethod->invoke($controller, $session);
+    $send($keyboard['keyboard'][0][0]);
+    check($session->state === 'renew_select_plan', 'single-duration renewal still prompts for price selection');
+    $pricedKeyboard = Bot::$sent[array_key_last(Bot::$sent)][1]['keyboard'];
+    check($pricedKeyboard === [['🧾 یک‌ماهه - 200 تومان'], ['⬅️ بازگشت']], 'renewal price is displayed before payment');
+    $send($pricedKeyboard[0][0]);
+    check($session->state === 'buy_select_payment_method' && $session->state_data['order_type'] === 'renew_account'
+        && $session->state_data['amount'] === 200, 'explicit priced selection starts renewal payment');
     $volume=[['plan_key'=>'3_volume_gig','group_name'=>'حجم دلخواه - VIP','title'=>'حجمی','price'=>10,'description'=>'']];
     foreach(['buy_select_group'=>'buy_waiting_volume_gb','traffic_select_group'=>'traffic_waiting_gb'] as $state=>$next) {
         $session=Session::$current=new Session;

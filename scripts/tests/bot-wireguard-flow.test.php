@@ -94,6 +94,16 @@ namespace App\Services {
     }
     class AccountTariffResolver { public function name(object $account): string { return (string) ($account->account_plan_name ?? ''); } }
     class SubscriptionValidity { public static function hasExpiry($at) { return $at !== null && $at > 0; } }
+    class RuntimeSetting {
+        public static int $renewMode = 2;
+        public static function get($key, $default) { return $key === 'renew_order_event_id' ? self::$renewMode : $default; }
+    }
+    class SubscriptionReservationService {
+        const RESERVE_KEEP = 2;
+        const RESERVE_RESET = 3;
+        public function periodic(object $account): bool { return $account->plan_id === 10; }
+        public function ended(object $account): bool { return false; }
+    }
 }
 namespace {
     function e($value) { return htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8'); }
@@ -109,6 +119,10 @@ namespace {
             return (object)['id'=>1, 'name'=>'VIP', 'group_type'=>'time', 'enable'=>1];
         }
         public function find($id) { return \Illuminate\Support\Facades\DB::$plans[$id] ?? null; }
+        public function pluck($column, $key = null) {
+            return $this->table === 'panel_plan' && $column === 'v2_plan_id' && $key === 'plan_key'
+                ? ['1m' => 11, '3m' => 10] : $this;
+        }
         public function update($values) { return 1; }
     }
     class BotHttpRequest {
@@ -259,6 +273,10 @@ namespace {
         protected function sendMsg(string $id, string $text): void { $this->messages[]=[$text, []]; }
         protected function findPanelUserByUsername(string $email): ?\App\Models\User { return \App\Models\User::find(1); }
         protected function checkPasswordFlexible(string $input, string $stored): bool { return $input === $stored; }
+        protected function findV2UserByEmailSafe(string $email): ?object { return (object) ['id' => 7, 'plan_id' => 10]; }
+        public function renewalKeyboard() {
+            return $this->buildTariffGroupKeyboard(new \App\Models\User, 'renew', account: (object) ['id' => 7], session: $this->session);
+        }
         public function send($text) { $this->handleLoginMessage(['chat'=>['id'=>1],'text'=>$text]); }
     }
     $partner = new \App\Models\User;
@@ -266,6 +284,30 @@ namespace {
     \App\Models\User::$current=$partner;
     $v2=['id'=>1,'name'=>'VIP','type'=>'time','service_type'=>'v2ray'];
     $wg=['id'=>2,'name'=>'VIP','type'=>'time','service_type'=>'wireguard'];
+    foreach ([['1m'], ['1m', '3m']] as $keys) {
+        $flow = new BotFlowAudit;
+        $flow->groups = [$v2 + ['renewal_keys' => $keys]];
+        $flow->planKeys = $keys;
+        $flow->session->state = 'renew_tariff_group';
+        $flow->session->payload = ['target_email' => 'fixture@example.test'];
+        $label = $flow->renewalKeyboard()['keyboard'][0][0]['text'];
+        check($label === (count($keys) === 1 ? '📁 VIP / یک‌ماهه' : '📁 VIP'), 'renewal group label reflects eligible durations');
+        $flow->send($label);
+        check($flow->session->state === 'renew_plan', 'representative still explicitly selects the renewal duration');
+        $buttons = array_column(array_column(end($flow->messages)[1]['keyboard'], 0), 'text');
+        check(count($buttons) === count($keys) + 1 && $buttons[0] === '📅 تمدید یک‌ماهه', 'renewal offers eligible durations and back');
+    }
+    \App\Services\RuntimeSetting::$renewMode = 0;
+    $flow = new BotFlowAudit;
+    $flow->groups = [$v2 + ['renewal_keys' => ['3m']]];
+    $flow->session->state = 'renew_tariff_group';
+    $flow->session->payload = ['target_email' => 'fixture@example.test'];
+    $label = $flow->renewalKeyboard()['keyboard'][0][0]['text'];
+    $flow->send($label);
+    $buttons = array_column(array_column(end($flow->messages)[1]['keyboard'], 0), 'text');
+    check($label === '📁 VIP / سه‌ماهه' && $buttons === ['📅 تمدید سه‌ماهه', '↩️ بازگشت به منو'],
+        'immediate renewal keeps only the compatible reset method');
+    \App\Services\RuntimeSetting::$renewMode = 2;
     foreach ([['V2Ray only',[$v2],'buy_tariff_group'],['WireGuard only',[$wg],'buy_tariff_group'],['both',[$v2,$wg],'buy_service'],['none',[],'logged_in']] as [$label,$groups,$expected]) {
         $flow=new BotFlowAudit; $flow->groups=$groups;
         $flow->send('🛒 خرید اکانت جدید');

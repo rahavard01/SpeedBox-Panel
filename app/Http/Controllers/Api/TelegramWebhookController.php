@@ -2314,7 +2314,7 @@ class TelegramWebhookController extends Controller
 
     protected function buildRenewPlanKeyboard(?int $tariffGroupId = null, ?object $account = null): array
     {
-        $keys = $this->enabledPlanKeysForGroup((int)$tariffGroupId, ['1m', '3m', '6m', '12m'], $account);
+        $keys = $this->renewalPlanKeys((int) $tariffGroupId, $account);
 
         $rows = [];
 
@@ -3418,9 +3418,11 @@ class TelegramWebhookController extends Controller
                 $service = ($group['service_type'] ?? 'v2ray') === 'wireguard' ? 'WireGuard' : 'V2Ray';
                 $label .= ' — ' . $service . '، ' . (($group['type'] ?? 'time') === 'volume' ? 'حجمی' : 'زمانی');
             }
-            $duration = $action === 'buy' && $group['type'] === 'time'
-                ? PurchasePlanDuration::label([$this->singleAccountPurchaseKey((int) $group['id'])])
-                : null;
+            $duration = match (true) {
+                $action === 'buy' && $group['type'] === 'time' => PurchasePlanDuration::label([$this->singleAccountPurchaseKey((int) $group['id'])]),
+                $action === 'renew' => PurchasePlanDuration::label($group['renewal_keys']),
+                default => null,
+            };
             $labels[] = $duration === null ? $label : $label . ' / ' . $duration;
         }
         $counts = array_count_values($labels);
@@ -3534,6 +3536,14 @@ class TelegramWebhookController extends Controller
 
         $eligible = [];
         foreach ($groups as $group) {
+            if ($action === 'renew') {
+                $group['renewal_keys'] = $this->renewalPlanKeys($group['id'], $account);
+                if ($group['renewal_keys']) {
+                    $group['service_type'] = \App\Services\SubscriptionServiceType::of($account);
+                    $eligible[] = $group;
+                }
+                continue;
+            }
             $keys = $group['type'] === 'volume' ? ['volume_gig'] : $timeKeys;
             $plans = DB::table('panel_plan as pp')->join('v2_plan as p', 'p.id', '=', 'pp.v2_plan_id')
                 ->where('pp.tariff_group_id', $group['id'])->where('pp.enable', 1)->whereIn('pp.plan_key', $keys)->select('p.*')->get();
@@ -3544,7 +3554,7 @@ class TelegramWebhookController extends Controller
                 if ($account) {
                     try { \App\Services\SubscriptionServiceType::same($account, (int) $plan->id); }
                     catch (\DomainException $e) { continue; }
-                } elseif ($action === 'renew') { continue; }
+                }
                 $group['service_type'] = $type;
                 $eligible[] = $group;
                 break;
@@ -3553,6 +3563,26 @@ class TelegramWebhookController extends Controller
         usort($eligible, fn ($a, $b) => (['v2ray' => 0, 'wireguard' => 1][$a['service_type']] ?? 2)
             <=> (['v2ray' => 0, 'wireguard' => 1][$b['service_type']] ?? 2));
         return $eligible;
+    }
+
+    private function renewalPlanKeys(int $tariffGroupId, ?object $account): array
+    {
+        if (!$account) return [];
+        $keys = $this->enabledPlanKeysForGroup($tariffGroupId, ['1m', '3m', '6m', '12m'], $account);
+        if (!$keys) return [];
+
+        $reservation = app(\App\Services\SubscriptionReservationService::class);
+        $mode = (int) \App\Services\RuntimeSetting::get('renew_order_event_id', $reservation::RESERVE_KEEP);
+        if (in_array($mode, [$reservation::RESERVE_KEEP, $reservation::RESERVE_RESET], true)
+            || !$reservation->periodic($account) || $reservation->ended($account)) return $keys;
+
+        $planIds = DB::table('panel_plan')
+            ->where('tariff_group_id', $tariffGroupId)
+            ->where('enable', 1)
+            ->whereIn('plan_key', $keys)
+            ->pluck('v2_plan_id', 'plan_key');
+        return array_values(array_filter($keys, fn ($key) => isset($planIds[$key])
+            && $reservation->periodic((object) ['plan_id' => $planIds[$key]])));
     }
 
     protected function detectTariffGroupFromText(string $text, User $user, string $action, ?string $groupTypeFilter = null, ?string $serviceType = null, ?object $account = null, ?PanelBotSession $session = null): ?array

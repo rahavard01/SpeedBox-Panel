@@ -3,7 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Services\{PanelAccountOwnership, SubscriptionReservationPresenter, RuntimeSetting};
+use App\Services\{PanelAccountOwnership, SubscriptionReservationPresenter, RuntimeSetting, SubscriptionServiceType};
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -37,7 +37,9 @@ final class SubscriptionReservationController extends Controller
         app(\App\Services\PartnerTariffAccessService::class)->applyVisibleGroups($query, $owner, 'tg');
         $query->where('vp.service_type',$user->service_type??'v2ray');
         if(($user->service_type??'v2ray')==='wireguard')$query->where('vp.wireguard_instance_id',$user->wireguard_instance_id);
-        $methods = $query->get(['pp.tariff_group_id', 'pp.plan_key', 'vp.reset_traffic_method']);
+        $methods = SubscriptionServiceType::available($user)
+            ? $query->get(['pp.tariff_group_id', 'pp.plan_key', 'vp.reset_traffic_method'])
+            : [];
         $map = [];
         foreach ($methods as $method) $map[$method->tariff_group_id][$method->plan_key] = in_array((int) ($method->reset_traffic_method ?? RuntimeSetting::get('reset_traffic_method', 2)), [0, 1, 3, 4], true);
         return response()->json(['data' => [

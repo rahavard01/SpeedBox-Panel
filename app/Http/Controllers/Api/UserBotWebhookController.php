@@ -2063,7 +2063,7 @@ class UserBotWebhookController extends Controller
         $data = $session->state_data ?: [];
         $data['group_options'] = UserBotPlanGroups::options(
             $data['plans'] ?? [],
-            showSingleDuration: $session->state === 'buy_select_group'
+            showSingleDuration: in_array($session->state, ['buy_select_group', 'renew_select_group'], true)
         );
         $session->update(['state_data' => $data]);
         return UserBotKeyboard::planGroups(array_keys($data['group_options']));

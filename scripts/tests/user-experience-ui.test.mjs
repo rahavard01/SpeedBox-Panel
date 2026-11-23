@@ -29,7 +29,7 @@ const server=createServer(async(req,res)=>{
     else if(p==='/admin/users'||p==='/users')data=[account];
     else if(p==='/admin/tariffs')data={groups,volume_groups:[{id:40,name:'طرح حجمی',enable:1,min_traffic_gb:10,volume_item:{enable:1,v2_plan_id:1}}]};
     else if(p==='/panel/plans')data={plan_groups:[...groups,{id:40,name:'طرح حجمی',group_type:'volume',min_traffic_gb:10,plan_enabled:{volume_gig:true}}]};
-    else if(p==='/users/reservation')data={data:{reservation:null,account_ended:false,account_has_periodic_reset:true,renewal_mode:0,renewal_plan_methods:Object.fromEntries(groups.map(group=>[group.id,Object.fromEntries(['test','1m','3m','6m','12m'].map(key=>[key,true]))]))}};
+    else if(p==='/users/reservation')data={data:{reservation:null,account_ended:false,account_has_periodic_reset:true,renewal_mode:0,renewal_plan_methods:Object.fromEntries(groups.map(group=>[group.id,Object.fromEntries(['test','1m','3m','6m','12m'].map(key=>[key,group.id!==2||key==='test'||key==='3m']))]))}};
     else if(p==='/settings/link-parts')data={data:{part1:'https://fixture.test',part2:'s',part3:''}};
     else if(p==='/users/by-email')data={data:[account]};
     else if(p.endsWith('/online'))data={data:(body.ids||[1]).map(id=>({id,online_count:1,device_limit:2}))};
@@ -120,6 +120,18 @@ try{
   check(selectedPlan(role+'-renew-tariff')==='طرح 1','Renewal preselects the current eligible plan');check(button('تمدید').disabled,'Renewal still requires an explicit duration');const renewPane=doc.getElementById(role+'-renew-tariff').closest('.account-renew-pane');check(win.getComputedStyle(renewPane).rowGap==='16px','Renewal uses consistent spacing');check(win.getComputedStyle(renewPane.querySelector('.create-actions')).marginTop==='0px','Renewal action has no stacked top margin');const outer=win.getComputedStyle(renewPane.closest('.final-result'));const upperGap=(parseFloat(outer.rowGap)||parseFloat(outer.gap))+parseFloat(win.getComputedStyle(renewPane).marginTop);const lowerGap=parseFloat(win.getComputedStyle(renewPane).rowGap)+parseFloat(win.getComputedStyle(renewPane.querySelector('.create-actions>.btn-create-user1')).marginTop);check(upperGap===lowerGap,'Renew action gap equals selector-to-divider gap');check(!doc.getElementById(role+'-renew-tariff').closest('.account-plan-select').querySelector('label'),'Renewal has no duplicate label');check(doc.getElementById(role+'-renew-tariff').closest('.account-plan-select').classList.contains('account-plan-select--compact'),'Renewal uses the shared compact selector inside the reservation modal');
   await choosePlan(role+'-renew-tariff','طرح 3');check(selectedPlan(role+'-renew-tariff')==='طرح 3','Renewal allows changing the suggested plan');button('یک ماهه').click();await sleep(20);check(!button('تمدید').disabled,'Renewal enables after tariff and duration');[...doc.querySelectorAll('.modal-backdrop')].at(-1).click();await sleep(30);button('مشاهده').click();await wait(()=>button('تمدید اکانت'),'account reopen');button('تمدید اکانت').click();await wait(()=>doc.getElementById(role+'-renew-tariff'),'renewal selector ready');
   check(selectedPlan(role+'-renew-tariff')==='طرح 1','Renewal reopens at the current plan rather than the previous manual choice');check(button('تمدید').disabled,'Reopening renewal clears the duration');
+  const renewSelector = role + '-renew-tariff';
+  await choosePlan(renewSelector, 'طرح 2 / سه‌ماهه');
+  check(selectedPlan(renewSelector) === 'طرح 2 / سه‌ماهه' && !button('تمدید').disabled,
+   'The only compatible renewal duration is labeled and selected');
+  check(!doc.querySelector('.account-renew-pane .plans-grid'), 'Single-duration renewal omits redundant choices');
+  check(!requests.slice(requestStart).some(r=>r.path.endsWith('/users/extend')), 'Selecting the plan does not submit renewal');
+  await choosePlan(renewSelector, 'طرح 1');
+  check(button('تمدید').disabled, 'Switching to a multi-duration group clears the automatic choice');
+  await choosePlan(renewSelector, 'طرح 2 / سه‌ماهه');
+  button('تمدید').click();
+  await wait(()=>requests.slice(requestStart).some(r=>r.path.endsWith('/users/extend')&&r.body.tariff_group_id===2&&r.body.period==='3m'), 'explicit renewal submits the eligible duration');
+  await wait(()=>!doc.querySelector('.account-renew-pane'), 'renewal request completes');
   [...doc.querySelectorAll('.modal-backdrop')].at(-1).click();await sleep(30);
   if(role==='admin'){
    doc.querySelector('[aria-label="عملیات اکانت"]').click();await sleep(20);button('ویرایش').click();const email=await wait(()=>doc.getElementById('account-email-1'),'edit dialog');email.value='duplicate@uxrep.com';email.dispatchEvent(new win.Event('input',{bubbles:true}));await sleep(20);[...doc.querySelectorAll('button')].find(el=>visible(el)&&el.textContent.includes('ذخیره')).click();
