@@ -60,10 +60,6 @@ foreach ($botBuilders as $label => $builder) {
 
 // Invoke the actual create controllers. Only account creation/pricing are stubbed:
 // those operations are unrelated to this change and must not charge any wallet.
-Schema::create('panel_tariff_groups', function ($t) {
-    $t->id(); $t->string('name'); $t->string('group_type'); $t->boolean('enable');
-    $t->boolean('is_default'); $t->integer('sort_order')->default(0);
-});
 Schema::create('panel_plan', function ($t) {
     $t->id(); $t->integer('tariff_group_id'); $t->integer('v2_plan_id');
     $t->string('plan_key'); $t->boolean('enable');

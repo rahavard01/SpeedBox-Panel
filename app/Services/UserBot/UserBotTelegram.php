@@ -72,7 +72,8 @@ class UserBotTelegram
         string|int $chatId,
         string $qrText,
         string $caption,
-        ?array $keyboard = null
+        ?array $keyboard = null,
+        bool $wireguard = false
     ): array {
         $tmp = null;
 
@@ -88,8 +89,8 @@ class UserBotTelegram
             $result = Builder::create()
                 ->writer(new PngWriter())
                 ->data($qrText)
-                ->size(800)
-                ->margin(20)
+                ->size($wireguard ? 1024 : 800)
+                ->margin($wireguard ? 32 : 20)
                 ->build();
 
             $tmp = tempnam(
@@ -156,6 +157,7 @@ class UserBotTelegram
 
             return $data;
         } catch (\Throwable $e) {
+            if ($wireguard) throw $e;
             return $this->sendMessage(
                 $chatId,
                 $caption,
@@ -169,6 +171,33 @@ class UserBotTelegram
                 @unlink($tmp);
             }
         }
+    }
+
+    public function sendWireGuardProfile(string|int $chatId, string $config, string $caption = '', ?array $keyboard = null, string $filename = 'speedbox.conf'): array
+    {
+        // The caller sends the device heading once. Neither attachment repeats it.
+        $this->sendQrPhotoOrMessage($chatId, $config, '', null, true);
+        $response = Http::timeout(30)->attach('document', $config, $filename)
+            ->post($this->apiUrl('sendDocument'), ['chat_id' => $chatId]);
+        $response->throw();
+        if (!$response->json('ok')) throw new \RuntimeException('تحویل فایل وایرگارد انجام نشد.');
+        return $response->json();
+    }
+
+    public function sendWireGuardProfiles(string|int $chatId, object $account, ?array $keyboard = null): array
+    {
+        $service = app(\App\Services\WireGuardService::class);
+        $prepared = [];
+        foreach ($service->profiles($account) as $peer) {
+            $prepared[] = [$service->config($account, $peer), $service->filename($account, $peer), $service->profileNumber($peer)];
+        }
+        if (!$prepared) throw new \RuntimeException('پروفایل اتصال فعالی موجود نیست؛ وضعیت حساب یا سرویس را بررسی کنید.');
+        $response = [];
+        foreach ($prepared as [$config, $filename, $number]) {
+            $this->sendMessage($chatId, 'دستگاه ' . \App\Support\JalaliDateFormatter::persianDigits((string) $number), $keyboard);
+            $response = $this->sendWireGuardProfile($chatId, $config, '', null, $filename);
+        }
+        return $response;
     }
 
     private function apiUrl(string $method): string

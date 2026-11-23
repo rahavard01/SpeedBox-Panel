@@ -118,6 +118,10 @@ Route::middleware(['auth:sanctum', CheckTokenExpiration::class, CheckUserBanned:
     Route::get('/user/panel', [PanelController::class, 'getProfile']);
     Route::get('/user/wallet', [PanelController::class, 'getWallet']);
     Route::get('/users', [PanelController::class, 'listUsers']);
+    Route::get('/users/{id}/wireguard', [\App\Http\Controllers\Api\WireGuardAccountController::class,'index'])->whereNumber('id');
+    Route::post('/users/{id}/wireguard', [\App\Http\Controllers\Api\WireGuardAccountController::class,'create'])->whereNumber('id');
+    Route::patch('/users/{id}/wireguard/{peer}', [\App\Http\Controllers\Api\WireGuardAccountController::class,'update'])->whereNumber('id')->whereNumber('peer');
+    Route::get('/users/{id}/wireguard/{peer}/config', [\App\Http\Controllers\Api\WireGuardAccountController::class,'config'])->whereNumber('id')->whereNumber('peer');
     Route::get('/users/traffic-records', [PanelController::class, 'trafficRecords']);
     Route::get('/users/transaction-records', [PanelController::class, 'transactionRecords']);
     Route::post('/users/{id}/reservation/cancel', [\App\Http\Controllers\Api\SubscriptionReservationController::class, 'cancel'])->whereNumber('id');
@@ -128,6 +132,9 @@ Route::middleware(['auth:sanctum', CheckTokenExpiration::class, CheckUserBanned:
     Route::post('/users/online', [\App\Http\Controllers\Api\PartnerAccountReadController::class, 'online']);
     Route::get('/users/{id}/details', [\App\Http\Controllers\Api\PartnerAccountReadController::class, 'details'])->whereNumber('id');
     Route::get('/users/{id}/reset-history', [\App\Http\Controllers\Api\PartnerAccountReadController::class, 'resetHistory'])->whereNumber('id');
+    Route::get('/users/{id}/identity', [\App\Http\Controllers\Api\PartnerAccountOperationsController::class, 'show'])->whereNumber('id');
+    Route::patch('/users/{id}/username', [\App\Http\Controllers\Api\PartnerAccountOperationsController::class, 'rename'])->whereNumber('id')->middleware('throttle:20,1');
+    Route::post('/users/{id}/reset-secret', [\App\Http\Controllers\Api\PartnerAccountOperationsController::class, 'resetSecret'])->whereNumber('id')->middleware('throttle:10,1');
     Route::post('/users/ban', [PanelController::class, 'updateBan']);
     Route::post('/users/extend', [V2UserController::class, 'extend']);
     Route::post('/users/topup', [V2UserController::class, 'topup']);
@@ -275,6 +282,9 @@ Route::middleware(['auth:sanctum', CheckTokenExpiration::class, CheckUserBanned:
         Route::post('/referrals/{id}/approve', [ReferralController::class, 'adminApprove'])->whereNumber('id');
         Route::post('/referrals/{id}/reject',  [ReferralController::class, 'adminReject'])->whereNumber('id');
 
+        Route::get('/streisand-smart', [\App\Http\Controllers\Api\Admin\StreisandSmartController::class, 'show']);
+        Route::put('/streisand-smart', [\App\Http\Controllers\Api\Admin\StreisandSmartController::class, 'update']);
+
         // --- Tariffs Admin ---
         Route::get   ('/tariffs',                    [TariffsAdminController::class, 'index']);
         Route::put   ('/tariffs',                    [TariffsAdminController::class, 'update']);
@@ -326,6 +336,11 @@ Route::middleware(['auth:sanctum', CheckTokenExpiration::class, CheckUserBanned:
 
         // === Unified infrastructure: managed servers, machines and nodes ===
         Route::prefix('infrastructure')->group(function () {
+            Route::get('/wireguard', [\App\Http\Controllers\Api\Admin\WireGuardController::class,'index']);
+            Route::post('/wireguard', [\App\Http\Controllers\Api\Admin\WireGuardController::class,'save']);
+            Route::delete('/wireguard/{instance}', [\App\Http\Controllers\Api\Admin\WireGuardController::class,'destroy'])->whereNumber('instance');
+            Route::put('/wireguard/{instance}', [\App\Http\Controllers\Api\Admin\WireGuardController::class,'save'])->whereNumber('instance');
+            Route::post('/wireguard/{instance}/actions', [\App\Http\Controllers\Api\Admin\WireGuardController::class,'action'])->whereNumber('instance');
             Route::get('/network-tunnels/capabilities', [\App\Http\Controllers\Api\Admin\NetworkTunnelController::class, 'capabilities']);
             Route::post('/network-tunnels', [\App\Http\Controllers\Api\Admin\NetworkTunnelController::class, 'store']);
             Route::put('/network-tunnels/{tunnel}', [\App\Http\Controllers\Api\Admin\NetworkTunnelController::class, 'update'])->whereNumber('tunnel');
@@ -484,6 +499,7 @@ Route::middleware(['auth:sanctum', CheckTokenExpiration::class, CheckUserBanned:
 });
 
 Route::get('/auth/validate-link', [AuthLinkController::class, 'validateLink']);
+
 
 
 

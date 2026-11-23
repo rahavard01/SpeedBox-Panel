@@ -4,6 +4,7 @@ const speedboxServerSections = [
   { view: 'configuration', label: 'پیکربندی سیستم', icon: 'cogs' },
   { view: 'servers', label: 'مدیریت سرورها', icon: 'server' },
   { view: 'nodes', label: 'مدیریت نودها', icon: 'project-diagram' },
+  { view: 'wireguard', label: 'مدیریت WireGuard', icon: 'shield-alt' },
   { view: 'plans', label: 'مدیریت پلن‌ها', icon: 'tags' },
   { view: 'routing', label: 'گروه‌های دسترسی و مسیریابی', icon: 'route' },
   { view: 'tunnels', label: 'مدیریت تونل‌ها', icon: 'exchange-alt' },
@@ -15,7 +16,7 @@ window.__SPEEDBOX_SERVER_MENU__ = ({ element, component, link, slot }) =>
     class: 'drawer-link', 'data-speedbox-view': item.view,
     to: item.view === 'overview' ? '/admin/infrastructure' : '/admin/infrastructure/' + item.view
   }, { default: slot(() => [
-    element('span', null, item.label),
+    element('span', item.view === 'wireguard' ? { dir: 'rtl' } : null, item.view === 'wireguard' ? ['مدیریت ', element('bdi', { dir: 'ltr' }, 'WireGuard')] : item.label),
     element('i', { class: 'fas fa-' + item.icon, 'aria-hidden': 'true' })
   ]) }));
 let speedboxPanelVue;
@@ -54,7 +55,7 @@ window.__SPEEDBOX_PANEL_SWITCH__ = {
     const { element, ref, nextTick, onMounted, onUnmounted } = speedboxPanelVue;
     const open = ref(false), wrapper = ref(null), trigger = ref(null);
     const mobile = window.__SPEEDBOX_USE_MOBILE__();
-    let placementObserver, panelBar, headerTop, floatingRoot;
+    let placementObserver, panelBar, headerAnchor, floatingRoot;
     const placeAboveBar = () => {
       const bar = panelBar || wrapper.value?.closest('.top-bar');
       const hamburger = bar?.querySelector('.hamburger-menu');
@@ -64,9 +65,10 @@ window.__SPEEDBOX_PANEL_SWITCH__ = {
       const width = control?.getBoundingClientRect().width || 0;
       const height = control?.getBoundingClientRect().height || 0;
       const left = Math.max(8, Math.min(anchor.right - width, window.innerWidth - width - 8));
-      // Remember the header's document boundary, rather than a sticky bar's
-      // current screen position. Recompute the midpoint when control size changes.
-      headerTop ??= window.scrollY + rect.top;
+      // Measure the normal-flow header slot on every layout change. A cached
+      // boundary goes stale on browser zoom; the bar itself may be fixed while
+      // scrolled, so its current screen rectangle is not a stable reference.
+      const headerTop = window.scrollY + (headerAnchor?.getBoundingClientRect().top ?? rect.top);
       const placementTop = Math.max(0, (headerTop - height) / 2);
       wrapper.value.style.left = `${window.scrollX + left}px`;
       wrapper.value.style.top = `${placementTop}px`;
@@ -75,34 +77,50 @@ window.__SPEEDBOX_PANEL_SWITCH__ = {
       { serverMode: false, label: 'پنل مدیریت اصلی', icon: 'th-large' },
       { serverMode: true, label: 'پنل مدیریت سرورها', icon: 'server' }
     ];
-    const close = (focus = false) => { open.value = false; if (focus) trigger.value?.focus(); };
+    const close = (focus = false) => { open.value = false; if (focus === true) trigger.value?.focus({preventScroll:true}); };
     const focusOption = index => nextTick(() => {
-      wrapper.value?.querySelectorAll('[role=menuitemradio]')[index]?.focus();
+      wrapper.value?.querySelectorAll('[role=menuitemradio]')[index]?.focus({preventScroll:true});
     });
     const show = () => { props.beforeOpen?.(); open.value = true; focusOption(props.serverMode ? 1 : 0); };
+    const closeOnResize = () => close();
     const outside = event => { if (!wrapper.value?.contains(event.target)) close(); };
     const scroll = event => { if (!wrapper.value?.contains(event.target)) close(); };
     onMounted(() => {
       document.addEventListener('click', outside);
       window.addEventListener('scroll', scroll, true);
-      window.addEventListener('resize', close);
+      window.addEventListener('resize', closeOnResize);
+      window.addEventListener('blur', closeOnResize);
       window.addEventListener('resize', placeAboveBar);
+      window.visualViewport?.addEventListener('resize', placeAboveBar);
       placementObserver = new ResizeObserver(placeAboveBar);
       panelBar = wrapper.value?.closest('.top-bar');
       // Anchor the selector in the document's header space, outside the bar's
       // backdrop-filter containing block. It scrolls out with the header and
       // never follows the bar's sticky/fixed position. The unmount hook cleans up.
-      if (panelBar) { placementObserver.observe(panelBar); placeAboveBar(); floatingRoot = wrapper.value; document.body.appendChild(floatingRoot); }
+      if (panelBar) {
+        headerAnchor = document.createElement('span');
+        headerAnchor.setAttribute('aria-hidden', 'true');
+        headerAnchor.style.cssText = 'display:block;width:0;height:0;margin:0;padding:0;border:0;font-size:0;line-height:0;pointer-events:none';
+        panelBar.before(headerAnchor);
+        placementObserver.observe(panelBar);
+        if (headerAnchor.parentElement) placementObserver.observe(headerAnchor.parentElement);
+        placeAboveBar();
+        floatingRoot = wrapper.value;
+        document.body.appendChild(floatingRoot);
+      }
       if (trigger.value) placementObserver.observe(trigger.value);
       nextTick(placeAboveBar);
     });
     onUnmounted(() => {
       document.removeEventListener('click', outside);
       window.removeEventListener('scroll', scroll, true);
-      window.removeEventListener('resize', close);
+      window.removeEventListener('resize', closeOnResize);
+      window.removeEventListener('blur', closeOnResize);
       window.removeEventListener('resize', placeAboveBar);
+      window.visualViewport?.removeEventListener('resize', placeAboveBar);
       placementObserver?.disconnect();
       floatingRoot?.remove();
+      headerAnchor?.remove();
     });
     const keys = event => {
       if (mobile.value) return;
@@ -120,7 +138,8 @@ window.__SPEEDBOX_PANEL_SWITCH__ = {
       return element('div', {
         ref: wrapper, class: 'speedbox-panel-switch speedbox-panel-switch--above', dir: 'rtl',
         'data-speedbox-mode': props.serverMode ? 'servers' : 'main', onKeydown: keys,
-        onFocusout: event => { if (!event.currentTarget.contains(event.relatedTarget)) close(); }
+        // Safari can blur a pointer-clicked option with relatedTarget=null before click.
+        onFocusout: event => { if (event.relatedTarget && !event.currentTarget.contains(event.relatedTarget)) close(); }
       }, [
         mobile.value ? window.__SPEEDBOX_RENDER_NATIVE_SELECT__({ value: props.serverMode ? 'servers' : 'main',
           options: panels.map(panel => ({ value: panel.serverMode ? 'servers' : 'main', label: panel.label })),
@@ -132,7 +151,7 @@ window.__SPEEDBOX_PANEL_SWITCH__ = {
           tabindex: mobile.value ? '-1' : null, 'aria-hidden': mobile.value ? 'true' : null,
           'aria-haspopup': 'menu', 'aria-expanded': String(open.value),
           'aria-controls': 'speedbox-panel-menu', 'aria-label': `انتخاب پنل؛ ${current.label}`,
-          title: current.label, onClick: () => open.value ? close(true) : show()
+          onClick: () => open.value ? close(true) : show()
         }, [
           element('span', null, current.label),
           element('i', { class: 'fas fa-chevron-down', 'aria-hidden': 'true' })
@@ -161,7 +180,7 @@ window.__SPEEDBOX_TARIFF_PLAN_SELECT__ = {
     const { element, ref, nextTick, onMounted, onUnmounted } = speedboxPanelVue;
     const open = ref(false), wrapper = ref(null), trigger = ref(null);
     const mobile = window.__SPEEDBOX_USE_MOBILE__();
-    const close = (focus = false) => { open.value = false; if (focus) trigger.value?.focus(); };
+    const close = (focus = false) => { open.value = false; if (focus === true) trigger.value?.focus({preventScroll:true}); };
     const focusOption = index => nextTick(() => {
       const options = wrapper.value?.querySelectorAll('[role=option]') || [];
       options[Math.max(0, Math.min(index, options.length - 1))]?.focus();
@@ -170,10 +189,11 @@ window.__SPEEDBOX_TARIFF_PLAN_SELECT__ = {
       open.value = true;
       focusOption((props.options || []).findIndex(option => String(option.id) === String(props.modelValue)));
     };
+    const closeOnResize = () => close();
     const outside = event => { if (!wrapper.value?.contains(event.target)) close(); };
     const scroll = event => { if (!wrapper.value?.contains(event.target)) close(); };
-    onMounted(() => { document.addEventListener('click', outside); window.addEventListener('scroll', scroll, true); window.addEventListener('resize', close); });
-    onUnmounted(() => { document.removeEventListener('click', outside); window.removeEventListener('scroll', scroll, true); window.removeEventListener('resize', close); });
+    onMounted(() => { document.addEventListener('click', outside); window.addEventListener('scroll', scroll, true); window.addEventListener('resize', closeOnResize); });
+    onUnmounted(() => { document.removeEventListener('click', outside); window.removeEventListener('scroll', scroll, true); window.removeEventListener('resize', closeOnResize); });
     const keys = event => {
       if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); close(true); return; }
       if (event.key === 'Tab') close();
@@ -184,6 +204,15 @@ window.__SPEEDBOX_TARIFF_PLAN_SELECT__ = {
       const index = options.indexOf(document.activeElement);
       focusOption(event.key === 'Home' ? 0 : event.key === 'End' ? options.length - 1 : (index + (event.key === 'ArrowDown' ? 1 : -1) + options.length) % options.length);
     };
+    const optionLabel = option => {
+      if (!option?.service_type || option.plan_name == null) return element('span', { dir: 'auto' }, option?.label || props.label || 'انتخاب پلن');
+      const separator = () => element('span', { class: 'tariff-plan-separator', 'aria-hidden': 'true' }, '·');
+      return element('span', { class: 'tariff-plan-label', dir: 'ltr' }, [
+        element('bdi', { class: 'tariff-plan-protocol', dir: 'ltr' }, option.service_type === 'wireguard' ? 'WireGuard' : 'V2Ray'), separator(),
+        element('bdi', { class: 'tariff-plan-title', dir: 'auto' }, option.plan_name), separator(),
+        element('bdi', { class: 'tariff-plan-traffic', dir: 'ltr' }, option.traffic_label || '')
+      ]);
+    };
     return () => {
       const options = props.options || [];
       const selected = options.find(option => String(option.id) === String(props.modelValue));
@@ -191,16 +220,17 @@ window.__SPEEDBOX_TARIFF_PLAN_SELECT__ = {
         id: props.inputId, disabled: props.disabled, 'aria-label': props.label || 'پلن',
         surface: props.surface, controlClass: 'tariff-plan-select', change: value => emit('update:modelValue', value) });
       return element('div', { ref: wrapper, class: 'invoice-custom-select tariff-plan-select' + (props.surface === 'white' ? ' continuous-select-white' : '') + (props.surface === 'panel' ? ' continuous-select-panel' : '') + (open.value ? ' is-open' : ''), dir: 'rtl', onKeydown: keys,
-        onFocusout: event => { if (!event.currentTarget.contains(event.relatedTarget)) close(); }
+        // Safari can blur a pointer-clicked option with relatedTarget=null before click.
+        onFocusout: event => { if (event.relatedTarget && !event.currentTarget.contains(event.relatedTarget)) close(); }
       }, [
         element('button', { ref: trigger, id: props.inputId, disabled: props.disabled, type: 'button', class: 'invoice-custom-select__trigger', 'aria-label': props.label || 'پلن', 'aria-haspopup': 'listbox', 'aria-expanded': String(open.value), onClick: () => open.value ? close(true) : show() }, [
-          element('span', null, selected?.label || 'انتخاب پلن'), element('i', { class: 'fas fa-chevron-down', 'aria-hidden': 'true' })
+          optionLabel(selected), element('i', { class: 'fas fa-chevron-down', 'aria-hidden': 'true' })
         ]),
         open.value ? element('div', { class: 'invoice-custom-select__menu', role: 'listbox', 'aria-label': props.label || 'پلن' }, options.map(option => {
           const active = String(option.id) === String(props.modelValue);
           return element('button', { key: option.id, type: 'button', role: 'option', tabindex: '-1', 'aria-selected': String(active), class: 'invoice-custom-select__option' + (active ? ' is-selected' : ''),
             onClick: () => { emit('update:modelValue', option.id); close(true); }
-          }, option.label);
+          }, [optionLabel(option)]);
         })) : null
       ].filter(Boolean));
     };

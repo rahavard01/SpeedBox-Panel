@@ -10,12 +10,13 @@ class ManagedServer extends Model
 {
     protected $table = 'speedbox_managed_servers';
     protected $guarded = ['id'];
-    protected $hidden = ['password', 'private_key', 'private_key_passphrase', 'reverse_ssh_port'];
+    protected $hidden = ['password', 'private_key', 'private_key_passphrase', 'reverse_ssh_port', 'operator_firewall'];
     protected $casts = [
         'password' => 'encrypted',
         'private_key' => 'encrypted',
         'private_key_passphrase' => 'encrypted',
         'last_checked_at' => 'integer',
+        'operator_firewall' => 'array',
     ];
 
     public function machine(): BelongsTo
@@ -28,3 +29,4 @@ class ManagedServer extends Model
         return $this->hasMany(ServerDeployment::class, 'managed_server_id');
     }
 }
+

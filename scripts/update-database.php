@@ -24,6 +24,10 @@ try {
         $connection = Illuminate\Support\Facades\DB::connection();
         if ($connection->getDriverName() === 'sqlite') {
             $connection->getPdo()->exec('VACUUM INTO '.$connection->getPdo()->quote($destination));
+        $copy = new PDO('sqlite:'.$destination);
+        if ($copy->query('PRAGMA quick_check')->fetchColumn() !== 'ok') {
+            throw new RuntimeException('SQLite backup failed its integrity check.');
+        }
         } elseif (in_array($connection->getDriverName(), ['mysql', 'mariadb'], true)) {
             $config = $connection->getConfig();
             $binary = getenv('MYSQLDUMP_BIN') ?: '/www/server/mysql/bin/mysqldump';

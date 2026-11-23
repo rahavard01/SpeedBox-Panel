@@ -18,7 +18,7 @@ check(result.rules>1000,'all page and modal families are included');
 const ast=postcss.parse(css);const rules=[];ast.walkRules(r=>rules.push(r));
 check(css.indexOf('color:silver;font-size:18px')<css.indexOf('@media(min-width:1367px)'),'base title icon cannot override its wide-screen size');
 for(const r of rules){
-  if(r.selector.includes('dashboard-summary .dashboard-card-title>i')||r.selector.startsWith('.speedbox-infrastructure-overlay .account-operation-modal .button.operation-danger'))continue;
+  if(r.selector.includes('dashboard-summary .dashboard-card-title>i'))continue;
   let wide=false;for(let p=r.parent;p;p=p.parent)if(p.type==='atrule'&&p.name==='media'&&p.params==='(min-width:1367px)')wide=true;
   check(wide,'generated layout never leaks into mobile: '+r.selector.slice(0,70));
 }
@@ -45,7 +45,8 @@ check(declaration('::placeholder','font-size','12 * var'),'toolbar placeholder s
 check(declaration('.hamburger-menu','font-size','20 * var'),'hamburger scales');
 check(declaration('.btn-toast-close','inline-size','26 * var'),'toast close control scales');
 check(declaration('.msg-icon svg','width','20 * var'),'toast icon scales');
-check(css.includes('.operation-danger{background:#835d16b3!important'),'UUID confirmation uses the existing amber confirmation colour');
+const accountActionCss=readFileSync(path.join(root,'resources/js/speedbox/account-action-ui.css'),'utf8');
+check(accountActionCss.includes('.operation-danger{background:#835d16b3!important'),'UUID confirmation uses the shared amber confirmation colour');
 check(declaration('.segmented .seg-btn','font-size','12 * var'),'standalone page segments scale, including the user status filter');
 check(declaration('.btn-create-user1','font-size','12 * var'),'shared green create/save button text scales');
 check(declaration('.btn-create-user1','padding','54 * var'),'shared green button geometry scales with the text');
@@ -112,4 +113,53 @@ check(!subscription.includes('reservation-note-name'),'reservation notice omits 
 check(subscription.includes("$reservation['traffic_label']")&&subscription.includes("$reservation['duration_days']"),'reservation retains traffic and duration');
 check(subscription.includes('viewport-fit=cover')&&subscription.includes('color-scheme: dark;')&&subscription.includes('background: #081014;'),'subscription has a dark root canvas and safe viewport');
 check((subscription.match(/padding-top: calc\([^\n]+safe-area-inset-top/g)||[]).length===3,'safe-area top padding survives every responsive breakpoint');
+// Previously the entry-bundle filter enlarged modal shells but skipped the
+// representative forms/cards and authentication pages inside them.
+for(const [selector,property,value] of [
+  ['.login-container','max-width','360 * var'],
+  ['.drawer-sublink','font-size','11 * var'],
+  ['.drawer-wallet','max-width','240 * var'],
+  ['.profile-dropdown .pd-link','font-size','10 * var'],
+  ['.edit-form','max-width','420 * var'],
+  ['.kpi-value','font-size','21 * var'],
+  ['.preset','--btn-h','46 * var'],
+  ['.announce-excerpt','font-size','12 * var'],
+  ['.video-wrap video','max-height','260 * var'],
+  ['.message-item p','font-size','12 * var'],
+  ['.userbot-guide-title','font-size','13 * var'],
+  ['.network-toggle :is(.switch-line','flex','42 * var']
+])check(declaration(selector,property,value),'representative/auth proportions: '+selector);
+const subscriptionWide=readFileSync(path.join(root,'public/speedbox/subscription-wide.css'),'utf8');
+postcss.parse(subscriptionWide);
+check(subscription.includes('/speedbox/subscription-wide.css'),'standalone subscription loads its generated styles');
+check(subscriptionWide.includes('980 * var(--speedbox-ui-unit)'),'subscription width grows with its contents');
+check(!subscriptionWide.includes('--speedbox-template-value'),'runtime subscription values are never replaced by generated styles');
+// Check the representative Telegram scope itself, rather than accepting a
+// similarly named selector belonging to the administrator's settings page.
+const appManifest=JSON.parse(readFileSync(path.join(root,'public/build/manifest.json'),'utf8'));
+const appCss=readFileSync(path.join(root,'public/build',appManifest['resources/js/app.js'].css[0]),'utf8');
+const telegramScope=appCss.match(/\.userbot-top-table\[data-v-([\w-]+)\]/)?.[1];
+check(!!telegramScope,'Telegram page scope is discoverable from a real stylesheet selector');
+check(declaration(`.userbot-guide-title[data-v-${telegramScope}]`,'font-size','13 * var'),'representative Telegram guide scales in its own scope');
+check(declaration(`.form-input[data-v-${telegramScope}]`,'height','30 * var'),'representative Telegram inputs grow with their text');
+check(declaration('.topup-root .method-text>i','font-size','10 * var'),'inline top-up warning icon grows with its text');
+const smsScope=appCss.match(/\.sms-device-manager\[data-v-([\w-]+)\]/)?.[1];
+check(!!smsScope,'nested SMS device manager has its own compiled scope');
+check(declaration(`.sms-device-manager[data-v-${smsScope}]`,'padding','14 * var'),'SMS manager shell scales');
+check(declaration(`.sms-device-name-display strong[data-v-${smsScope}]`,'font-size','12 * var'),'SMS device names scale in the nested scope');
+check(declaration(`.sms-btn[data-v-${smsScope}]`,'font-size','10.5 * var'),'SMS device actions scale');
+check(declaration(`.sms-events-modal[data-v-${smsScope}]`,'width','720 * var'),'teleported SMS event dialog scales too');
+const ticketsScope=appCss.match(/\.tickets-filter-wrap\[data-v-([\w-]+)\]/)?.[1];
+check(declaration(`.message-item p[data-v-${ticketsScope}]`,'font-size','12 * var'),'representative ticket conversation text scales');
+check(declaration(`.ticket-file-box[data-v-${ticketsScope}]`,'height','42 * var'),'representative ticket attachments scale');
+check(declaration('.ticket-title-row .ticket-icon-wrap','font-size','16 * var'),'ticket card icon scales with its container');
+check(declaration('.speedbox-login-heading .speedbox-login-logo','width','64 * var')&&declaration('.speedbox-login-heading .speedbox-login-logo','height','64 * var'),'separate branding logo scales with the authentication form');
+check(declaration('.login-container h1','gap','10 * var'),'all authentication logo-to-title spacing scales too');
+check(declaration('.login-container h1:not(.speedbox-login-heading)::before','width','64 * var')&&declaration('.login-container h1:not(.speedbox-login-heading)::before','height','64 * var'),'recovery and reset logos scale exactly like login');
+const branding=readFileSync(path.join(root,'public/speedbox/branding.css'),'utf8');
+check(branding.includes('.login-container h1:not(.speedbox-login-heading)::before{content:""')&&branding.includes("background:url('/favicon-128x128.png') center/contain no-repeat"),'recovery headings use the same decorative brand asset without duplicating the login image');
 console.log(`WIDE LAYOUT: ${checks} checks passed; ${result.rules} generated rules`);
+
+
+
+

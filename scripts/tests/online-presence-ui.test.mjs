@@ -18,7 +18,7 @@ function initialCards(){
 const account = { id: 1, email: 'fixture@uxrep.com', token: '1234567890abcdef1234567890abcdef', subscribe_url: 'https://fixture.test/hooked/1234567890abcdef1234567890abcdef/client?sig=a%2Bb&x=1#tail', plan_id: 1, group_id: 1, u: 0, d: 1073741824, t: Math.floor(Date.now()/1000), transfer_enable: 10737418240, expired_at: Math.floor(Date.now()/1000)+864000, banned: 0, device_limit: 2, speed_limit: 0, reset_count: 1, account_plan_name: 'طرح ۱', account_group_type: 'time', account_tariff_group_id: 1, account_plan_key: '1m', created_at: Math.floor(Date.now()/1000), updated_at: Math.floor(Date.now()/1000) };
 const groups = Array.from({length:30}, (_,i)=>({id:i+1,name:`طرح ${i+1}`,group_type:'time',is_default:i===0?1:0,enable:1,items:['test','1m','3m','6m','12m'].map(plan_key=>({plan_key,enable:1,v2_plan_id:1,default_price:100})),plan_enabled:{test:true,'1m':true,'3m':true,'6m':true,'12m':true,'1m_noexp':true}}));
 const entry=manifest['resources/js/app.js'];
-const scripts=['node-editor','emergency-configs','infrastructure','register-infrastructure','panel-tooltip','partner-statistics'];
+const scripts=['node-editor','emergency-configs','jalali-calendar','infrastructure','register-infrastructure','panel-tooltip','partner-statistics'];
 const html='<!doctype html><html lang="fa"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'+entry.css.map(file=>`<link rel="stylesheet" href="/build/${file}">`).join('')+['panel-controls','bot-faqs','branding','infrastructure','emergency-configs','partner-statistics'].map(name=>`<link rel="stylesheet" href="/speedbox/${name}.css">`).join('')+'</head><body><div id="app"></div><script id="__BOOTSTRAP__" type="application/json">{}</script>'+scripts.map(name=>`<script src="/speedbox/${name}.js"></script>`).join('')+`<script type="module" src="/build/${entry.file}"></script></body></html>`;
 const server=createServer(async(req,res)=>{
   const url=new URL(req.url,'http://fixture.test');
@@ -114,7 +114,7 @@ try{
   let count=2,calls=0;const notices=[];
   const normalTimeout=win.setTimeout.bind(win);win.setTimeout=(fn,delay,...args)=>normalTimeout(fn,delay===5000?25:delay,...args);
   win.fetch=async url=>{const nodes=String(url).endsWith('/nodes');if(nodes)calls++;return {ok:true,status:200,json:async()=>({data:nodes?[{id:1,name:'Fixture',type:'vless',host:'node.test',port:443,enabled:true,show:true,kernel:'xray',machine_id:1,runtime:{online:count>0,connected:true,kernel_running:true,connection_state:count>0?'active':'idle',online_users:count}}]:[]})}};
-  for(const name of ['node-editor','infrastructure'])vm.runInContext(readFileSync(path.join(root,'public/speedbox/'+name+'.js'),'utf8'),context);
+  for(const name of ['node-editor','jalali-calendar','infrastructure'])vm.runInContext(readFileSync(path.join(root,'public/speedbox/'+name+'.js'),'utf8'),context);
   const mounted=win.SpeedboxInfrastructure.mount(host,{router:{replace(){throw Error('Unexpected auth redirect')},push(){}},notify:(...args)=>notices.push(args),view:'nodes'});
   const cell=()=>{const index=[...host.querySelectorAll('.node-table thead th')].findIndex(th=>th.textContent.trim()==='کاربران آنلاین');return index<0?null:host.querySelector('[data-node-row="1"]')?.cells[index]};
   async function waitNode(expected){const until=Date.now()+3000;while(Date.now()<until){if(cell()?.textContent.trim()===String(expected))return;await sleep(15)}throw Error('Node count did not reach '+expected+'; '+host.textContent+'; '+JSON.stringify(notices))}

@@ -102,6 +102,9 @@ try {
         '2026_10_09_000001_create_speedbox_queue_monitor_tables.php', '2026_10_10_000003_create_connection_admission_leases.php'] as $migration) {
         (require $root.'/database/migrations/'.$migration)->up();
     }
+    Schema::create('panel_tariff_groups', function ($table) { $table->id(); });
+    (require $root . '/database/migrations/2026_11_16_000001_add_independent_wireguard.php')->up();
+
     Schema::table('v2_user', function ($table) {
         $table->string('account_group_type')->nullable();
         foreach (['next_reset_at','last_reset_at'] as $column) $table->unsignedBigInteger($column)->nullable();

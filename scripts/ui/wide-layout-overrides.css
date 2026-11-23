@@ -35,3 +35,28 @@
 #app .topbar-holder .hamburger-menu :is(.notif-badge,.hamburger-badge){top:calc(-7 * var(--speedbox-ui-unit));right:calc(-9 * var(--speedbox-ui-unit));height:calc(15 * var(--speedbox-ui-unit));min-width:calc(14 * var(--speedbox-ui-unit));border-radius:calc(10 * var(--speedbox-ui-unit));font-size:calc(9 * var(--speedbox-ui-unit));line-height:calc(16 * var(--speedbox-ui-unit))}
 :root{--toast-gap:calc(10 * var(--speedbox-ui-unit))}
 :root:root body .toast-container.pos-top-right{right:calc(16 * var(--speedbox-ui-unit))}
+/* Keep flex tracks and their thumbs in the same coordinate scale. */
+:root:root body .speedbox-infrastructure-overlay .tunnel-modal .network-toggle :is(.switch-line,input[type=checkbox]){flex:0 0 calc(42 * var(--speedbox-ui-unit));min-width:calc(42 * var(--speedbox-ui-unit))}
+/* Script measures the dropdown's actual width before clamping its position. */
+:root:root body .profile-dropdown{width:calc(120 * var(--speedbox-ui-unit))!important;max-width:calc(100vw - 16px)}
+/* These two shell modals have inline titles, outside the compiled CSS rules. */
+:root:root body .create-modal.edit-modal>div:first-of-type{font-size:calc(18 * var(--speedbox-ui-unit))!important;margin-bottom:calc(25 * var(--speedbox-ui-unit))!important}
+:root:root body .profile-dropdown .pd-link i{margin:calc(4 * var(--speedbox-ui-unit))!important}
+:root:root body .edit-form .pw-toggle{left:calc(10 * var(--speedbox-ui-unit))}
+:root:root body .create-modal.edit-modal .ref-footer i{margin-left:calc(8 * var(--speedbox-ui-unit))!important}
+:root:root body .create-modal.edit-modal .method-text.ref-footer i{font-size:calc(10 * var(--speedbox-ui-unit))!important}
+:root:root body .create-modal.edit-modal .method-text1.ref-footer i{font-size:calc(14 * var(--speedbox-ui-unit))!important}
+/* Top-up warnings carry inline icon sizes; keep them relative to their text. */
+:root:root body .topup-root .method-text>i{font-size:calc(10 * var(--speedbox-ui-unit))!important;margin-left:calc(8 * var(--speedbox-ui-unit))!important}
+/* Representative ticket controls with inherited fonts or inline spacing. */
+:root:root body .ticket-title-row .ticket-icon-wrap{font-size:calc(16 * var(--speedbox-ui-unit))}
+:root:root body .tickets-filter-wrap>.segmented{margin-top:calc(10 * var(--speedbox-ui-unit))!important}
+:root:root body .tickets-action-row+.announce-list{margin-top:calc(10 * var(--speedbox-ui-unit))!important}
+/* Branding is loaded separately from the compiled authentication form. */
+:root:root body .speedbox-login-heading .speedbox-login-logo,:root:root body .login-container h1:not(.speedbox-login-heading)::before{width:calc(64 * var(--speedbox-ui-unit));height:calc(64 * var(--speedbox-ui-unit))}
+:root:root body .login-container h1{gap:calc(10 * var(--speedbox-ui-unit))}
+
+
+
+
+

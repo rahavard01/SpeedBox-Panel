@@ -65,6 +65,9 @@ Schema::create('panel_users', function (Blueprint $table) {
     $table->string('partner_plan_type')->default('time'); $table->timestamps();
 });
 (require $root . '/database/migrations/2025_01_01_000000_create_speedbox_core_tables.php')->up();
+Schema::create('panel_tariff_groups', function (Blueprint $table) { $table->id(); $table->string('name'); $table->string('group_type'); });
+Schema::create('panel_plan', function (Blueprint $table) { $table->id(); $table->integer('tariff_group_id'); $table->integer('v2_plan_id'); $table->string('plan_key'); });
+(require $root . '/database/migrations/2026_11_16_000001_add_independent_wireguard.php')->up();
 Schema::table('v2_user', function (Blueprint $table) {
     $table->string('account_plan_name')->nullable(); $table->string('account_group_type')->nullable();
     $table->integer('account_tariff_group_id')->nullable(); $table->string('account_plan_key')->nullable();
@@ -137,8 +140,6 @@ DB::table('v2_user')->where('id', $legacyId)->update(['u' => 0, 'd' => 0, 'trans
 $details = $json($read->details($request($legacy), $legacyId))['data'];
 $check($details['u'] === 0 && $details['d'] === 0 && $details['transfer_enable'] === 20 * 1073741824 && $details['expired_at'] === 1900000000, 'Refresh includes quota, consumption and expiry');
 $check($details['account_plan_name'] === 'New tariff' && $details['account_is_volume'] === 1 && $details['device_limit'] === 4 && $details['reset_count'] === 5, 'Refresh includes tariff, device limit and reset count');
-Schema::create('panel_tariff_groups', function (Blueprint $table) { $table->id(); $table->string('name'); $table->string('group_type'); });
-Schema::create('panel_plan', function (Blueprint $table) { $table->id(); $table->integer('tariff_group_id'); $table->integer('v2_plan_id'); $table->string('plan_key'); });
 DB::table('panel_tariff_groups')->insert(['id' => 7, 'name' => 'Imported tariff', 'group_type' => 'volume']);
 DB::table('panel_plan')->insert(['tariff_group_id' => 7, 'v2_plan_id' => $planId, 'plan_key' => 'volume_gig']);
 DB::table('v2_user')->where('id', $otherId)->update(['plan_id' => $planId]);

@@ -110,6 +110,8 @@ final class SubscriptionReservationService
 
     public function assertCompatible(object $user, array $snapshot): void
     {
+        SubscriptionServiceType::same($user,(int)$snapshot['update']['plan_id']);
+        SubscriptionServiceType::ready(DB::table('v2_plan')->find($snapshot['update']['plan_id']));
         if ($this->ended($user)) return;
         $mode = (int) ($snapshot['renewal_mode'] ?? RuntimeSetting::get('renew_order_event_id', self::RESERVE_KEEP));
         // A deferred purchase changes reset policy only when the frozen plan activates.
@@ -120,6 +122,7 @@ final class SubscriptionReservationService
 
     public function ensureGenerationSupport(object $user): void
     {
+        if(SubscriptionServiceType::of($user)==='wireguard') return;
         if (!Schema::hasTable('v2_server')) return;
         $nodes = DB::table('v2_server')->where('enabled', 1)->where(fn ($q) => $q->whereJsonContains('group_ids', (int) ($user->group_id ?? 0))->orWhereJsonContains('group_ids', (string) ($user->group_id ?? '0')))->get();
         foreach ($nodes as $node) {
@@ -158,6 +161,10 @@ final class SubscriptionReservationService
             if ($this->periodic($user) && $mode === self::RESERVE_RESET) {
                 $update = $this->resetUpdate($user);
                 DB::table('v2_user')->where('id', $user->id)->update($update);
+        if(SubscriptionServiceType::of($nextUser)==='wireguard') {
+            app(WireGuardService::class)->provision($nextUser);
+            \App\Jobs\SyncWireGuard::dispatch((int)$nextUser->wireguard_instance_id)->afterCommit();
+        }
                 app(TrafficResetHistory::class)->renewal($user, $update);
             }
         } else {
@@ -179,6 +186,7 @@ final class SubscriptionReservationService
     private function apply(object $user, object $row, int $base, bool $reset, bool $automatic): void
     {
         $s = json_decode($row->snapshot, true, 512, JSON_THROW_ON_ERROR);
+        SubscriptionServiceType::same($user,(int)$row->plan_id);
         $this->ensureGenerationSupport((object) array_merge((array) $user, $s['update']));
         if (!DB::table('v2_plan')->where('id', $row->plan_id)->exists()) throw new \DomainException('طرح فنی رزرو حذف شده است؛ با مدیر تماس بگیرید.');
         $update = $s['update'] + ['expired_at' => $base + $s['duration_days'] * 86400, 'updated_at' => time()];

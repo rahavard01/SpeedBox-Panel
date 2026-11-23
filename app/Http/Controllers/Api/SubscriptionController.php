@@ -33,6 +33,7 @@ class SubscriptionController extends Controller
         if (!is_string($token)) return $this->tokenError('token is error');
         $user = SubscriptionAccount::where('token', $token)->first();
         if (!$user) return $this->tokenError('token is error');
+        if(($user->service_type??'v2ray')==='wireguard') return $this->wireGuard($request,$user);
 
         try {
             return $this->withUser($request, $user, function () use ($request, $user) {
@@ -65,6 +66,7 @@ class SubscriptionController extends Controller
         try {
             return $this->withUser($request, $user, function () use ($request, $user, $servers) {
                 $this->validateInput($request);
+                if(($user->service_type??'v2ray')==='wireguard') return $this->wireGuard($request,$user);
                 if ($servers === null) {
                     $servers = $this->serversFor($user);
                     $servers = HookManager::filter('client.subscribe.servers', $servers, $user, $request);
@@ -191,6 +193,17 @@ class SubscriptionController extends Controller
                 || strtolower((string) $request->header('Sec-Fetch-Mode', '')) === 'navigate');
     }
 
+    private function wireGuard(Request $request, SubscriptionAccount $user) {
+        if($request->boolean('download')) {
+            $request->validate(['wireguard_peer'=>'required|integer|min:1']);
+            $peer=\App\Models\WireGuardPeer::where('user_id',$user->id)->findOrFail($request->integer('wireguard_peer'));
+            return response(app(\App\Services\WireGuardService::class)->config($user,$peer))
+                ->header('Content-Type','application/x-wireguard-profile')->header('Content-Disposition','attachment; filename="'.app(\App\Services\WireGuardService::class)->filename($user,$peer).'"')
+                ->header('Cache-Control','no-store')->header('X-Content-Type-Options','nosniff')->header('Referrer-Policy','no-referrer');
+        }
+        return $this->portal($request,$user);
+    }
+
     private function portal(Request $request, SubscriptionAccount $user)
     {
         $used = max(0, (int) $user->u + (int) $user->d);
@@ -201,7 +214,15 @@ class SubscriptionController extends Controller
         // Request::url() loses ?token= on the legacy endpoint.
         $url = Helper::getSubscribeUrl((string) $user->token);
         $writer = new \BaconQrCode\Writer(new \BaconQrCode\Renderer\ImageRenderer(new \BaconQrCode\Renderer\RendererStyle\RendererStyle(256), new \BaconQrCode\Renderer\Image\SvgImageBackEnd()));
+        $wireguard=[];
+        if(($user->service_type??'v2ray')==='wireguard') {
+            foreach(app(\App\Services\WireGuardService::class)->profiles($user) as $peer) {
+                try {$conf=app(\App\Services\WireGuardService::class)->config($user,$peer);} catch(\Symfony\Component\HttpKernel\Exception\HttpException $e) { continue; }
+                $wireguard[]=['name'=>'دستگاه '.app(\App\Services\WireGuardService::class)->profileNumber($peer),'download'=>$url.(str_contains($url,'?')?'&':'?').'download=1&wireguard_peer='.$peer->id,'qr'=>base64_encode($writer->writeString($conf))];
+            }
+        }
         return response()->view('client.subscribe', [
+            'service_type'=>$user->service_type??'v2ray','wireguard_profiles'=>$wireguard,
             'username' => str_replace(['@', '.com'], ['-', ''], $user->email),
             'reservation' => ($reservation['state'] ?? null) === 'reserved'
                 ? array_intersect_key($reservation, array_flip(['title', 'traffic_label', 'duration_days', 'activation_label'])) : null,
@@ -212,9 +233,9 @@ class SubscriptionController extends Controller
             'remaining_days' => $this->remainingCalendarDays($user),
             'device_limit' => $user->device_limit, 'reset_day' => app(SubscriptionResetDay::class)->forUser($user),
             'online_count' => app(\App\Services\AccountOnlineStatus::class)->counts([(int) $user->id])[$user->id] ?? 0,
-            'subscription_url' => $url, 'qr_code' => base64_encode($writer->writeString($url)),
+            'subscription_url' => $url, 'qr_code' => ($user->service_type??'v2ray')==='wireguard' ? '' : base64_encode($writer->writeString($url)),
         ])->header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
-            ->header('Pragma', 'no-cache')->header('X-Robots-Tag', 'noindex, nofollow, noarchive');
+            ->header('Pragma', 'no-cache')->header('Referrer-Policy','no-referrer')->header('X-Robots-Tag', 'noindex, nofollow, noarchive');
     }
 
     private function remainingDays(object $user): ?int

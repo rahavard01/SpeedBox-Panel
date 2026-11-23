@@ -152,8 +152,8 @@ class PanelAccountActionService
             $created = $result['created'] ?? [];
             $errors = $result['errors'] ?? [];
 
-            if (count($created) === 0) {
-                throw new \RuntimeException('ساخت اکانت ناموفق بود');
+            if (count($created) !== $count || !empty($errors)) {
+                throw new \RuntimeException('ساخت همه اکانت‌ها انجام نشد؛ عملیات و هزینه به‌طور کامل برگشت داده شد.');
             }
 
             if ($trxId) {

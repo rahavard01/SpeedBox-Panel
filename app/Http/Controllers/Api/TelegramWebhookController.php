@@ -20,6 +20,7 @@ use App\Services\TelegramConfig;
 use Endroid\QrCode\Builder\Builder;
 use Endroid\QrCode\Writer\PngWriter;
 use App\Services\PartnerTariffAccessService;
+use App\Services\PurchasePlanDuration;
 use App\Models\PanelPaymentMethod;
 use App\Models\PanelCryptoWalletSetting;
 use App\Models\PanelCryptoTopup;
@@ -37,6 +38,7 @@ class TelegramWebhookController extends Controller
     const STATE_AWAIT_PASSWORD  = 'awaiting_password';
     const STATE_LOGGED_IN       = 'logged_in';
 
+    const STATE_BUY_SERVICE = 'buy_service';
     const STATE_BUY_ACCOUNT      = 'buy_account';
     const STATE_RENEW_USERNAME   = 'renew_username';
     const STATE_TRAFFIC_USERNAME = 'traffic_username';
@@ -717,20 +719,22 @@ class TelegramWebhookController extends Controller
             $isBothPartner = !$isAdmin && $partnerPlanType === 'both';
 
             if ($text === '🛒 خرید اکانت جدید') {
-                $s->update([
-                    'state' => self::STATE_BUY_TARIFF_GROUP,
-                    'payload' => [
-                        'action' => 'buy_account',
-                    ],
-                ]);
-
-                $this->sendMsgKb(
-                    $chatIdStr,
-                    $isAdmin
-                        ? "نوع طرح موردنظر برای ساخت اکانت را انتخاب کنید:"
-                        : "طرح موردنظر برای ساخت اکانت را انتخاب کنید:",
-                    $this->buildTariffGroupKeyboard($user, 'buy')
-                );
+                $groups = $this->availableTariffGroupsForBot($user, 'buy');
+                if (!$groups) {
+                    $this->sendMsgKb($chatIdStr, '⚠️ در حال حاضر هیچ طرح فعالی برای خرید وجود ندارد', $this->buildMainMenu(true, $user));
+                    return;
+                }
+                $services = array_values(array_unique(array_column($groups, 'service_type')));
+                $s->update(['state' => count($services) > 1 ? self::STATE_BUY_SERVICE : self::STATE_BUY_TARIFF_GROUP,
+                    'payload' => ['action' => 'buy_account', 'service_type' => count($services) === 1 ? $services[0] : null]]);
+                if (count($services) > 1) {
+                    $this->sendMsgKb($chatIdStr, 'سرویس مورد نظر را انتخاب کنید:', [
+                        'keyboard' => [[['text' => '🌐 V2Ray']], [['text' => '🛡 WireGuard']], [['text' => '↩️ بازگشت به منو']]],
+                        'resize_keyboard' => true]);
+                } else {
+                    $this->sendMsgKb($chatIdStr, 'طرح مورد نظر را انتخاب کنید:',
+                        $this->buildTariffGroupKeyboard($user, 'buy', null, $services[0], session: $s));
+                }
                 return;
             }
 
@@ -844,6 +848,20 @@ class TelegramWebhookController extends Controller
             return;
         }
 
+        if ($s->state === self::STATE_BUY_SERVICE) {
+            $user = $s->panel_user_id ? User::find($s->panel_user_id) : null;
+            if (!$user) { $this->resetSession($s); return; }
+            $service = match ($text) { '🌐 V2Ray' => 'v2ray', '🛡 WireGuard' => 'wireguard', default => null };
+            if (!$service || !$this->availableTariffGroupsForBot($user, 'buy', null, $service)) {
+                $s->update(['state' => self::STATE_LOGGED_IN, 'payload' => null, 'temp_username' => null]);
+                $this->sendMsgKb($chatIdStr, '⚠️ سرویس انتخاب‌شده در حال حاضر آماده فروش نیست؛ دوباره خرید اکانت جدید را انتخاب کنید.', $this->buildMainMenu(true, $user));
+                return;
+            }
+            $s->update(['state' => self::STATE_BUY_TARIFF_GROUP, 'payload' => ['action' => 'buy_account', 'service_type' => $service]]);
+            $this->sendMsgKb($chatIdStr, 'طرح مورد نظر را انتخاب کنید:', $this->buildTariffGroupKeyboard($user, 'buy', null, $service, session: $s));
+            return;
+        }
+
         if ($s->state === self::STATE_BUY_TARIFF_GROUP) {
             $user = $s->panel_user_id ? User::find($s->panel_user_id) : null;
 
@@ -853,13 +871,13 @@ class TelegramWebhookController extends Controller
                 return;
             }
 
-            $selected = $this->detectTariffGroupFromText($text, $user, 'buy');
+            $selected = $this->detectTariffGroupFromText($text, $user, 'buy', null, $s->payload['service_type'] ?? null, session: $s);
 
             if (!$selected) {
                 $this->sendMsgKb(
                     $chatIdStr,
                     "لطفاً یکی از طرح‌های نمایش‌داده‌شده را انتخاب کنید:",
-                    $this->buildTariffGroupKeyboard($user, 'buy')
+                    $this->buildTariffGroupKeyboard($user, 'buy', null, $s->payload['service_type'] ?? null, session: $s)
                 );
                 return;
             }
@@ -868,19 +886,11 @@ class TelegramWebhookController extends Controller
             $payload['tariff_group_id'] = (int)$selected['id'];
             $payload['tariff_group_name'] = (string)$selected['name'];
 
-            if (($selected['type'] ?? '') === 'volume') {
-                $payload['plan_key'] = 'volume_gig';
-
-                $s->update([
-                    'state' => self::STATE_BUY_VOLUME_GB,
-                    'payload' => $payload,
-                ]);
-
-                $this->sendMsgKb(
-                    $chatIdStr,
-                    \App\Services\VolumeTrafficPolicy::label(\App\Services\VolumeTrafficPolicy::minimum((int) ($payload['tariff_group_id'] ?? 0))) . "\n\nمقدار حجم اکانت را به گیگ وارد کنید:",
-                    $this->buildBackKeyboard()
-                );
+            $planKey = ($selected['type'] ?? '') === 'volume'
+                ? 'volume_gig'
+                : $this->singleAccountPurchaseKey((int) $selected['id']);
+            if ($planKey !== null) {
+                $this->continueAccountPurchase($s, $chatIdStr, $payload, $planKey);
                 return;
             }
 
@@ -921,32 +931,7 @@ class TelegramWebhookController extends Controller
                 return;
             }
 
-            $payload['plan_key'] = $planKey;
-
-            if ($planKey === 'volume_gig') {
-                $s->update([
-                    'state' => self::STATE_BUY_VOLUME_GB,
-                    'payload' => $payload,
-                ]);
-
-                $this->sendMsgKb(
-                    $chatIdStr,
-                    \App\Services\VolumeTrafficPolicy::label(\App\Services\VolumeTrafficPolicy::minimum((int) ($payload['tariff_group_id'] ?? 0))) . "\n\nمقدار حجم اکانت را به گیگ وارد کنید:",
-                    $this->buildBackKeyboard()
-                );
-                return;
-            }
-
-            $s->update([
-                'state' => self::STATE_BUY_COUNT,
-                'payload' => $payload,
-            ]);
-
-            $this->sendMsgKb(
-                $chatIdStr,
-                "تعداد اکانت را وارد کنید:\n\nبرای ساخت تکی عدد 1 را بفرستید",
-                $this->buildBackKeyboard()
-            );
+            $this->continueAccountPurchase($s, $chatIdStr, $payload, $planKey);
             return;
         }   
 
@@ -1086,28 +1071,12 @@ class TelegramWebhookController extends Controller
 
             $created = $result['created'] ?? [];
 
-            $createdText = $this->formatCreatedAccountsMessage(
-                $created,
-                $planKey,
-                $volumeGb,
-                (string)($payload['tariff_group_name'] ?? '')
-            );
-
             $mainMenu = $this->buildMainMenu(true, $user);
-
-            if (count($created) === 1 && !empty($created[0]['token'])) {
-                $this->sendQrPhotoKb(
-                    $chatIdStr,
-                    $this->buildSubscribeUrl((string) $created[0]['token']),
-                    $createdText,
-                    $mainMenu
-                );
-            } else {
-                $this->sendMsgKb(
-                    $chatIdStr,
-                    $createdText,
-                    $mainMenu
-                );
+            foreach ($created as $item) {
+                $account = DB::table('v2_user')->find($item['id']);
+                if (!$account) continue;
+                $text = \App\Services\BotAccountMessages::created($account, $this->buildSubscribeUrl((string) $account->token));
+                $this->deliverAccount($chatIdStr, $account, $text, $mainMenu);
             }
             return;
         }
@@ -1179,7 +1148,7 @@ class TelegramWebhookController extends Controller
             $this->sendMsgKb(
                 $chatIdStr,
                 $this->formatV2UserSummary($v2User) . "\n\nلطفاً طرح تمدید را انتخاب کنید:",
-                $this->buildTariffGroupKeyboard($user, 'renew')
+                $this->buildTariffGroupKeyboard($user, 'renew', null, null, $this->findV2UserByEmailSafe((string) ($s->payload['target_email'] ?? '')), session: $s)
             );
             return;
         }
@@ -1193,13 +1162,13 @@ class TelegramWebhookController extends Controller
                 return;
             }
 
-            $selected = $this->detectTariffGroupFromText($text, $user, 'renew');
+            $selected = $this->detectTariffGroupFromText($text, $user, 'renew', null, null, $this->findV2UserByEmailSafe((string) ($s->payload['target_email'] ?? '')), session: $s);
 
             if (!$selected || ($selected['type'] ?? '') === 'volume') {
                 $this->sendMsgKb(
                     $chatIdStr,
                     "لطفاً یکی از طرح‌های زمانی نمایش‌داده‌شده را انتخاب کنید:",
-                    $this->buildTariffGroupKeyboard($user, 'renew')
+                    $this->buildTariffGroupKeyboard($user, 'renew', null, null, $this->findV2UserByEmailSafe((string) ($s->payload['target_email'] ?? '')), session: $s)
                 );
                 return;
             }
@@ -1217,7 +1186,7 @@ class TelegramWebhookController extends Controller
             $this->sendMsgKb(
                 $chatIdStr,
                 "مدت تمدید را برای طرح «{$selected['name']}» انتخاب کنید:",
-                $this->buildRenewPlanKeyboard((int)$selected['id'])
+                $this->buildRenewPlanKeyboard((int)$selected['id'], $this->findV2UserByEmailSafe((string) ($s->payload['target_email'] ?? '')))
             );
             return;
         }
@@ -1242,7 +1211,7 @@ class TelegramWebhookController extends Controller
                 $this->sendMsgKb(
                     $chatIdStr,
                     "لطفاً طرح تمدید را انتخاب کنید:",
-                    $this->buildRenewPlanKeyboard((int)($tariffGroupId ?? 0))
+                    $this->buildRenewPlanKeyboard((int)($tariffGroupId ?? 0), $this->findV2UserByEmailSafe((string) ($s->payload['target_email'] ?? '')))
                 );
                 return;
             }
@@ -1286,18 +1255,13 @@ class TelegramWebhookController extends Controller
 
             $v2User = $this->findV2UserByEmailSafe($email);
 
-            $renewText = "✅ اکانت با موفقیت تمدید شد\n\n" . ($v2User ? $this->formatV2UserSummary($v2User, true) : "نام کاربری: <code>{$email}</code>");
             $mainMenu = $this->buildMainMenu(true, $user);
-
-            if ($v2User && !empty($v2User->token)) {
-                $this->sendQrPhotoKb(
-                    $chatIdStr,
-                    $this->buildSubscribeUrl((string) $v2User->token),
-                    $renewText,
-                    $mainMenu
-                );
-            } else {
+            if ($v2User) {
+                $renewText = \App\Services\BotAccountMessages::renewal($v2User, $result,
+                    $this->planTitle($period) . ' ' . (string) ($payload['tariff_group_name'] ?? ''));
                 $this->sendMsgKb($chatIdStr, $renewText, $mainMenu);
+            } else {
+                $this->sendMsgKb($chatIdStr, '✅ عملیات تمدید ثبت شد.', $mainMenu);
             }
             return;
         }
@@ -1378,7 +1342,7 @@ class TelegramWebhookController extends Controller
                     $this->formatV2UserSummary($v2User) . "\n\n" .
                     $trafficWarning . "\n\n" .
                     "طرح حجمی موردنظر برای خرید ترافیک را انتخاب کنید:",
-                    $this->buildTariffGroupKeyboard($user, 'traffic', 'volume')
+                    $this->buildTariffGroupKeyboard($user, 'traffic', 'volume', null, $v2User, session: $s)
                 );
                 return;
             }
@@ -1411,13 +1375,13 @@ class TelegramWebhookController extends Controller
             $payload = $s->payload ?: [];
             $targetGroupType = !empty($payload['is_volume_mode']) ? 'volume' : 'time';
 
-            $selected = $this->detectTariffGroupFromText($text, $user, 'traffic', $targetGroupType);
+            $selected = $this->detectTariffGroupFromText($text, $user, 'traffic', $targetGroupType, null, $this->findV2UserByEmailSafe((string) ($s->payload['target_email'] ?? '')), session: $s);
 
             if (!$selected || ($selected['type'] ?? '') !== $targetGroupType) {
                 $this->sendMsgKb(
                     $chatIdStr,
                     "لطفاً یکی از طرح‌های حجمی نمایش‌داده‌شده را انتخاب کنید:",
-                    $this->buildTariffGroupKeyboard($user, 'traffic', $targetGroupType)
+                    $this->buildTariffGroupKeyboard($user, 'traffic', $targetGroupType, null, $this->findV2UserByEmailSafe((string) ($s->payload['target_email'] ?? '')), session: $s)
                 );
                 return;
             }
@@ -1534,9 +1498,12 @@ class TelegramWebhookController extends Controller
                 $trafficDoneNote .
                 ($v2User ? $this->formatV2UserSummary($v2User, true) : "نام کاربری: <code>{$email}</code>");
 
+            if (!empty($result['reserved']) && $v2User) {
+                $trafficText = \App\Services\BotAccountMessages::renewal($v2User, $result, $trafficGroupName);
+            }
             $mainMenu = $this->buildMainMenu(true, $user);
 
-            if ($v2User && !empty($v2User->token)) {
+            if ($v2User && !empty($v2User->token) && \App\Services\SubscriptionServiceType::of($v2User) !== 'wireguard' && empty($result['reserved'])) {
                 $this->sendQrPhotoKb(
                     $chatIdStr,
                     $this->buildSubscribeUrl((string) $v2User->token),
@@ -1599,16 +1566,7 @@ class TelegramWebhookController extends Controller
             $statusText = $this->formatV2UserSummary($v2User, true);
             $mainMenu = $this->buildMainMenu(true, $user);
 
-            if (!empty($v2User->token)) {
-                $this->sendQrPhotoKb(
-                    $chatIdStr,
-                    $this->buildSubscribeUrl((string) $v2User->token),
-                    $statusText,
-                    $mainMenu
-                );
-            } else {
-                $this->sendMsgKb($chatIdStr, $statusText, $mainMenu);
-            }
+            $this->deliverAccount($chatIdStr, $v2User, $statusText, $mainMenu);
             return;
         }
 
@@ -1950,15 +1908,20 @@ class TelegramWebhookController extends Controller
                 return;
             }
 
-            // موفق
-            $user->telegram_user_id = $chatIdStr;
-            $user->save();
+            // Keep onboarding history independent of the active Telegram session.
+            DB::transaction(function () use ($user, $s, $chatIdStr) {
+                $user->telegram_user_id = $chatIdStr;
+                if ((int) $user->role === 2) {
+                    $user->partner_bot_has_logged_in = true;
+                }
+                $user->save();
 
-            $s->update([
-                'state'         => self::STATE_LOGGED_IN,
-                'panel_user_id' => $user->id,
-                'temp_username' => null,
-            ]);
+                $s->update([
+                    'state'         => self::STATE_LOGGED_IN,
+                    'panel_user_id' => $user->id,
+                    'temp_username' => null,
+                ]);
+            });
 
             $name = $user->name ?: ($user->username ?? $user->email);
             $this->sendMsgKb(
@@ -2349,9 +2312,9 @@ class TelegramWebhookController extends Controller
         return \App\Utils\Helper::getSubscribeUrl($token);
     }
 
-    protected function buildRenewPlanKeyboard(?int $tariffGroupId = null): array
+    protected function buildRenewPlanKeyboard(?int $tariffGroupId = null, ?object $account = null): array
     {
-        $keys = $this->enabledPlanKeysForGroup((int)$tariffGroupId, ['1m', '3m', '6m', '12m']);
+        $keys = $this->enabledPlanKeysForGroup((int)$tariffGroupId, ['1m', '3m', '6m', '12m'], $account);
 
         $rows = [];
 
@@ -2453,36 +2416,29 @@ class TelegramWebhookController extends Controller
 
     protected function formatV2UserSummary(object $v2User, bool $withSubLink = false): string
     {
-        $email = (string)($v2User->email ?? '');
-        $token = (string)($v2User->token ?? '');
+        $snapshot = (array) $v2User;
+        $snapshot['reservation'] = app(\App\Services\SubscriptionReservationService::class)->current((int) $v2User->id);
+        return app(\App\Services\UserBot\UserBotAccountResolver::class)->accountInfoText($snapshot,
+            !empty($v2User->token) ? $this->buildSubscribeUrl((string) $v2User->token) : null);
+    }
 
-        $transfer = (int)($v2User->transfer_enable ?? 0);
-        $used = (int)($v2User->u ?? 0) + (int)($v2User->d ?? 0);
-        $remain = max(0, $transfer - $used);
-
-        $expiredAt = $v2User->expired_at === null ? null : (int) $v2User->expired_at;
-        $expireText = \App\Services\SubscriptionValidity::hasExpiry($expiredAt)
-            ? JalaliDateFormatter::forTelegram($expiredAt, 'H:i d-m-Y', '-')
-            : 'بدون تاریخ';
-
-        $daysText = $this->formatRemainingTime($expiredAt);
-
-        $lines = [];
-        $lines[] = "🔰 اطلاعات کاربر";
-        $lines[] = "";
-        $lines[] = "👤 نام کاربری: <code>" . $this->formatPanelUsername($email) . "</code>";
-        $lines[] = "🧾 طرح فعال: " . e($this->v2UserPlanTitle($v2User));
-        $lines[] = "📊 ترافیک باقی‌مانده: " . $this->formatBytesGb($remain);
-        $lines[] = "📅 تاریخ انقضا: {$expireText}";
-        $lines[] = "⏳ زمان باقی‌مانده: {$daysText}";
-
-        if ($withSubLink && $token !== '') {
-            $lines[] = "";
-            $lines[] = "🔗 لینک سابسکرایب:";
-            $lines[] = "<code>" . $this->buildSubscribeUrl($token) . "</code>";
+    protected function deliverAccount(string $chatId, object $account, string $text, array $keyboard, bool $profiles = true): void
+    {
+        if (\App\Services\SubscriptionServiceType::of($account) !== 'wireguard') {
+            $this->sendQrPhotoKb($chatId, $this->buildSubscribeUrl((string) $account->token), $text, $keyboard);
+            return;
         }
-
-        return implode("\n", $lines);
+        $bot = new \App\Services\UserBot\UserBotTelegram((string) TelegramConfig::token());
+        $bot->sendMessage($chatId, $text, $keyboard);
+        if (!$profiles) return;
+        try { $bot->sendWireGuardProfiles($chatId, $account, $keyboard); }
+        catch (\Throwable $e) {
+            report($e);
+            $message = $e instanceof \Symfony\Component\HttpKernel\Exception\HttpException
+                ? ($e->getMessage() ?: 'پروفایل فعال نیست.')
+                : 'ارسال پروفایل‌ها کامل نشد؛ از اطلاعات کاربر دوباره تلاش کنید.';
+            $bot->sendMessage($chatId, e($message), $keyboard);
+        }
     }
 
     protected function formatRemainingTime(?int $expiredAt): string
@@ -3448,13 +3404,51 @@ class TelegramWebhookController extends Controller
         return $download->body();
     }
 
-    protected function buildTariffGroupKeyboard(User $user, string $action, ?string $groupTypeFilter = null): array
+    protected function buildTariffGroupKeyboard(User $user, string $action, ?string $groupTypeFilter = null, ?string $serviceType = null, ?object $account = null, ?PanelBotSession $session = null): array
     {
-        $groups = $this->availableTariffGroupsForBot($user, $action, $groupTypeFilter);
+        $groups = $this->availableTariffGroupsForBot($user, $action, $groupTypeFilter, $serviceType, $account);
 
-        $rows = [];
+        // Reply keyboards send their visible text back. Keep IDs in the session,
+        // and qualify duplicate names without exposing database identifiers.
+        $names = array_count_values(array_column($groups, 'name'));
+        $labels = [];
         foreach ($groups as $group) {
-            $rows[] = [['text' => '📁 ' . $group['name']]];
+            $label = '📁 ' . $group['name'];
+            if ($names[$group['name']] > 1) {
+                $service = ($group['service_type'] ?? 'v2ray') === 'wireguard' ? 'WireGuard' : 'V2Ray';
+                $label .= ' — ' . $service . '، ' . (($group['type'] ?? 'time') === 'volume' ? 'حجمی' : 'زمانی');
+            }
+            $duration = $action === 'buy' && $group['type'] === 'time'
+                ? PurchasePlanDuration::label([$this->singleAccountPurchaseKey((int) $group['id'])])
+                : null;
+            $labels[] = $duration === null ? $label : $label . ' / ' . $duration;
+        }
+        $counts = array_count_values($labels);
+        $ordinals = [];
+        $options = [];
+        $rows = [];
+        foreach ($groups as $index => $group) {
+            $base = $labels[$index];
+            $label = $base;
+            if ($counts[$base] > 1) {
+                $ordinals[$base] = ($ordinals[$base] ?? 0) + 1;
+                $label .= ' (گزینه ' . JalaliDateFormatter::persianDigits((string) $ordinals[$base]) . ')';
+            }
+            // A literal tariff name may itself match a generated qualifier.
+            while (isset($options[$label]) || ($label !== $base && isset($counts[$label]))) {
+                $ordinals[$base] = ($ordinals[$base] ?? 0) + 1;
+                $label = $base . ' (گزینه ' . JalaliDateFormatter::persianDigits((string) $ordinals[$base]) . ')';
+            }
+            $options[$label] = (int) $group['id'];
+            $rows[] = [['text' => $label]];
+        }
+        if ($session) {
+            $payload = $session->payload ?: [];
+            $payload['tariff_group_selection'] = [
+                'context' => [$action, $groupTypeFilter, $serviceType, (int) ($account->id ?? 0)],
+                'options' => $options,
+            ];
+            $session->update(['payload' => $payload]);
         }
 
         $rows[] = [['text' => '↩️ بازگشت به منو']];
@@ -3467,7 +3461,7 @@ class TelegramWebhookController extends Controller
         ];
     }
 
-    protected function availableTariffGroupsForBot(User $user, string $action, ?string $groupTypeFilter = null): array
+    protected function availableTariffGroupsForBot(User $user, string $action, ?string $groupTypeFilter = null, ?string $serviceType = null, ?object $account = null): array
     {
         $role = (int)($user->role ?? 2);
         $isAdmin = $role === 1;
@@ -3538,27 +3532,59 @@ class TelegramWebhookController extends Controller
             }
         }
 
-        return $groups;
+        $eligible = [];
+        foreach ($groups as $group) {
+            $keys = $group['type'] === 'volume' ? ['volume_gig'] : $timeKeys;
+            $plans = DB::table('panel_plan as pp')->join('v2_plan as p', 'p.id', '=', 'pp.v2_plan_id')
+                ->where('pp.tariff_group_id', $group['id'])->where('pp.enable', 1)->whereIn('pp.plan_key', $keys)->select('p.*')->get();
+            foreach ($plans as $plan) {
+                $type = \App\Services\SubscriptionServiceType::of($plan);
+                if ($serviceType && $type !== $serviceType) continue;
+                if (!\App\Services\SubscriptionServiceType::available($plan)) continue;
+                if ($account) {
+                    try { \App\Services\SubscriptionServiceType::same($account, (int) $plan->id); }
+                    catch (\DomainException $e) { continue; }
+                } elseif ($action === 'renew') { continue; }
+                $group['service_type'] = $type;
+                $eligible[] = $group;
+                break;
+            }
+        }
+        usort($eligible, fn ($a, $b) => (['v2ray' => 0, 'wireguard' => 1][$a['service_type']] ?? 2)
+            <=> (['v2ray' => 0, 'wireguard' => 1][$b['service_type']] ?? 2));
+        return $eligible;
     }
 
-    protected function detectTariffGroupFromText(string $text, User $user, string $action, ?string $groupTypeFilter = null): ?array
+    protected function detectTariffGroupFromText(string $text, User $user, string $action, ?string $groupTypeFilter = null, ?string $serviceType = null, ?object $account = null, ?PanelBotSession $session = null): ?array
     {
-        $name = trim(str_replace('📁 ', '', $text));
+        $text = trim($text);
+        if ($text === '') return null;
 
-        if ($name === '') {
+        // Always recheck live permissions, service readiness and account compatibility.
+        $groups = $this->availableTariffGroupsForBot($user, $action, $groupTypeFilter, $serviceType, $account);
+        $selection = $session?->payload['tariff_group_selection'] ?? null;
+        if ($selection !== null) {
+            if (($selection['context'] ?? null) !== [$action, $groupTypeFilter, $serviceType, (int) ($account->id ?? 0)]) return null;
+            $id = $selection['options'][$text] ?? null;
+            foreach ($groups as $group) {
+                if ($id !== null && (int) $group['id'] === (int) $id) return $group;
+            }
             return null;
         }
 
-        foreach ($this->availableTariffGroupsForBot($user, $action, $groupTypeFilter) as $group) {
-            if ($group['name'] === $name) {
-                return $group;
-            }
+        // Accept keyboards shown before the update, but never guess a duplicate name.
+        $matches = [];
+        foreach ($groups as $group) {
+            if (in_array($text, [
+                '📁 ' . $group['name'], $group['name'],
+                '📁 ' . $group['name'] . ' [#' . $group['id'] . ']',
+                $group['name'] . ' [#' . $group['id'] . ']',
+            ], true)) $matches[] = $group;
         }
-
-        return null;
+        return count($matches) === 1 ? $matches[0] : null;
     }
 
-    protected function enabledPlanKeysForGroup(int $tariffGroupId, array $allowedKeys): array
+    protected function enabledPlanKeysForGroup(int $tariffGroupId, array $allowedKeys, ?object $account = null): array
     {
         if ($tariffGroupId <= 0) {
             return [];
@@ -3571,8 +3597,15 @@ class TelegramWebhookController extends Controller
             ->whereNotNull('v2_plan_id')
             ->orderByRaw("FIELD(plan_key, 'test', '1m', '3m', '6m', '12m')")
             ->pluck('plan_key')
-            ->values()
-            ->all();
+            ->filter(function ($key) use ($tariffGroupId, $account) {
+                if (!\App\Services\SubscriptionServiceType::botPlanReady($tariffGroupId . '_' . $key)) return false;
+                if ($account) {
+                    $id = DB::table('panel_plan')->where('tariff_group_id', $tariffGroupId)->where('plan_key', $key)->value('v2_plan_id');
+                    try { \App\Services\SubscriptionServiceType::same($account, (int) $id); }
+                    catch (\DomainException $e) { return false; }
+                }
+                return true;
+            })->values()->all();
     }
 
     protected function isV2UserVolumePlan(object $v2User): bool
@@ -3698,9 +3731,50 @@ class TelegramWebhookController extends Controller
         ];
     }
 
+    private function continueAccountPurchase(PanelBotSession $s, string $chatIdStr, array $payload, string $planKey): void
+    {
+        $payload['plan_key'] = $planKey;
+
+        if ($planKey === 'volume_gig') {
+            $s->update([
+                'state' => self::STATE_BUY_VOLUME_GB,
+                'payload' => $payload,
+            ]);
+
+            $this->sendMsgKb(
+                $chatIdStr,
+                \App\Services\VolumeTrafficPolicy::label(\App\Services\VolumeTrafficPolicy::minimum((int) ($payload['tariff_group_id'] ?? 0))) . "\n\nمقدار حجم اکانت را به گیگ وارد کنید:",
+                $this->buildBackKeyboard()
+            );
+            return;
+        }
+
+        $s->update([
+            'state' => self::STATE_BUY_COUNT,
+            'payload' => $payload,
+        ]);
+
+        $this->sendMsgKb(
+            $chatIdStr,
+            "تعداد اکانت را وارد کنید:\n\nبرای ساخت تکی عدد 1 را بفرستید",
+            $this->buildBackKeyboard()
+        );
+    }
+
+    private function buyPlanKeys(int $tariffGroupId): array
+    {
+        return $this->enabledPlanKeysForGroup($tariffGroupId, ['test', '1m', '3m', '6m', '12m']);
+    }
+
+    private function singleAccountPurchaseKey(int $tariffGroupId): ?string
+    {
+        $keys = $this->buyPlanKeys($tariffGroupId);
+        return PurchasePlanDuration::label($keys) === null ? null : $keys[0];
+    }
+
     protected function buildBuyPlanKeyboard(User $user, ?int $tariffGroupId = null): array
     {
-        $keys = $this->enabledPlanKeysForGroup((int)$tariffGroupId, ['test', '1m', '3m', '6m', '12m']);
+        $keys = $this->buyPlanKeys((int) $tariffGroupId);
 
         $rows = [];
 
@@ -3832,3 +3906,4 @@ class TelegramWebhookController extends Controller
     }
 
 }
+

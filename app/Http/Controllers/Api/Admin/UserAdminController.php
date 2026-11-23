@@ -25,28 +25,8 @@ class UserAdminController extends Controller
 
     public function index(Request $request)
     {
-        $plans = DB::table('panel_plan as pp')
-            ->join('panel_tariff_groups as tg', 'tg.id', '=', 'pp.tariff_group_id')
-            ->select(
-                'pp.v2_plan_id',
-                DB::raw('MIN(tg.name) as account_plan_name'),
-                DB::raw("MAX(CASE WHEN tg.group_type = 'volume' OR pp.plan_key = 'volume_gig' THEN 1 ELSE 0 END) as account_is_volume"),
-                DB::raw('MIN(pp.tariff_group_id) as account_tariff_group_id')
-            )
-            ->whereNotNull('pp.v2_plan_id')
-            ->groupBy('pp.v2_plan_id');
-
         $q = V2User::query()
-            ->leftJoinSub($plans, 'pp', function ($join) {
-                $join->on('v2_user.plan_id', '=', 'pp.v2_plan_id');
-            })
-            ->select(
-                'v2_user.*',
-                DB::raw('COALESCE(v2_user.account_plan_name, pp.account_plan_name) as account_plan_name'),
-                DB::raw("CASE WHEN v2_user.account_group_type = 'volume' OR pp.account_is_volume = 1 THEN 1 ELSE 0 END as account_is_volume"),
-                DB::raw('COALESCE(v2_user.account_tariff_group_id, pp.account_tariff_group_id) as account_tariff_group_id'),
-                DB::raw("COALESCE(v2_user.account_group_type, CASE WHEN pp.account_is_volume = 1 THEN 'volume' ELSE 'time' END) as account_group_type")
-            )
+            ->select('v2_user.*')
             ->orderByDesc('v2_user.id');
 
         $users = $q->get();
@@ -154,6 +134,7 @@ class UserAdminController extends Controller
         ];
 
         app(\App\Services\SubscriptionReservationHistory::class)->attach($rows->items());
+        app(\App\Services\TransactionServiceSnapshot::class)->attach($rows->items());
         $items = collect($rows->items())->map(function ($r) use ($planMap) {
             $meta = [];
 
@@ -215,6 +196,8 @@ class UserAdminController extends Controller
                 // دقیقاً برای ساخت متن مثل صفحه صورتحساب
                 "plan_key"          => $planKey,
                 "plan_label"        => $planLabel,
+                "service_type" => $r->service_type ?? null,
+                "account_count" => $r->account_count ?? 1,
                 "tariff_group_id"   => $meta["tariff_group_id"] ?? null,
                 "tariff_group_name" => $meta["tariff_group_name"] ?? null,
                 "traffic_gb"        => $trafficGb,
@@ -322,6 +305,63 @@ class UserAdminController extends Controller
             return $item;
         }, is_array($created) ? $created : []);
 
+        // لاگ ادمین (اختیاری)
+        try {
+            $me = $request->user();
+            $panelUserId = (int) DB::table('panel_users')->where('email', strtolower((string)($me->email ?? '')))->value('id');
+            $creditNow = (float) DB::table('panel_users')->where('id', $panelUserId)->value('credit');
+            $userIds = array_values(array_filter(array_map(function($it){
+                return isset($it['id']) ? (int)$it['id'] : null;
+            }, $created)));
+            /** @var \App\Services\TransactionLogger $logger */
+            $logger = app(TransactionLogger::class);
+            $trxId = $logger->start([
+                'panel_user_id'   => $panelUserId ?: 0,
+                'type'            => 'account_purchase',
+                'direction'       => 'debit',
+                'amount'          => 0,
+                'balance_before'  => $creditNow,
+                'balance_after'   => $creditNow,
+                'quantity'        => $isVolumeCreate ? max(1, (int)($volumeGb ?? 1)) : max(count($userIds), 1),
+                'plan_key_after'  => (string) $data['plan_key'],
+                'performed_by_id' => (int)($me->id ?? 0),
+                'performed_by_role' => (int)($me->role ?? 1),
+                'meta'            => [
+                    'source' => 'admin_panel',
+                    'panel_code' => $data['panel_code'] ?? null,
+                    'plan_key_after' => (string) $data['plan_key'],
+                    'tariff_group_id' => $tariffGroupId,
+                        'service_type' => \App\Services\SubscriptionServiceType::of(DB::table('v2_plan')->find($pp->v2_plan_id)),
+                    'tariff_group_name' => DB::table('panel_tariff_groups')->where('id', $tariffGroupId)->value('name'),
+                    'is_volume_partner' => $isVolumeCreate,
+                    'volume_gb' => $isVolumeCreate ? (int)($volumeGb ?? 1) : null,
+                    'account_count' => $count,
+                    'total_volume_gb' => $isVolumeCreate ? ((int)($volumeGb ?? 1) * $count) : null,
+                ],
+            ]);
+            if ($trxId) {
+                $logger->finalize($trxId, [
+                    'reference_type' => 'v2_user',
+                    'reference_id'   => (count($userIds) === 1) ? $userIds[0] : null,
+                    'user_ids'       => $userIds,
+                    'performed_by_id' => (int)($me->id ?? 0),
+                    'performed_by_role' => (int)($me->role ?? 1),
+                    'extra_meta'     => [
+                        'source' => 'admin_panel',
+                        'plan_key_after' => (string) $data['plan_key'],
+                        'tariff_group_id' => $tariffGroupId,
+                        'service_type' => \App\Services\SubscriptionServiceType::of(DB::table('v2_plan')->find($pp->v2_plan_id)),
+                        'tariff_group_name' => DB::table('panel_tariff_groups')->where('id', $tariffGroupId)->value('name'),
+                        'is_volume_partner' => $isVolumeCreate,
+                        'volume_gb' => $isVolumeCreate ? (int)($volumeGb ?? 1) : null,
+                        'account_count' => $count,
+                        'total_volume_gb' => $isVolumeCreate ? ((int)($volumeGb ?? 1) * $count) : null,
+                        'errors' => $errors,
+                    ],
+                ]);
+            }
+        } catch (\Throwable $e) {}
+
         // اکسل
         if ($wantExcel) {
             $spreadsheet = new Spreadsheet();
@@ -375,66 +415,11 @@ class UserAdminController extends Controller
             ]);
         }
 
-        // لاگ ادمین (اختیاری)
-        try {
-            $me = $request->user();
-            $panelUserId = (int) DB::table('panel_users')->where('email', strtolower((string)($me->email ?? '')))->value('id');
-            $creditNow = (float) DB::table('panel_users')->where('id', $panelUserId)->value('credit');
-            $userIds = array_values(array_filter(array_map(function($it){
-                return isset($it['id']) ? (int)$it['id'] : null;
-            }, $created)));
-            /** @var \App\Services\TransactionLogger $logger */
-            $logger = app(TransactionLogger::class);
-            $trxId = $logger->start([
-                'panel_user_id'   => $panelUserId ?: 0,
-                'type'            => 'account_purchase',
-                'direction'       => 'debit',
-                'amount'          => 0,
-                'balance_before'  => $creditNow,
-                'balance_after'   => $creditNow,
-                'quantity'        => $isVolumeCreate ? max(1, (int)($volumeGb ?? 1)) : max(count($userIds), 1),
-                'plan_key_after'  => (string) $data['plan_key'],
-                'performed_by_id' => (int)($me->id ?? 0),
-                'performed_by_role' => (int)($me->role ?? 1),
-                'meta'            => [
-                    'source' => 'admin_panel',
-                    'panel_code' => $data['panel_code'] ?? null,
-                    'plan_key_after' => (string) $data['plan_key'],
-                    'tariff_group_id' => $tariffGroupId,
-                    'tariff_group_name' => DB::table('panel_tariff_groups')->where('id', $tariffGroupId)->value('name'),
-                    'is_volume_partner' => $isVolumeCreate,
-                    'volume_gb' => $isVolumeCreate ? (int)($volumeGb ?? 1) : null,
-                    'account_count' => $count,
-                    'total_volume_gb' => $isVolumeCreate ? ((int)($volumeGb ?? 1) * $count) : null,
-                ],
-            ]);
-            if ($trxId) {
-                $logger->finalize($trxId, [
-                    'reference_type' => 'v2_user',
-                    'reference_id'   => (count($userIds) === 1) ? $userIds[0] : null,
-                    'user_ids'       => $userIds,
-                    'performed_by_id' => (int)($me->id ?? 0),
-                    'performed_by_role' => (int)($me->role ?? 1),
-                    'extra_meta'     => [
-                        'source' => 'admin_panel',
-                        'plan_key_after' => (string) $data['plan_key'],
-                        'tariff_group_id' => $tariffGroupId,
-                        'tariff_group_name' => DB::table('panel_tariff_groups')->where('id', $tariffGroupId)->value('name'),
-                        'is_volume_partner' => $isVolumeCreate,
-                        'volume_gb' => $isVolumeCreate ? (int)($volumeGb ?? 1) : null,
-                        'account_count' => $count,
-                        'total_volume_gb' => $isVolumeCreate ? ((int)($volumeGb ?? 1) * $count) : null,
-                        'errors' => $errors,
-                    ],
-                ]);
-            }
-        } catch (\Throwable $e) {}
-
         return response()->json([
             'status'        => 'success',
             'created'       => $created,
             'errors'        => $errors,
-            'transactionId' => null,
+            'transactionId' => $trxId ?? null,
         ]);
     }
 

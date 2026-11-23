@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\UserBotSession;
 use App\Models\UserBotSetting;
 use App\Services\UserBot\UserBotKeyboard;
+use App\Services\UserBot\UserBotPlanGroups;
 use App\Services\UserBot\UserBotTelegram;
 use Illuminate\Http\Request;
 use App\Services\UserBot\UserBotAccountResolver;
@@ -954,12 +955,24 @@ class UserBotWebhookController extends Controller
                 'account_snapshot' => $resolved['snapshot'],
             ]);
 
-            $bot->sendQrPhotoOrMessage(
-                $chatId,
-                (string) $resolved['sub_link'],
-                $resolver->accountInfoText($resolved['snapshot'], $resolved['sub_link']),
-                UserBotKeyboard::user($this->isSnapshotVolumeAccount($resolved['snapshot'] ?? []), app(\App\Services\UserBot\AccountTrafficResetPolicy::class)->hasPeriodicReset($session->account_snapshot ?: []))
-            );
+            $subscribeUrl = \App\Utils\Helper::getSubscribeUrl((string) $resolved['token']);
+            $accountInfo = $resolver->accountInfoText($resolved['snapshot'], $subscribeUrl);
+            $account=DB::table('v2_user')->where('email',$resolved['email'])->first();
+            $keyboard=UserBotKeyboard::user($this->isSnapshotVolumeAccount($resolved['snapshot']??[]),app(\App\Services\UserBot\AccountTrafficResetPolicy::class)->hasPeriodicReset($session->account_snapshot?:[]));
+            if(($account->service_type??'v2ray')==='wireguard') {
+                $bot->sendMessage($chatId, $accountInfo, $keyboard);
+                try {
+                    $bot->sendWireGuardProfiles($chatId, $account, $keyboard);
+                } catch (\Throwable $e) {
+                    report($e);
+                    $message = $e instanceof \Symfony\Component\HttpKernel\Exception\HttpException
+                        ? ($e->getMessage() ?: 'پروفایل اتصال فعالی موجود نیست؛ وضعیت حساب یا سرویس را بررسی کنید.')
+                        : 'ارسال پروفایل‌ها کامل نشد؛ از مشاهده اطلاعات کاربری دوباره تلاش کنید.';
+                    $bot->sendMessage($chatId, e($message), $keyboard);
+                }
+            } else {
+                $bot->sendQrPhotoOrMessage($chatId, $subscribeUrl, $accountInfo, $keyboard);
+            }
 
             return response()->json(['ok' => true]);
         }
@@ -1020,8 +1033,6 @@ class UserBotWebhookController extends Controller
                 }
 
                 if ($isVolumeAccount && $trafficPlans->count() > 1) {
-                    $groups = $trafficPlans->map(fn ($p) => $this->groupNameOf($p))->unique()->values()->all();
-
                     $session->update([
                         'state' => 'traffic_select_group',
                         'state_data' => [
@@ -1039,7 +1050,7 @@ class UserBotWebhookController extends Controller
                     $bot->sendMessage(
                         $chatId,
                         "➕ لطفاً طرح حجمی مورد نظر برای خرید ترافیک را انتخاب کنید:",
-                        UserBotKeyboard::planGroups($groups)
+                        $this->planGroupKeyboard($session)
                     );
 
                     return response()->json(['ok' => true]);
@@ -1100,12 +1111,17 @@ class UserBotWebhookController extends Controller
                     );
 
                 $plans = $plans->filter(function ($p) use ($live, $reserveService) {
-                    if ($reserveService->ended($live)) return true;
+                    if($this->serviceOfBotPlan((string)$p->plan_key)!==($live->service_type??'v2ray'))return false;
                     $key = (string) $p->plan_key;
                     $groupId = (int) ($live->account_tariff_group_id ?? 0);
                     if (preg_match('/^(\d+)_(.+)$/', $key, $m)) { $groupId = (int) $m[1]; $key = $m[2]; }
                     $planId = DB::table('panel_plan')->where('tariff_group_id', $groupId)->where('plan_key', $key)->where('enable', 1)->value('v2_plan_id');
-                    return $planId && $reserveService->periodic((object) ['plan_id' => $planId]) === $reserveService->periodic($live);
+                    if(!$planId)return false;
+                    $plan=DB::table('v2_plan')->find($planId);
+                    if(($live->service_type??'v2ray')==='wireguard' && (int)$plan->wireguard_instance_id!==(int)$live->wireguard_instance_id)return false;
+                    $mode=(int)\App\Services\RuntimeSetting::get('renew_order_event_id',2);
+                    return $reserveService->ended($live) || !$reserveService->periodic($live) || in_array($mode,[2,3],true)
+                        || $reserveService->periodic((object)['plan_id'=>$planId])===$reserveService->periodic($live);
                 })->values();
 
                 if ($plans->isEmpty()) {
@@ -1113,7 +1129,6 @@ class UserBotWebhookController extends Controller
                     return response()->json(['ok' => true]);
                 }
 
-                $groups = $plans->map(fn ($p) => $this->groupNameOf($p))->unique()->values()->all();
 
                 $session->update([
                     'state' => 'renew_select_group',
@@ -1132,7 +1147,7 @@ class UserBotWebhookController extends Controller
                 $bot->sendMessage(
                     $chatId,
                     "🔄 لطفاً طرح مورد نظر برای تمدید را انتخاب کنید:",
-                    UserBotKeyboard::planGroups($groups)
+                    $this->planGroupKeyboard($session)
                 );
 
                 return response()->json(['ok' => true]);
@@ -1140,11 +1155,10 @@ class UserBotWebhookController extends Controller
         }
 
         if ($session->state === 'traffic_select_group' && str_starts_with($text, '📁 ')) {
-            $groupName = trim(str_replace('📁 ', '', $text));
             $stateData = $session->state_data ?: [];
-
-            $trafficPlan = collect($stateData['plans'] ?? [])
-                ->firstWhere('group_name', $groupName);
+            $trafficPlan = UserBotPlanGroups::select(
+                $stateData['plans'] ?? [], $stateData['group_options'] ?? null, $text
+            )[0] ?? null;
 
             if (!$trafficPlan) {
                 $bot->sendMessage($chatId, "⚠️ طرح حجمی انتخاب‌شده معتبر نیست", UserBotKeyboard::back());
@@ -1171,13 +1185,19 @@ class UserBotWebhookController extends Controller
             return response()->json(['ok' => true]);
         }
 
-        if (in_array($session->state, ['buy_select_group', 'renew_select_group'], true) && str_starts_with($text, '📁 ')) {
-            $groupName = trim(str_replace('📁 ', '', $text));
-            $stateData = $session->state_data ?: [];
+        if($session->state==='buy_select_service' && in_array($text,['🛡 WireGuard','🌐 V2Ray'],true)) {
+            $type=$text==='🛡 WireGuard'?'wireguard':'v2ray';
+            $plans=collect($session->state_data['plans']??[])->filter(fn($p)=>$p['service_type']===$type)->values();
+            $session->update(['state'=>'buy_select_group','state_data'=>['plans'=>$plans->all()]]);
+            $bot->sendMessage($chatId,'طرح مورد نظر را انتخاب کنید:',$this->planGroupKeyboard($session));
+            return response()->json(['ok'=>true]);
+        }
 
-            $plans = collect($stateData['plans'] ?? [])
-                ->where('group_name', $groupName)
-                ->values();
+        if (in_array($session->state, ['buy_select_group', 'renew_select_group'], true) && str_starts_with($text, '📁 ')) {
+            $stateData = $session->state_data ?: [];
+            $plans = collect(UserBotPlanGroups::select(
+                $stateData['plans'] ?? [], $stateData['group_options'] ?? null, $text
+            ));
 
             if ($plans->isEmpty()) {
                 $bot->sendMessage($chatId, "⚠️ طرح انتخاب‌شده معتبر نیست", UserBotKeyboard::back());
@@ -1197,7 +1217,7 @@ class UserBotWebhookController extends Controller
 
                 $bot->sendMessage(
                     $chatId,
-                    "📦 <b>" . e($selected['group_name'] ?? $selected['title']) . "</b>\n\n"
+                    "📦 <b>" . e(UserBotPlanGroups::displayName((string) ($selected['group_name'] ?? $selected['title']))) . "</b>\n\n"
                     . "📝 " . e((string)($selected['description'] ?? '')) . "\n\n"
                     . "💰 قیمت هر گیگ: <b>" . number_format((int)($selected['price'] ?? 0)) . " تومان</b>\n\n"
                     . \App\Services\VolumeTrafficPolicy::label(\App\Services\VolumeTrafficPolicy::minimumForPlanKey((string) $selected['plan_key'])) . "\n\n"
@@ -1292,20 +1312,7 @@ class UserBotWebhookController extends Controller
                 return response()->json(['ok' => true]);
             }
 
-            $amount = (int) $selected['price'];
-
-            $session->update([
-                'state' => 'buy_select_payment_method',
-                'state_data' => [
-                    'order_type' => 'buy_account',
-                    'selected_plan' => $selected,
-                    'amount' => $amount,
-                    'traffic_gb' => null,
-                ],
-            ]);
-
-            $this->sendPaymentMethodSelection($bot, $setting, $session, $chatId);
-
+            $this->startAccountPurchasePayment($bot, $setting, $session, $chatId, $selected);
             return response()->json(['ok' => true]);
         }
 
@@ -1398,6 +1405,7 @@ class UserBotWebhookController extends Controller
         }
         
         if ($session->state === 'buy_select_payment_method') {
+            if (!$this->selectedPlanReady($bot, $setting, $session, $chatId)) return response()->json(['ok' => true]);
             $stateData = $session->state_data ?: [];
 
             if (
@@ -1506,6 +1514,7 @@ class UserBotWebhookController extends Controller
         }
 
         if ($session->state === 'buy_select_crypto_option') {
+            if (!$this->selectedPlanReady($bot, $setting, $session, $chatId)) return response()->json(['ok' => true]);
             $option = $this->detectUserBotCryptoOptionFromText($setting, $text);
 
             if (!$option) {
@@ -1777,7 +1786,7 @@ class UserBotWebhookController extends Controller
                     ($orderType === 'buy_traffic' || $this->isVolumePlanKey((string)($selected['plan_key'] ?? '')))
                         ? (
                             !empty($selected['group_name']) && $selected['group_name'] !== 'طرح پیشفرض'
-                                ? $selected['group_name']
+                                ? UserBotPlanGroups::displayName((string) $selected['group_name'])
                                 : $this->planFullTitle($selected)
                         )
                         : $this->planFullTitle($selected)
@@ -1843,7 +1852,14 @@ class UserBotWebhookController extends Controller
                 return response()->json(['ok' => true]);
             }
 
-            $groups = $plans->map(fn ($p) => $this->groupNameOf($p))->unique()->values()->all();
+            $serviceTypes=$plans->map(fn($p)=>$this->serviceOfBotPlan((string)$p->plan_key))->unique()->sortBy(fn($type)=>$type==='v2ray'?0:1)->values();
+            if($serviceTypes->count()>1) {
+                $session->update(['state'=>'buy_select_service','state_data'=>['plans'=>$plans->map(fn($p)=>[
+                    'id'=>$p->id,'plan_key'=>$p->plan_key,'group_name'=>$this->groupNameOf($p),'title'=>$p->title,
+                    'price'=>(int)$p->price,'description'=>$p->description,'service_type'=>$this->serviceOfBotPlan((string)$p->plan_key)])->values()->all()]]);
+                $bot->sendMessage($chatId,'سرویس مورد نظر را انتخاب کنید:',['keyboard'=>$serviceTypes->map(fn($type)=>[['text'=>$type==='wireguard'?'🛡 WireGuard':'🌐 V2Ray']])->push([['text'=>'⬅️ بازگشت']])->all(),'resize_keyboard'=>true]);
+                return response()->json(['ok'=>true]);
+            }
 
             $session->update([
                 'state' => 'buy_select_group',
@@ -1862,7 +1878,7 @@ class UserBotWebhookController extends Controller
             $bot->sendMessage(
                 $chatId,
                 "🛒 لطفاً طرح مورد نظر را انتخاب کنید:",
-                UserBotKeyboard::planGroups($groups)
+                $this->planGroupKeyboard($session)
             );
 
             return response()->json(['ok' => true]);
@@ -1951,6 +1967,7 @@ class UserBotWebhookController extends Controller
 
     private function ownerCanSeeUserBotPlan(UserBotSetting $setting, string $planKey): bool
     {
+        if (!\App\Services\SubscriptionServiceType::botPlanReady($planKey)) return false;
         $groupId = $this->extractTariffGroupIdFromUserBotPlanKey($planKey);
 
         if (!$groupId) {
@@ -1965,7 +1982,7 @@ class UserBotWebhookController extends Controller
             ->where("p.plan_key", $normalizedKey)
             ->where("p.enable", 1)
             ->where("g.enable", 1)
-            ->whereNotNull("p.v2_plan_id")
+            ->when($normalizedKey !== 'gig', fn ($query) => $query->whereNotNull('p.v2_plan_id'))
             ->exists();
 
         if (!$planIsActive) {
@@ -1994,6 +2011,15 @@ class UserBotWebhookController extends Controller
         return null;
     }
 
+    private function serviceOfBotPlan(string $key): string {
+        $groupId=$this->extractTariffGroupIdFromUserBotPlanKey($key);
+        $q=DB::table('panel_plan as pp')->join('v2_plan as p','p.id','=','pp.v2_plan_id')
+            ->where('pp.plan_key',$this->normalizeUserBotPlanKey($key));
+        if($groupId) $q->where('pp.tariff_group_id',$groupId);
+        else $q->join('panel_tariff_groups as g','g.id','=','pp.tariff_group_id')->where('g.is_default',1)->where('g.group_type','time');
+        return $q->value('p.service_type')??'v2ray';
+    }
+
     private function normalizeUserBotPlanKey(string $planKey): string
     {
         $key = strtolower(trim($planKey));
@@ -2018,9 +2044,34 @@ class UserBotWebhookController extends Controller
             || str_contains((string) $plan->title, 'تست');
     }
 
+    private function selectedPlanReady(UserBotTelegram $bot, UserBotSetting $setting, UserBotSession $session, string|int $chatId): bool
+    {
+        $key = (string) ($session->state_data['selected_plan']['plan_key'] ?? '');
+        if (($session->state_data['order_type'] ?? '') === 'buy_traffic') {
+            $account = DB::table('v2_user')->where('email', $session->account_email)->first();
+            $plan = $account ? DB::table('v2_plan')->find($account->plan_id) : null;
+            if ($plan && \App\Services\SubscriptionServiceType::available($plan)) return true;
+        } elseif ($key !== '' && $this->ownerCanSeeUserBotPlan($setting, $key)) {
+            return true;
+        }
+        $bot->sendMessage($chatId, '⚠️ طرح انتخاب‌شده در حال حاضر آماده فروش نیست؛ دوباره از منوی خرید یا تمدید انتخاب کنید.', UserBotKeyboard::back());
+        return false;
+    }
+
+    private function planGroupKeyboard(UserBotSession $session): array
+    {
+        $data = $session->state_data ?: [];
+        $data['group_options'] = UserBotPlanGroups::options(
+            $data['plans'] ?? [],
+            showSingleDuration: $session->state === 'buy_select_group'
+        );
+        $session->update(['state_data' => $data]);
+        return UserBotKeyboard::planGroups(array_keys($data['group_options']));
+    }
+
     private function groupNameOf($plan): string
     {
-        return trim((string) ($plan->group_name ?: 'طرح پیشفرض'));
+        return UserBotPlanGroups::displayName((string) ($plan->group_name ?: 'طرح پیشفرض'));
     }
 
     private function formatUsername(?string $email): string
@@ -2038,7 +2089,7 @@ class UserBotWebhookController extends Controller
     private function planFullTitle(array $plan): string
     {
         $title = trim((string)($plan['title'] ?? ''));
-        $group = trim((string)($plan['group_name'] ?? ''));
+        $group = UserBotPlanGroups::displayName((string) ($plan['group_name'] ?? ''));
         $planKey = trim((string)($plan['plan_key'] ?? ''));
 
         if (
@@ -2267,7 +2318,7 @@ class UserBotWebhookController extends Controller
                     ($order->order_type === 'buy_traffic' || $this->isVolumePlanKey((string)($selected['plan_key'] ?? '')))
                         ? (
                             !empty($selected['group_name']) && $selected['group_name'] !== 'طرح پیشفرض'
-                                ? $selected['group_name']
+                                ? UserBotPlanGroups::displayName((string) $selected['group_name'])
                                 : $this->planFullTitle(is_array($selected) ? $selected : [])
                         )
                         : $this->planFullTitle(is_array($selected) ? $selected : [])
@@ -2536,8 +2587,25 @@ class UserBotWebhookController extends Controller
         return max(0, (int) $text);
     }
 
+    private function startAccountPurchasePayment(
+        UserBotTelegram $bot, UserBotSetting $setting, UserBotSession $session, string|int $chatId, array $selected
+    ): void {
+        $session->update([
+            'state' => 'buy_select_payment_method',
+            'state_data' => [
+                'order_type' => 'buy_account',
+                'selected_plan' => $selected,
+                'amount' => (int) $selected['price'],
+                'traffic_gb' => null,
+            ],
+        ]);
+
+        $this->sendPaymentMethodSelection($bot, $setting, $session, $chatId);
+    }
+
     private function sendPaymentMethodSelection(UserBotTelegram $bot, UserBotSetting $setting, UserBotSession $session, string|int $chatId): void
     {
+        if (!$this->selectedPlanReady($bot, $setting, $session, $chatId)) return;
         $cardEnabled = (bool) $setting->card_payment_enabled;
         $cryptoEnabled = (bool) $setting->crypto_payment_enabled
             && $this->activeUserBotCryptoOptions($setting)->isNotEmpty();
@@ -3072,3 +3140,4 @@ class UserBotWebhookController extends Controller
     }
 
 }
+

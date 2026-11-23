@@ -35,7 +35,7 @@ class NodeControlService
         }
 
         return DB::table('v2_user')
-            ->whereIn('group_id', $groupIds)
+            ->whereIn('group_id', $groupIds)->where('service_type','v2ray')
             ->where('banned', 0)
             ->whereRaw('(u + d) < transfer_enable')
             ->tap(fn ($query) => SubscriptionValidity::whereUnexpired($query))

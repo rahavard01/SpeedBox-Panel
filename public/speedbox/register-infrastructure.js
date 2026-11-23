@@ -4,6 +4,7 @@ const speedboxServerSections = [
   { view: 'configuration', label: 'پیکربندی سیستم', icon: 'cogs' },
   { view: 'servers', label: 'مدیریت سرورها', icon: 'server' },
   { view: 'nodes', label: 'مدیریت نودها', icon: 'project-diagram' },
+  { view: 'wireguard', label: 'مدیریت WireGuard', icon: 'shield-alt' },
   { view: 'plans', label: 'مدیریت پلن‌ها', icon: 'tags' },
   { view: 'routing', label: 'گروه‌های دسترسی و مسیریابی', icon: 'route' },
   { view: 'tunnels', label: 'مدیریت تونل‌ها', icon: 'exchange-alt' },
@@ -15,7 +16,7 @@ window.__SPEEDBOX_SERVER_MENU__ = ({ element, component, link, slot }) =>
     class: 'drawer-link', 'data-speedbox-view': item.view,
     to: item.view === 'overview' ? '/admin/infrastructure' : '/admin/infrastructure/' + item.view
   }, { default: slot(() => [
-    element('span', null, item.label),
+    element('span', item.view === 'wireguard' ? { dir: 'rtl' } : null, item.view === 'wireguard' ? ['مدیریت ', element('bdi', { dir: 'ltr' }, 'WireGuard')] : item.label),
     element('i', { class: 'fas fa-' + item.icon, 'aria-hidden': 'true' })
   ]) }));
 let speedboxPanelVue;
@@ -203,6 +204,15 @@ window.__SPEEDBOX_TARIFF_PLAN_SELECT__ = {
       const index = options.indexOf(document.activeElement);
       focusOption(event.key === 'Home' ? 0 : event.key === 'End' ? options.length - 1 : (index + (event.key === 'ArrowDown' ? 1 : -1) + options.length) % options.length);
     };
+    const optionLabel = option => {
+      if (!option?.service_type || option.plan_name == null) return element('span', { dir: 'auto' }, option?.label || props.label || 'انتخاب پلن');
+      const separator = () => element('span', { class: 'tariff-plan-separator', 'aria-hidden': 'true' }, '·');
+      return element('span', { class: 'tariff-plan-label', dir: 'ltr' }, [
+        element('bdi', { class: 'tariff-plan-protocol', dir: 'ltr' }, option.service_type === 'wireguard' ? 'WireGuard' : 'V2Ray'), separator(),
+        element('bdi', { class: 'tariff-plan-title', dir: 'auto' }, option.plan_name), separator(),
+        element('bdi', { class: 'tariff-plan-traffic', dir: 'ltr' }, option.traffic_label || '')
+      ]);
+    };
     return () => {
       const options = props.options || [];
       const selected = options.find(option => String(option.id) === String(props.modelValue));
@@ -214,13 +224,13 @@ window.__SPEEDBOX_TARIFF_PLAN_SELECT__ = {
         onFocusout: event => { if (event.relatedTarget && !event.currentTarget.contains(event.relatedTarget)) close(); }
       }, [
         element('button', { ref: trigger, id: props.inputId, disabled: props.disabled, type: 'button', class: 'invoice-custom-select__trigger', 'aria-label': props.label || 'پلن', 'aria-haspopup': 'listbox', 'aria-expanded': String(open.value), onClick: () => open.value ? close(true) : show() }, [
-          element('span', null, selected?.label || 'انتخاب پلن'), element('i', { class: 'fas fa-chevron-down', 'aria-hidden': 'true' })
+          optionLabel(selected), element('i', { class: 'fas fa-chevron-down', 'aria-hidden': 'true' })
         ]),
         open.value ? element('div', { class: 'invoice-custom-select__menu', role: 'listbox', 'aria-label': props.label || 'پلن' }, options.map(option => {
           const active = String(option.id) === String(props.modelValue);
           return element('button', { key: option.id, type: 'button', role: 'option', tabindex: '-1', 'aria-selected': String(active), class: 'invoice-custom-select__option' + (active ? ' is-selected' : ''),
             onClick: () => { emit('update:modelValue', option.id); close(true); }
-          }, option.label);
+          }, [optionLabel(option)]);
         })) : null
       ].filter(Boolean));
     };

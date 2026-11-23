@@ -84,32 +84,12 @@ class PanelController extends Controller
         }
 
         // اگر ستون created_at دارید، همین را نگه دارید. اگر ندارید، موقتاً با id سورت کنید.
-        $plans = DB::table('panel_plan as pp')
-            ->join('panel_tariff_groups as tg', 'tg.id', '=', 'pp.tariff_group_id')
-            ->select(
-                'pp.v2_plan_id',
-                DB::raw('MIN(tg.name) as account_plan_name'),
-                DB::raw("MAX(CASE WHEN tg.group_type = 'volume' OR pp.plan_key = 'volume_gig' THEN 1 ELSE 0 END) as account_is_volume"),
-                DB::raw('MIN(pp.tariff_group_id) as account_tariff_group_id')
-            )
-            ->whereNotNull('pp.v2_plan_id')
-            ->groupBy('pp.v2_plan_id');
-
         $rows = V2User::query()
-            ->leftJoinSub($plans, 'pp', function ($join) {
-                $join->on('v2_user.plan_id', '=', 'pp.v2_plan_id');
-            })
             ->where(function ($q) use ($code) {
                 $q->whereRaw('LOWER(SUBSTRING_INDEX(v2_user.email, "@", 1)) = ?', [strtolower($code)])
                 ->orWhereRaw('LOWER(SUBSTRING_INDEX(SUBSTRING_INDEX(v2_user.email, "@", -1), ".", 1)) = ?', [strtolower($code)]);
             })
-            ->select(
-                'v2_user.*',
-                DB::raw('COALESCE(v2_user.account_plan_name, pp.account_plan_name) as account_plan_name'),
-                DB::raw("CASE WHEN v2_user.account_group_type = 'volume' OR pp.account_is_volume = 1 THEN 1 ELSE 0 END as account_is_volume"),
-                DB::raw('COALESCE(v2_user.account_tariff_group_id, pp.account_tariff_group_id) as account_tariff_group_id'),
-                DB::raw("COALESCE(v2_user.account_group_type, CASE WHEN pp.account_is_volume = 1 THEN 'volume' ELSE 'time' END) as account_group_type")
-            )
+            ->select('v2_user.*')
             ->orderBy('v2_user.created_at', 'asc')
             ->get();
 
@@ -238,6 +218,7 @@ class PanelController extends Controller
         ];
 
         app(\App\Services\SubscriptionReservationHistory::class)->attach($rows->items());
+        app(\App\Services\TransactionServiceSnapshot::class)->attach($rows->items());
         $items = collect($rows->items())->map(function ($r) use ($planMap) {
             $meta = [];
 
@@ -298,6 +279,8 @@ class PanelController extends Controller
 
                 "plan_key"          => $planKey,
                 "plan_label"        => $planLabel,
+                "service_type" => $r->service_type ?? null,
+                "account_count" => $r->account_count ?? 1,
                 "tariff_group_id"   => $meta["tariff_group_id"] ?? null,
                 "tariff_group_name" => $meta["tariff_group_name"] ?? null,
                 "traffic_gb"        => $trafficGb,

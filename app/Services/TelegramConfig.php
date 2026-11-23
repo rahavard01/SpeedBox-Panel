@@ -13,9 +13,9 @@ class TelegramConfig
     }
 
     /** 🔵 منبع واحد توکن: اول DB (encrypted)، بعد fallback به config/env */
-    public static function token(): ?string
+    public static function token(?PanelBotSetting $setting = null): ?string
     {
-        $db = (string) (self::s()->bot_token ?? '');
+        $db = (string) (($setting ?? self::s())->bot_token ?? '');
         if (trim($db) !== '') {
             return $db;
         }

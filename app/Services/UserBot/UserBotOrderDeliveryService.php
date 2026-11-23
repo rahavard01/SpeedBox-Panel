@@ -311,14 +311,16 @@ class UserBotOrderDeliveryService
                 . "</code>",
         };
 
-        if (!empty($result['reserved'])) {
-            $reserve = $result['reservation'];
-            $buyerText = "✅ طرح رزرو شما با موفقیت ثبت شد.\n\n"
-                . "👤 نام کاربری: <code>" . e($this->formatUsername($result['email'] ?? null)) . "</code>\n"
-                . "📦 طرح رزرو: <b>" . e($reserve['title']) . "</b>\n"
-                . "📊 ترافیک: " . e($reserve['traffic_label']) . "\n"
-                . "⏳ " . e($reserve['activation_label']) . "\n"
-                . "هزینه پرداخت شده است و هنگام فعال‌سازی دوباره کسر نمی‌شود.";
+        $resultAccount = DB::table('v2_user')->where('email', $result['email'] ?? '')->first();
+        if ($resultAccount && $order->order_type === 'buy_account') {
+            $buyerText = \App\Services\BotAccountMessages::created($resultAccount, (string) ($result['subscribe_url'] ?? ''));
+        } elseif ($resultAccount && $order->order_type === 'renew_account') {
+            $buyerText = \App\Services\BotAccountMessages::renewal($resultAccount, $result,
+                $this->planFullTitle($order->payload['selected_plan'] ?? ['title' => $result['plan_title'] ?? '-']));
+        } elseif (!empty($result['reserved']) && $resultAccount) {
+            $buyerText = \App\Services\BotAccountMessages::renewal($resultAccount, $result, '');
+        } elseif ($resultAccount) {
+            $buyerText .= "\n🛡 سرویس: " . \App\Services\BotAccountMessages::service($resultAccount);
         }
 
         $buyerKeyboard = $buyerSession->is_logged_in
@@ -336,12 +338,18 @@ class UserBotOrderDeliveryService
             $order->order_type === 'buy_account'
             && !empty($result['subscribe_url'])
         ) {
+            $account=DB::table('v2_user')->where('email',$result['email']??'')->first();
+            if(($account->service_type??'v2ray')==='wireguard') {
+                $bot->sendMessage($buyerSession->telegram_chat_id, $buyerText, $buyerKeyboard);
+                $response = $bot->sendWireGuardProfiles($buyerSession->telegram_chat_id, $account, $buyerKeyboard);
+            } else {
             $response = $bot->sendQrPhotoOrMessage(
                 $buyerSession->telegram_chat_id,
                 (string) $result['subscribe_url'],
                 $buyerText,
                 $buyerKeyboard
             );
+            }
         } else {
             $response = $bot->sendMessage(
                 $buyerSession->telegram_chat_id,
@@ -860,7 +868,7 @@ class UserBotOrderDeliveryService
                 !empty($selected['group_name'])
                 && $selected['group_name']
                     !== 'طرح پیشفرض'
-                    ? (string) $selected['group_name']
+                    ? UserBotPlanGroups::displayName((string) $selected['group_name'])
                     : $this->planFullTitle(
                         $selected
                     )
@@ -946,7 +954,7 @@ class UserBotOrderDeliveryService
             (string) ($plan['title'] ?? '')
         );
 
-        $group = trim(
+        $group = UserBotPlanGroups::displayName(
             (string) ($plan['group_name'] ?? '')
         );
 
@@ -1127,3 +1135,4 @@ class UserBotOrderDeliveryService
         ) . ' گیگ';
     }
 }
+

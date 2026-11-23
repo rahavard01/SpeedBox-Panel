@@ -359,3 +359,20 @@
 :is(.speedbox-infrastructure,.speedbox-infrastructure-overlay) .button.tunnel-create-untested:hover:not(:disabled){background:rgba(59,130,246,.38);border-color:#93c5fd;color:#fff}
 
 .tunnel-speed-peak{display:block;font-size:.75rem;font-weight:400;opacity:.72;margin-top:.15rem}
+
+/* Keep the running and completed test cards on the same layout. */
+.tunnel-https-preparation{flex:1;min-width:0;text-align:right;direction:rtl}
+.tunnel-https-preparation>small{display:block;margin-top:5px;font-size:10px;line-height:1.8;color:var(--muted);font-weight:400}
+.tunnel-result-method{grid-template-rows:30px 44px;align-content:start}
+.tunnel-result-method>b{line-height:15px;align-self:center}
+.tunnel-result-method>div{align-content:center}
+.tunnel-result-method .tunnel-badge{max-width:100%;box-sizing:border-box;white-space:normal;overflow-wrap:anywhere;text-align:center}
+.tunnel-result-metrics dd{min-height:34px}
+.tunnel-result-metrics .tunnel-speed-peak{min-height:15px;line-height:1.35;font-size:.72em!important;font-weight:400!important}
+.tunnel-result-metrics .tunnel-speed-peak *{font-size:inherit!important;font-weight:inherit!important;line-height:inherit}
+@media(max-width:540px){
+ .tunnel-result-metrics:not(.tunnel-roundtrip-metrics){grid-template-columns:repeat(2,minmax(0,1fr))}
+ .tunnel-result-method{grid-template-rows:30px 58px}
+ .tunnel-result-method>div{gap:4px}
+ .tunnel-result-method .tunnel-badge{font-size:9px;line-height:13px;padding:2px 4px}
+}

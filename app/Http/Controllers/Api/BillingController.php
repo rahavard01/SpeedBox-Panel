@@ -71,6 +71,7 @@ class BillingController extends Controller
 
         // خروجی مطابق انتظارات فرانت
         app(\App\Services\SubscriptionReservationHistory::class)->attach($rows);
+        app(\App\Services\TransactionServiceSnapshot::class)->attach($rows);
         $out = $rows->map(function ($r) use ($user, $idToUsername) {
 
             // علامت مبلغ بر اساس جهت تراکنش
@@ -180,6 +181,8 @@ class BillingController extends Controller
                 'affected_users'    => $affected_users,                  // نام کاربری/پنل برای نمایش
                 'plan_key'          => $planKey,       // مثل '1m'، '3m'، ...
                 'plan_label'        => $planLabel,     // مثل «یک ماهه»
+                'service_type' => $r->service_type ?? null,
+                'account_count' => $r->account_count ?? 1,
                 'tariff_group_id'   => $meta['tariff_group_id'] ?? null,
                 'tariff_group_name' => $meta['tariff_group_name'] ?? null,                
                 'expired_before'    => $expiredBefore, // اختیاری برای تمدید
@@ -251,6 +254,7 @@ class BillingController extends Controller
         }
 
         app(\App\Services\SubscriptionReservationHistory::class)->attach($rows);
+        app(\App\Services\TransactionServiceSnapshot::class)->attach($rows);
         $out = $rows->map(function ($r) use ($idToUsername) {
             $base = (int) $r->amount;
             $dir  = strtolower((string) $r->direction);
@@ -352,6 +356,8 @@ class BillingController extends Controller
                 'affected_users'    => $affected_users,
                 'plan_key'          => $planKey,
                 'plan_label'        => $planLabel,
+                'service_type' => $r->service_type ?? null,
+                'account_count' => $r->account_count ?? 1,
                 'tariff_group_id'   => $meta['tariff_group_id'] ?? null,
                 'tariff_group_name' => $meta['tariff_group_name'] ?? null,
                 'expired_before'    => $meta['expired_before'] ?? null,

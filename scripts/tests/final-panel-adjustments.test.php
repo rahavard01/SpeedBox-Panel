@@ -45,6 +45,7 @@ Schema::create('v2_user', function (Blueprint $t) {
     $t->string('account_plan_key')->nullable(); $t->string('account_plan_name')->nullable(); $t->string('account_group_type')->nullable(); $t->boolean('banned')->default(false);
 });
 Schema::create('panel_tariff_groups', function (Blueprint $t) { $t->id(); $t->string('name'); $t->string('group_type'); });
+(require $root . '/database/migrations/2026_11_16_000001_add_independent_wireguard.php')->up();
 Schema::create('panel_plan', function (Blueprint $t) { $t->id(); $t->integer('tariff_group_id'); $t->integer('v2_plan_id'); $t->string('plan_key'); $t->integer('device_limit')->nullable(); });
 Schema::create('v2_settings', function (Blueprint $t) { $t->string('name')->primary(); $t->text('value')->nullable(); $t->timestamps(); });
 Schema::create('speedbox_connection_leases', function (Blueprint $t) { $t->id(); $t->integer('user_id'); $t->string('source_ip'); $t->bigInteger('expires_at'); });

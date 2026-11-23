@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Services\PartnerBotEntry;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Cache;
@@ -170,6 +171,7 @@ class DashboardPanelController extends Controller
 
         // --- پاسخ ---
         return response()->json([
+            'partnerBotUrl' => PartnerBotEntry::forPartner($me, $req->getSchemeAndHttpHost()),
             'panelStatus' => [
                 'usersTotal'   => $usersTotal,
                 'usersOnline'  => $usersOnline,

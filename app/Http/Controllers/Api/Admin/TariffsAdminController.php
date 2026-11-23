@@ -15,13 +15,16 @@ class TariffsAdminController extends Controller
     public function index()
     {
         $v2 = DB::table('v2_plan')
-            ->select(['id', 'name', 'transfer_enable', 'device_limit'])
+            ->select(['id', 'name', 'transfer_enable', 'device_limit','service_type'])
             ->orderBy('id')
             ->get()
             ->map(function ($r) {
                 return [
                     'id' => (int) $r->id,
-                    'label' => trim(($r->name ?? '') . ' - ' . (string) ($r->transfer_enable ?? 0) . 'G'),
+                    'service_type'=>$r->service_type,
+                    'plan_name'=>(string)($r->name??''),
+                    'traffic_label'=>(string)($r->transfer_enable??0).'G',
+                    'label' => "\u{2066}".($r->service_type==='wireguard'?'WireGuard':'V2Ray').' · '."\u{2068}".(string)($r->name??'')."\u{2069}".' · '.(string)($r->transfer_enable??0)."G\u{2069}",
                     'device_limit' => $r->device_limit === null ? null : (int) $r->device_limit,
                 ];
             })
@@ -72,6 +75,7 @@ class TariffsAdminController extends Controller
             return [
                 'id' => (int) $group->id,
                 'name' => (string) $group->name,
+                'service_type'=>$group->service_type??'v2ray',
                 'is_default' => (int) $group->is_default,
                 'group_type' => (string) $group->group_type,
                 'enable' => (int) $group->enable,
@@ -106,6 +110,7 @@ class TariffsAdminController extends Controller
             return [
                 'id' => (int) $group->id,
                 'name' => (string) $group->name,
+                'service_type'=>$group->service_type??'v2ray',
                 'is_default' => (int) $group->is_default,
                 'group_type' => (string) $group->group_type,
                 'enable' => (int) $group->enable,
@@ -397,6 +402,7 @@ class TariffsAdminController extends Controller
             'group' => [
                 'id' => (int) $group->id,
                 'name' => (string) $group->name,
+                'service_type'=>$group->service_type??'v2ray',
                 'group_type' => (string) ($group->group_type ?? self::GROUP_TYPE_TIME),
                 'partner_access_mode' => (string) ($group->partner_access_mode ?? 'all_partners'),
             ],
@@ -551,7 +557,16 @@ class TariffsAdminController extends Controller
     private function updateGroups(array $groupsInput, array $volumeGroupsInput = [])
     {
         $changed = 0;
-
+        foreach(array_merge($groupsInput,$volumeGroupsInput) as $group) {
+            $items=$group['items']??[$group];
+            $ids=array_filter(array_column($items,'v2_plan_id'));
+            $types=DB::table('v2_plan')->whereIn('id',$ids)->pluck('service_type')->unique();
+            if($types->first()==='wireguard' && DB::table('v2_plan')->whereIn('id',$ids)->pluck('wireguard_instance_id')->unique()->count()>1)throw new \DomainException('مدت‌های یک تعرفه وایرگارد باید روی یک سرور باشند؛ برای سرور دیگر تعرفه جدا بسازید.');
+            $type=$types->first()??($group['service_type']??'v2ray');
+            if(isset($group['service_type']) && $group['service_type']!==$type)throw new \DomainException('پلن‌های متصل باید متعلق به سرویس انتخابی تعرفه باشند.');
+            if(!empty($group['id']) && DB::table('v2_user')->where('account_tariff_group_id',$group['id'])->where('service_type','!=',$type)->exists())throw new \DomainException('نوع سرویس تعرفه دارای کاربر قابل تغییر نیست؛ تعرفه جدید بسازید.');
+            if($types->count()>1) throw new \DomainException('تمام مدت‌های یک تعرفه باید متعلق به یک سرویس باشند؛ برای وایرگارد تعرفه جدا بسازید.');
+        }
         DB::transaction(function () use ($groupsInput, $volumeGroupsInput, &$changed) {
             $oldGigPrices = DB::table('panel_plan')
                 ->where('plan_key', 'gig')
@@ -577,6 +592,7 @@ class TariffsAdminController extends Controller
                     DB::table('panel_tariff_groups')->where('id', $groupId)->update([
                         'name' => $name,
                         'group_type' => self::GROUP_TYPE_TIME,
+                        'service_type'=>$this->groupService($group),
                         'enable' => (int) ($group['enable'] ?? 1),
                         'sort_order' => (int) ($group['sort_order'] ?? ($index + 1)),
                         'updated_at' => now(),
@@ -586,6 +602,7 @@ class TariffsAdminController extends Controller
                         'name' => $name,
                         'is_default' => 0,
                         'group_type' => self::GROUP_TYPE_TIME,
+                        'service_type'=>$this->groupService($group),
                         'partner_access_mode' => 'selected_partners',
                         'enable' => (int) ($group['enable'] ?? 1),
                         'sort_order' => (int) ($group['sort_order'] ?? ($index + 1)),
@@ -657,6 +674,7 @@ class TariffsAdminController extends Controller
                     DB::table('panel_tariff_groups')->where('id', $groupId)->update([
                         'name' => $name,
                         'group_type' => self::GROUP_TYPE_VOLUME,
+                        'service_type'=>$this->groupService($group),
                         'enable' => (int) ($group['enable'] ?? 1),
                         'sort_order' => (int) ($group['sort_order'] ?? ($index + 1)),
                         'min_traffic_gb' => $minimumTraffic,
@@ -667,6 +685,7 @@ class TariffsAdminController extends Controller
                         'name' => $name,
                         'is_default' => 0,
                         'group_type' => self::GROUP_TYPE_VOLUME,
+                        'service_type'=>$this->groupService($group),
                         'partner_access_mode' => 'selected_partners',
                         'enable' => (int) ($group['enable'] ?? 1),
                         'sort_order' => (int) ($group['sort_order'] ?? ($index + 1)),
@@ -774,6 +793,7 @@ class TariffsAdminController extends Controller
                 'name' => $groupName,
                 'is_default' => $isDefault ? 1 : 0,
                 'group_type' => self::GROUP_TYPE_TIME,
+                'service_type'=>$this->groupService(['items'=>$items]),
                 'enable' => 1,
                 'sort_order' => $sortOrder,
                 'updated_at' => now(),
@@ -811,6 +831,11 @@ class TariffsAdminController extends Controller
             'changed' => $changed > 0,
             'message' => $changed > 0 ? 'تغییرات با موفقیت ذخیره شد' : 'تغییری اعمال نشد',
         ]);
+    }
+
+    private function groupService(array $group): string {
+        $items=$group['items']??[$group];$ids=array_filter(array_column($items,'v2_plan_id'));
+        return DB::table('v2_plan')->whereIn('id',$ids)->value('service_type')??'v2ray';
     }
 
     private function validateItems(array $items): void

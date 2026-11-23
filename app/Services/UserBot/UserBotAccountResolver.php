@@ -134,8 +134,10 @@ class UserBotAccountResolver
         $subLink = trim((string) $subLink);
         $subText = $subLink !== '' ? e($subLink) : '-';
 
+        $serviceName=($snapshot['service_type']??'v2ray')==='wireguard'?'WireGuard':'V2Ray';
         return "🔰 <b>اطلاعات کاربری</b>\n\n"
             . "👤 نام کاربری: <code>{$email}</code>\n"
+            . "🛡 سرویس: <b>{$serviceName}</b>\n"
             . ($planTitle !== '' ? "🧩 طرح فعال: <b>" . e($planTitle) . "</b>\n" : "")
             . "📦 ترافیک کل: <b>" . $this->formatBytes($total) . "</b>\n"
             . "🔥 ترافیک مصرفی: <b>" . $this->formatBytes($used) . "</b>\n"
@@ -143,8 +145,9 @@ class UserBotAccountResolver
             . "📅 تاریخ انقضا: <b>{$expireText}</b>\n"
             . "🕒 زمان باقی‌مانده: <b>{$daysText}</b>\n\n"
             . (!empty($snapshot['reservation']) ? "📦 طرح رزرو: <b>" . e($snapshot['reservation']['title']) . "</b>\n📊 ترافیک: " . e($snapshot['reservation']['traffic_label']) . "\n⏳ " . e($snapshot['reservation']['activation_label']) . "\n\n" : '')
-            . "🔗 لینک سابسکرایب:\n"
-            . "<code>{$subText}</code>";
+            . (($snapshot['service_type']??'v2ray')==='wireguard' ? "🔗 لینک اشتراک:\n" : "🔗 لینک سابسکرایب:\n")
+            . "<code>{$subText}</code>"
+            . (($snapshot['service_type'] ?? 'v2ray') === 'wireguard' ? "\n\n" . \App\Services\BotAccountMessages::guidance() : '');
     }
 
     private function formatRemainingTime(?int $expiredAt): string
@@ -199,6 +202,7 @@ class UserBotAccountResolver
                 'reservation' => app(\App\Services\SubscriptionReservationService::class)->current((int) $user->id),
                 'account_has_periodic_reset' => app(\App\Services\SubscriptionReservationService::class)->periodic($user),
                 'id' => $user->id ?? null,
+                'service_type' => $user->service_type ?? 'v2ray',
                 'email' => $user->email ?? null,
                 'transfer_enable' => $user->transfer_enable ?? null,
                 'banned' => $user->banned ?? 0,
@@ -262,62 +266,7 @@ class UserBotAccountResolver
 
     private function resolvePlanTitle(array $snapshot): string
     {
-        $snapshotName = trim((string)($snapshot['account_plan_name'] ?? ''));
-
-        if ($snapshotName !== '') {
-            return $snapshotName;
-        }
-
-        $planId = (int)($snapshot['plan_id'] ?? 0);
-
-        if ($planId <= 0) {
-            return '';
-        }
-
-        $volumePlan = DB::table('panel_plan as p')
-            ->leftJoin('panel_tariff_groups as g', 'g.id', '=', 'p.tariff_group_id')
-            ->where('p.v2_plan_id', $planId)
-            ->where('p.plan_key', 'volume_gig')
-            ->where('p.enable', 1)
-            ->where('g.group_type', 'volume')
-            ->select('g.name as group_name')
-            ->first();
-
-        if ($volumePlan && trim((string)($volumePlan->group_name ?? '')) !== '') {
-            return trim((string)$volumePlan->group_name);
-        }
-
-        $plan = DB::table('panel_plan as p')
-            ->leftJoin('panel_tariff_groups as g', 'g.id', '=', 'p.tariff_group_id')
-            ->where('p.v2_plan_id', $planId)
-            ->where('p.enable', 1)
-            ->select(
-                'p.plan_key',
-                'g.name as group_name',
-                'g.group_type'
-            )
-            ->first();
-
-        if (!$plan) {
-            return '';
-        }
-
-        $groupName = trim((string)($plan->group_name ?? ''));
-        $planKey = trim((string)($plan->plan_key ?? ''));
-
-        if ($groupName !== '') {
-            return $groupName;
-        }
-
-        return match ($planKey) {
-            'test' => 'تست',
-            '1m' => 'یک‌ماهه',
-            '3m' => 'سه‌ماهه',
-            '6m' => 'شش‌ماهه',
-            '12m' => 'یک‌ساله',
-            'volume_gig' => 'حجمی',
-            default => $planKey,
-        };
+        return app(\App\Services\AccountTariffResolver::class)->name((object) $snapshot);
     }
 
     private function formatUsername(?string $email): string

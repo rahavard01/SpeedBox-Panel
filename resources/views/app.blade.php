@@ -3,7 +3,8 @@
   $isViteDev = app()->environment('local') && is_file(public_path('hot'));
 
   // Production manifest
-  $manifestPath = public_path('build/manifest.json');
+  $buildDirectory = 'build';
+  $manifestPath = public_path($buildDirectory.'/manifest.json');
   $manifest = (!$isViteDev && is_file($manifestPath))
       ? json_decode(file_get_contents($manifestPath), true)
       : null;
@@ -30,6 +31,9 @@
   <script src="/speedbox/wattunnel.js?v={{ filemtime(public_path('speedbox/wattunnel.js')) }}"></script>
   <script src="/speedbox/network-tunnels.js?v={{ filemtime(public_path('speedbox/network-tunnels.js')) }}"></script>
   <script src="/speedbox/tunnels.js?v={{ filemtime(public_path('speedbox/tunnels.js')) }}"></script>
+  <link rel="stylesheet" href="/speedbox/wireguard.css?v={{ filemtime(public_path('speedbox/wireguard.css')) }}">
+  <script src="/speedbox/wireguard.js?v={{ filemtime(public_path('speedbox/wireguard.js')) }}"></script>
+  <script src="/speedbox/jalali-calendar.js?v={{ filemtime(public_path('speedbox/jalali-calendar.js')) }}"></script>
   <script src="/speedbox/infrastructure.js?v={{ filemtime(public_path('speedbox/infrastructure.js')) }}"></script>
   <script src="/speedbox/register-infrastructure.js?v={{ filemtime(public_path('speedbox/register-infrastructure.js')) }}"></script>
   <script src="/speedbox/panel-tooltip.js?v={{ filemtime(public_path('speedbox/panel-tooltip.js')) }}"></script>
@@ -43,12 +47,12 @@
     {{-- Production (RELATIVE) --}}
     @if($cssFiles)
       @foreach($cssFiles as $css)
-        <link rel="stylesheet" href="{{ '/build/' . ltrim($css, '/') }}">
+        <link rel="stylesheet" href="{{ '/' . $buildDirectory . '/' . ltrim($css, '/') }}">
       @endforeach
     @endif
 
     @if($jsFile)
-      <script type="module" src="{{ '/build/' . ltrim($jsFile, '/') }}"></script>
+      <script type="module" src="{{ '/' . $buildDirectory . '/' . ltrim($jsFile, '/') }}"></script>
     @endif
   @endif
 
@@ -97,6 +101,7 @@
   @include('infrastructure')
 </body>
 </html>
+
 
 
 

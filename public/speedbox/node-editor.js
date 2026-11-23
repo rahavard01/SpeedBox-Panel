@@ -16,6 +16,18 @@ window.SpeedboxNodeEditor = (() => {
     xhttp:{label:'XHTTP',content:{host:'example.com',path:'/yourpath',mode:'auto',extra:{headers:{},xPaddingBytes:'100-1000',noGRPCHeader:false,noSSEHeader:false,scMaxEachPostBytes:1000000,scMinPostsIntervalMs:30,scMaxBufferedPosts:30,xmux:{maxConcurrency:'16-32',maxConnections:0,cMaxReuseTimes:'64-128',cMaxLifetimeMs:0,hMaxRequestTimes:'800-900',hKeepAlivePeriod:0},downloadSettings:{address:'',port:443,network:'xhttp',security:'tls',tlsSettings:{},xhttpSettings:{path:'/yourpath'},sockopt:{}}}}}
   };
   const padding = ['stop=8','0=30-30','1=100-400','2=400-500,c,500-1000,c,500-1000,c,500-1000,c,500-1000','3=9-9,500-1000','4=500-1000','5=500-1000','6=500-1000','7=500-1000'];
+  function operatorFilterStatus(status) {
+    return {
+      pending:'در حال اعمال محدودیت اپراتورها…',
+      applied:'محدودیت اپراتورها اعمال شد.',
+      inactive:'محدودیت پس از فعال‌شدن نود اعمال می‌شود.',
+      unsupported:'اعمال محدودیت برای ورودی فعلی امکان‌پذیر نیست.',
+      shared:'ورودی مشترک است و محدودیت مستقل برای این نود قابل اعمال نیست.',
+      manual:'قانون دستی همراه اول هم روی این ورودی فعال است.',
+      missing_tools:'ابزار فایروال سرور نصب نیست.',
+      failed:'اعمال تغییر محدودیت اپراتورها با خطا روبه‌رو شد. پنل دوباره تلاش می‌کند.',
+    }[status] || '';
+  }
   const clone = value => JSON.parse(JSON.stringify(value));
   function compatibleKernels(type, settings, definition) {
     if (!definition?.protocols) return {kernels:[],reason:'قواعد سازگاری هسته دریافت نشده است؛ صفحه را تازه کنید.'};
@@ -97,6 +109,27 @@ window.SpeedboxNodeEditor = (() => {
       });
       enhanceControls(container);
     };
+    draft.blockMci = (node?.operator_filters || []).includes('mci');
+    draft.blockIrancell = (node?.operator_filters || []).includes('irancell');
+    const operatorTarget = value => JSON.stringify([
+      value.host, String(value.port), Number(value.server_port), Number(value.machine_id), Number(value.parent_id),
+      value.type, value.protocol_settings?.network, value.protocol_settings?.transport
+    ]);
+    const originalTarget = node && operatorTarget(node);
+    let savedOperatorTarget;
+    function renderOperatorStatus() {
+      const mci = form.querySelector('[data-path="blockMci"]');
+      const latest = state.nodes?.find(candidate => Number(candidate.id) === Number(node?.id)) ?? node;
+      const manualStatus = latest && operatorTarget(latest) === originalTarget ? latest.operator_filter_live?.manual : 'unknown';
+      const saved = Boolean(node?.id) && operatorTarget(draft) === savedOperatorTarget;
+      const manual = saved && ['blocked', 'partial'].includes(manualStatus);
+      const unknown = saved && (!manualStatus || manualStatus === 'unknown');
+      mci.checked = manual || draft.blockMci;
+      mci.indeterminate = unknown || (manual && manualStatus === 'partial' && !draft.blockMci);
+      mci.disabled = manual || unknown;
+      mci.setAttribute('aria-label', unknown ? 'مسدودسازی همراه اول، در انتظار بررسی'
+        : manualStatus === 'partial' && manual ? 'مسدودسازی جزئی همراه اول' : 'مسدودسازی همراه اول');
+    }
     function common() {
       form.querySelector('.node-common').innerHTML=`<div class="node-row name-rate">${text('name','نام نود',draft.name,{required:true})}${text('rate','ضریب پایه',draft.rate,{number:true,step:'0.01'})}</div>
         ${toggle('rate_time_enable','ضریب ترافیک زمان‌بندی‌شده',draft.rate_time_enable)}<div class="node-rate-ranges full" ${draft.rate_time_enable?'':'hidden'}></div>
@@ -105,12 +138,16 @@ window.SpeedboxNodeEditor = (() => {
         ${select('group_ids','گروه‌های دسترسی',draft.group_ids,state.groups.map(g=>[g.id,g.name]),{multiple:true,wide:true})}
         ${text('host','آدرس نود',draft.host,{required:true,wide:true,placeholder:'example.com'})}
         <div class="node-row">${text('port','پورت اتصال',draft.port,{required:true})}${text('server_port','پورت سرور',draft.server_port,{number:true,min:1,required:true})}</div>
-        <button type="button" class="button secondary small node-sync-port" data-sync-port>همگام‌سازی پورت سرور با پورت اتصال</button>`;
+        <button type="button" class="button secondary small node-sync-port" data-sync-port>همگام‌سازی پورت سرور با پورت اتصال</button>
+        <div class="full node-operator-controls" role="group" aria-labelledby="node-operator-heading">
+          <b id="node-operator-heading">محدودیت دسترسی اپراتورها</b>
+          <div class="node-row">${toggle('blockMci','مسدودسازی همراه اول',draft.blockMci)}${toggle('blockIrancell','مسدودسازی ایرانسل',draft.blockIrancell)}</div>
+        </div>`;
       bind(form.querySelector('.node-common'),draft,input=>{
         if(input.dataset.path==='transfer_enable_gb')draft.transfer_enable=Math.round(Number(input.value||0)*1073741824);
         if(input.dataset.path==='rate_time_enable'){form.querySelector('.node-rate-ranges').hidden=!input.checked;}
       });
-      form.querySelector('[data-sync-port]').onclick=()=>{const port=String(draft.port);if(!/^\d+$/.test(port)||+port<1||+port>65535){toast('برای همگام‌سازی، یک پورت اتصال بین ۱ و ۶۵۵۳۵ وارد کنید.','error');return;}draft.server_port=Number(port);form.querySelector('[data-path="server_port"]').value=port;};
+      form.querySelector('[data-sync-port]').onclick=()=>{const port=String(draft.port);if(!/^\d+$/.test(port)||+port<1||+port>65535){toast('برای همگام‌سازی، یک پورت اتصال بین ۱ و ۶۵۵۳۵ وارد کنید.','error');return;}draft.server_port=Number(port);form.querySelector('[data-path="server_port"]').value=port;renderOperatorStatus();};
       ranges();
     }
     function ranges() {
@@ -367,17 +404,26 @@ window.SpeedboxNodeEditor = (() => {
       selector.onchange=()=>{cache.set(draft.type,clone(draft.protocol_settings));draft.type=selector.value;draft.protocol_settings=merge(defaults(draft.type),cache.get(draft.type));header();protocol();assignment();};enhanceControls(form.querySelector('.node-protocol-head'));
     }
     common();header();protocol();assignment();
+    savedOperatorTarget = operatorTarget(draft);
+    renderOperatorStatus();
+    form.addEventListener('input', renderOperatorStatus);
+    form.addEventListener('change', renderOperatorStatus);
     form.querySelector('[data-advanced]').onclick=advanced;
     form.onsubmit=async e=>{
       e.preventDefault();if(!form.reportValidity())return;
       if(!compatibleKernels(draft.type,draft.protocol_settings,state.kernelCapabilities).kernels.includes(draft.kernel)){toast('تنظیمات نود با هسته انتخاب‌شده سازگار نیست.','error');return;}
       const body=clone(draft);delete body.transfer_enable_gb;delete body.runtime;delete body.machine;delete body.parent;delete body.created_at;delete body.updated_at;delete body.id;delete body.u;delete body.d;
+      body.operator_filters = [...(draft.blockMci ? ['mci'] : []), ...(draft.blockIrancell ? ['irancell'] : [])];
+      delete body.blockMci; delete body.blockIrancell; delete body.operator_filter_status;
       body.protocol_settings=clone(draft.protocol_settings);
       if(body.type==='hysteria'){body.protocol_settings.bandwidth={...body.protocol_settings.bandwidth,up:Number(get(body,'protocol_settings.bandwidth.up',0)),down:Number(get(body,'protocol_settings.bandwidth.down',0))};}
       try{const r=await api(node?`/nodes/${node.id}`:'/nodes',{method:node?'PUT':'POST',body:JSON.stringify(body)});if(disposed)return;toast(r.message);closeModal();await reload(r.data);}catch(error){if(error.name!=='AbortError')toast(error.message,'error');}
     };
-    return () => {disposed=true;warpSequence++;clearTimeout(warpTimer);warpState.license='';closeSub();};
+    const dispose = () => {disposed=true;warpSequence++;clearTimeout(warpTimer);warpState.license='';closeSub();};
+    dispose.refreshOperatorStatus = renderOperatorStatus;
+    return dispose;
   }
-  return {mount,protocols,protocolBadge,compatibleKernels};
+  return {mount,protocols,protocolBadge,compatibleKernels,operatorFilterStatus};
 })();
+
 

@@ -93,7 +93,17 @@ class InfrastructureController extends Controller
                 unset($data[$secret]);
             }
         }
-        $managedServer->update($data);
+        DB::transaction(function () use ($managedServer, $data) {
+            $server = ManagedServer::whereKey($managedServer->id)->lockForUpdate()->firstOrFail();
+            abort_if($server->status === 'removing', 409, 'این سرور در حال حذف است.');
+            if ($server->operator_firewall) {
+                foreach (['host', 'ssh_port'] as $field) {
+                    abort_if(isset($data[$field]) && (string) $data[$field] !== (string) $server->$field, 409,
+                        'ابتدا محدودیت اپراتورهای نودهای این سرور را بردارید و منتظر اعمال تغییر بمانید.');
+                }
+            }
+            $managedServer->update($data);
+        });
         $managedServer->machine?->update(['name' => $managedServer->name, 'notes' => $data['notes'] ?? $managedServer->machine->notes]);
         return response()->json(['message' => 'اطلاعات سرور به‌روز شد.', 'data' => $managedServer->fresh('machine')]);
     }
@@ -106,6 +116,8 @@ class InfrastructureController extends Controller
             \App\Services\TunnelManager::protectServer($server->id, true);
             abort_if($server->machine?->managedServers()->where('id', '!=', $server->id)->exists(), 422, 'این ماشین با سرور دیگری مشترک است؛ ابتدا ارتباط مشترک را اصلاح کنید.');
             abort_if($server->deployments()->whereIn('status', ['queued', 'running'])->exists(), 409, 'عملیات قبلی این سرور هنوز تمام نشده است.');
+            abort_if($server->operator_firewall, 409,
+                'ابتدا محدودیت اپراتورهای نودهای این سرور را بردارید و منتظر اعمال تغییر بمانید.');
             $server->update(['status' => 'removing']);
             return ServerDeployment::create(['managed_server_id' => $server->id, 'requested_by' => $request->user()?->id, 'action' => 'uninstall', 'kernel' => 'singbox', 'status' => 'queued']);
         });
@@ -179,7 +191,9 @@ class InfrastructureController extends Controller
     {
         $nodes = ProxyServer::with(['machine:id,name,last_seen_at', 'parent'])->orderBy('sort')->orderBy('id')->get();
         $onlineCounts = app(\App\Services\AccountOnlineStatus::class)->nodeUserCounts($nodes->map(fn ($node) => (int) $node->runtimeNode()->id)->all());
-        $nodes = $nodes->map(function ($node) use ($onlineCounts) {
+        $observations = app(\App\Services\OperatorFilterObservations::class)->forNodes($nodes);
+        $nodes = $nodes->map(function ($node) use ($onlineCounts, $observations) {
+            $node->operator_filter_live = $observations[$node->id];
             $node->runtime = $this->nodeControl->stateFor($node, $onlineCounts);
             $trafficNode = $node->runtimeNode();
             $node->traffic_usage = [
@@ -220,13 +234,16 @@ class InfrastructureController extends Controller
     public function cloneNode(ProxyServer $node): JsonResponse
     {
         $copy = DB::transaction(function () use ($node) {
-            $source = ProxyServer::lockForUpdate()->findOrFail($node->id);
-            $parent = $source->parent_id ? ProxyServer::lockForUpdate()->findOrFail($source->parent_id) : $source;
-            abort_if($parent->parent_id || $parent->type !== $source->type, 422, 'رابطهٔ والد این نود معتبر نیست.');
+            // Lock in the same order as sortNodes so concurrent clones/reorders
+            // retain one consistent list, including old duplicate/null sorts.
+            $nodes = ProxyServer::orderBy('sort')->orderBy('id')->lockForUpdate()->get();
+            $source = $nodes->firstWhere('id', $node->id);
+            abort_if(!$source, 404, 'نود یافت نشد.');
+            $parent = $source->parent_id ? $nodes->firstWhere('id', $source->parent_id) : $source;
+            abort_if(!$parent || $parent->parent_id || $parent->type !== $source->type, 422, 'رابطهٔ والد این نود معتبر نیست.');
             $copy = $source->replicate();
             $copy->name = $source->name.' (کپی)';
             $copy->code = null;
-            $copy->sort = ((int) ProxyServer::max('sort')) + 1;
             $copy->parent_id = $parent->id;
             $copy->machine_id = $parent->machine_id;
             $copy->kernel = $parent->kernel;
@@ -234,9 +251,22 @@ class InfrastructureController extends Controller
             $copy->warp_enabled = (bool) $parent->warp_enabled;
             $copy->enabled = (bool) $source->enabled && (bool) $parent->enabled;
             $copy->show = false;
+            $copy->operator_filters = null;
+            $copy->operator_filter_status = null;
             $copy->u = 0;
             $copy->d = 0;
-            $copy->save();
+            $order = 1;
+            foreach ($nodes as $existing) {
+                if ((int) $existing->sort !== $order) {
+                    $existing->sort = $order;
+                    $existing->save();
+                }
+                $order++;
+                if ($existing->id === $source->id) {
+                    $copy->sort = $order++;
+                    $copy->save();
+                }
+            }
             return $copy;
         });
         return response()->json(['message' => 'کپی به نود اصلی متصل شد؛ نمایش در سابسکرایب خاموش است.', 'data' => $copy->load('parent', 'machine')], 201);
@@ -270,9 +300,12 @@ class InfrastructureController extends Controller
 
     public function savePlan(Request $request, ?int $plan = null): JsonResponse
     {
+        $request->merge(['service_type'=>$request->input('service_type','v2ray')]);
         $data = $request->validate([
+            'service_type'=>'required|in:v2ray,wireguard',
+            'wireguard_instance_id'=>'nullable|required_if:service_type,wireguard|integer|exists:speedbox_wireguard_instances,id',
             'name' => ['required', 'string', 'max:100'],
-            'group_id' => ['required', 'integer', 'exists:v2_server_group,id'],
+            'group_id' => ['exclude_if:service_type,wireguard','required','integer','exists:v2_server_group,id'],
             'transfer_enable' => ['required', 'integer', 'min:0'],
             'speed_limit' => ['nullable', 'integer', 'min:0'],
             'device_limit' => ['nullable', 'integer', 'min:0'],
@@ -292,6 +325,12 @@ class InfrastructureController extends Controller
             'speed_limit' => 'محدودیت سرعت', 'device_limit' => 'محدودیت اتصال',
             'capacity_limit' => 'محدودیت ظرفیت', 'tags' => 'تگ‌ها',
         ]);
+        if($data['service_type']==='wireguard') {
+            $data['group_id']=0;
+            abort_if((int)($data['speed_limit']??0)>10000,422,'سقف سرعت وایرگارد ۱۰۰۰۰ مگابیت است.');
+            abort_if((int)($data['device_limit']??1)>16,422,'حداکثر ۱۶ پروفایل برای هر حساب مجاز است.');
+            if(empty($data['device_limit']))$data['device_limit']=1;
+        } else $data['wireguard_instance_id']=null;
         $forceUpdate = $request->boolean('force_update');
         unset($data['force_update']);
         foreach (['group_id', 'transfer_enable', 'speed_limit', 'device_limit', 'capacity_limit', 'reset_traffic_method'] as $key) {
@@ -300,9 +339,15 @@ class InfrastructureController extends Controller
         if (array_key_exists('tags', $data)) $data['tags'] = json_encode($data['tags'] ?? [], JSON_UNESCAPED_UNICODE);
         $data['updated_at'] = time();
         $plan = DB::transaction(function () use ($plan, $data, $forceUpdate) {
+            if($data['service_type']==='wireguard'){
+                $instance=\App\Models\WireGuardInstance::whereKey($data['wireguard_instance_id'])->lockForUpdate()->first();
+                abort_unless($instance,422,'سرویس WireGuard یافت نشد.');
+                abort_if(in_array($instance->status,['deleting','delete_failed'],true),422,'سرویس WireGuard در حال حذف است.');
+            }
             if (!$plan) return DB::table('v2_plan')->insertGetId([...$data, 'created_at' => time()]);
             $existing = DB::table('v2_plan')->where('id', $plan)->lockForUpdate()->first();
             abort_unless($existing, 404, 'پلن یافت نشد.');
+            abort_if(($existing->service_type??'v2ray')!==$data['service_type'] || (int)($existing->wireguard_instance_id??0)!==(int)($data['wireguard_instance_id']??0),422,'نوع سرویس و سرور پلن قابل تغییر نیست؛ پلن جدید بسازید.');
             $changed = [];
             foreach (['group_id', 'transfer_enable', 'speed_limit', 'device_limit'] as $field) {
                 if (!array_key_exists($field, $data)) continue;
@@ -465,7 +510,20 @@ class InfrastructureController extends Controller
 
     private function validateNode(Request $request, ?ProxyServer $node = null): array
     {
-        return InfrastructureNodeRules::validate($request, $node);
+        $data = InfrastructureNodeRules::validate($request, $node);
+        $filters = $request->validate([
+            'operator_filters' => ['sometimes', 'nullable', 'array', 'list', 'max:2'],
+            'operator_filters.*' => ['required', 'string', 'distinct', 'in:mci,irancell'],
+        ]);
+        if (array_key_exists('operator_filters', $filters)) {
+            $operators = $filters['operator_filters'] ?? [];
+            sort($operators, SORT_STRING);
+            $data['operator_filters'] = $operators ?: null;
+        }
+        if (($data['operator_filters'] ?? null) || $node?->operator_filters) {
+            $data['operator_filter_status'] = 'pending';
+        }
+        return $data;
     }
 
     public function generateVlessEncryption(Request $request, RemoteNodeTools $tools): JsonResponse
@@ -586,3 +644,5 @@ class InfrastructureController extends Controller
         return response()->json(['message' => 'ترتیب نودها ذخیره شد.']);
     }
 }
+
+

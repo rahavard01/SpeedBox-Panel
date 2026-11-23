@@ -35,10 +35,13 @@ final class SubscriptionReservationController extends Controller
         $query = DB::table('panel_plan as pp')->join('v2_plan as vp', 'vp.id', '=', 'pp.v2_plan_id')
             ->join('panel_tariff_groups as tg', 'tg.id', '=', 'pp.tariff_group_id')->where('pp.enable', 1)->where('tg.enable', 1);
         app(\App\Services\PartnerTariffAccessService::class)->applyVisibleGroups($query, $owner, 'tg');
+        $query->where('vp.service_type',$user->service_type??'v2ray');
+        if(($user->service_type??'v2ray')==='wireguard')$query->where('vp.wireguard_instance_id',$user->wireguard_instance_id);
         $methods = $query->get(['pp.tariff_group_id', 'pp.plan_key', 'vp.reset_traffic_method']);
         $map = [];
         foreach ($methods as $method) $map[$method->tariff_group_id][$method->plan_key] = in_array((int) ($method->reset_traffic_method ?? RuntimeSetting::get('reset_traffic_method', 2)), [0, 1, 3, 4], true);
         return response()->json(['data' => [
+            'service_type'=>$user->service_type??'v2ray','wireguard_instance_id'=>$user->wireguard_instance_id,
             'reservation' => $user->reservation, 'account_has_periodic_reset' => $user->account_has_periodic_reset,
             'account_ended' => $user->account_ended, 'renewal_mode' => (int) RuntimeSetting::get('renew_order_event_id', 2),
             'renewal_plan_methods' => $map,

@@ -140,7 +140,7 @@ class TunnelManager
             // Swapped carriers keep Iran ingress via the bridge's private L3 adapter.
             $status = in_array($r['s'] ?? '', ['ok','unstable','down','skipped','testing'], true) ? $r['s'] : 'down';
             $rows[] = ['id' => $orientation.':'.$kind.':'.$transport, 'kind' => $kind, 'transport' => $transport,
-                'label' => ($kind === 'reverse' ? 'Reverse ' : 'Direct ').($transport === 'paqet' ? 'PCK v2' : strtoupper($transport)), 'orientation' => $orientation,
+                'label' => ($kind === 'reverse' ? 'Reverse ' : 'Direct ').($transport === 'paqet' ? 'PCK' : strtoupper($transport)), 'orientation' => $orientation,
                 'cdn_selectable'=>TunnelCdn::supported('backpack',$kind,$transport),
                 'status' => $status, 'selectable' => $supported && in_array($status, ['ok','unstable'], true),
                 'reason' => !$supported ? 'ساخت خودکار این روش به تنظیمات تکمیلی نیاز دارد و در این نسخه فعال نیست.'

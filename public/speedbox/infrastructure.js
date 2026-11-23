@@ -29,6 +29,7 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
   try { user = JSON.parse(localStorage.getItem('user') || 'null'); } catch (_) {}
   if (!token || Number(user?.role) !== 1) { router.replace('/login'); overlay.remove(); return { dispose() {}, showView() {} }; }
 
+  const { todayDate, displayDate, persianParts, persianMonths, faNumber, monthDays } = window.SpeedboxJalaliCalendar;
   const rankRequests = {node:null, user:null};
   let calendarSession = null;
   const rankState = {node:{range:'today', data:[]}, user:{range:'today', data:[]}};
@@ -36,6 +37,7 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
   const content = scope.getElementById('content');
   const modalBackdrop = scope.getElementById('modalBackdrop');
   const titles = {
+    wireguard:'مدیریت WireGuard',
     tunnels:'مدیریت تونل‌ها', configuration:'پیکربندی سیستم', overview:'داشبورد', servers:'مدیریت سرورها', nodes:'مدیریت نودها', 'emergency-configs':'کانفیگ‌های اضطراری',
     plans:'مدیریت پلن‌ها', routing:'گروه‌های دسترسی و مسیریابی', settings:'تنظیمات سرورها',
     'site-settings':'تنظیمات سایت', 'security-settings':'تنظیمات امنیت',
@@ -58,13 +60,16 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
   async function api(path='', options={}) {
     const signal = options.signal || requests.signal;
     const method = (options.method || 'GET').toUpperCase();
-    let statusCheck = false;
+    let action = '';
     if(method === 'POST' && /^\/(?:tunnels|network-tunnels)\/\d+\/actions$/.test(path)) {
-      try { statusCheck = JSON.parse(options.body || '{}').action === 'status'; } catch (_) {}
+      try { action = JSON.parse(options.body || '{}').action || ''; } catch (_) {}
     }
+    // These requests only retrieve/queue status; their modal already
+    // renders its own progress. They must not flash a saving overlay.
+    const statusCheck = ['status','maintenance-status'].includes(action);
     const mutation = ['POST','PUT','PATCH','DELETE'].includes(method) && !statusCheck;
     if(mutation && savingCount) throw new Error('لطفاً تا پایان عملیات جاری صبر کنید.');
-    const finish = mutation ? savingOverlay() : () => {};
+    const finish = mutation && !options.background ? savingOverlay(operationMessage(path, method, action)) : () => {};
     try {
       const response = await fetch(apiBase + path, {
         ...options, signal,
@@ -81,11 +86,25 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
       return data;
     } finally { finish(); }
   }
-  function savingOverlay(){
+  function operationMessage(path, method, action){
+    if(method==='DELETE'||action==='delete')return 'در حال حذف…';
+    if(path.endsWith('/cancel'))return 'در حال لغو عملیات…';
+    if(path.endsWith('/clone'))return 'در حال ساخت کپی…';
+    if(['/tunnel-tests','/network-tunnel-tests','/tunnel-cdn-tests'].includes(path))return 'در حال شروع بررسی اتصال…';
+    if(path==='/nodes/order')return 'در حال ذخیرهٔ ترتیب…';
+    if(path.startsWith('/keys/'))return 'در حال تولید کلید…';
+    if(path==='/nodes/certificate-fingerprint')return 'در حال دریافت اثرانگشت گواهی…';
+    if(action==='optimize')return 'در حال شروع بهینه‌سازی…';
+    if(action==='update')return 'در حال شروع به‌روزرسانی…';
+    if(action==='logs')return 'در حال دریافت گزارش…';
+    if(action||/\/(?:deploy|warp)$/.test(path))return 'در حال اجرای عملیات…';
+    return 'در حال ذخیره…';
+  }
+  function savingOverlay(message){
     savingCount++;
     const target = !modalBackdrop.hidden ? overlay.querySelector('.infrastructure-modal') : content;
     const layer=document.createElement('div'); layer.className='creating-overlay'; layer.role='status'; layer.setAttribute('aria-live','polite');
-    layer.innerHTML='<div class="creating-box"><span>در حال ذخیره…</span><i class="fas fa-spinner fa-spin" aria-hidden="true"></i></div>';
+    layer.innerHTML='<div class="creating-box"><span>'+escape(message)+'</span><i class="fas fa-spinner fa-spin" aria-hidden="true"></i></div>';
     target.appendChild(layer); target.setAttribute('aria-busy','true');
     return () => { savingCount--; layer.remove(); target.removeAttribute('aria-busy'); };
   }
@@ -153,8 +172,8 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
     const selection=focused&&typeof focused.selectionStart==='number'?[focused.selectionStart,focused.selectionEnd]:null;
     modalCloseHandler=options.onClose||null;
     nodeEditorDispose?.(); nodeEditorDispose=null;
-    overlay.querySelector('.infrastructure-modal').classList.toggle('node-modal',!!options.node);
-    for(const kind of ['group','routing','plan','server','server-delete','job','emergency','emergency-delete','tunnel']) overlay.querySelector('.infrastructure-modal').classList.toggle(`${kind}-modal`, options.kind===kind);
+    overlay.querySelector('.infrastructure-modal').classList.toggle('node-modal',!!options.node||options.kind==='wireguard');
+    for(const kind of ['group','routing','plan','server','server-delete','job','emergency','emergency-delete','tunnel','wireguard']) overlay.querySelector('.infrastructure-modal').classList.toggle(`${kind}-modal`, options.kind===kind);
     scope.getElementById('modalTitle').textContent=title;
     const modalBody=scope.getElementById('modalBody');
     modalBody.innerHTML=body;
@@ -194,6 +213,11 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
         emergencySession?.dispose();
         emergencySession=window.SpeedboxEmergencyConfigs.mount(content,{api,toast,openModal,closeModal,modalBody:()=>scope.getElementById('modalBody')});
         await emergencySession.load();
+      }
+      if(currentView==='wireguard') {
+        tunnelSession?.dispose();
+        tunnelSession=window.SpeedboxWireGuard.mount(content,{api,toast,openModal,closeModal,modalBody:()=>scope.getElementById('modalBody'),enhanceControls,entityLayout:entityCardLayout,isBusy:()=>savingCount>0});
+        await tunnelSession.load();
       }
       if(currentView==='tunnels') {
         tunnelSession?.dispose();
@@ -291,10 +315,6 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
       <div class="rank-list" data-rank-list="${type}">${loading()}</div>
     </article>`;
   }
-  function todayDate() {
-    const parts = Object.fromEntries(new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Tehran',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date()).map(part=>[part.type,part.value]));
-    return `${parts.year}-${parts.month}-${parts.day}`;
-  }
   function bindRankControls() {
     content.querySelectorAll('[data-rank-range]').forEach(select=>select.onchange=()=>{
       closeRankCalendar();
@@ -302,25 +322,6 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
       content.querySelector(`[data-rank-dates="${type}"]`).hidden=rank.range!=='custom';loadRank(type);
     });
     content.querySelectorAll('[data-rank-date]').forEach(button=>button.onclick=()=>openRankCalendar(button));
-  }
-  // Persian calendar is used for every displayed date. ISO dates stay internal to the API.
-  const persianDateFormat = new Intl.DateTimeFormat('fa-IR-u-ca-persian',{timeZone:'Asia/Tehran',year:'numeric',month:'2-digit',day:'2-digit'});
-  const persianPartsFormat = new Intl.DateTimeFormat('en-US-u-ca-persian',{timeZone:'UTC',year:'numeric',month:'numeric',day:'numeric'});
-  const persianMonths = ['فروردین','اردیبهشت','خرداد','تیر','مرداد','شهریور','مهر','آبان','آذر','دی','بهمن','اسفند'];
-  const faNumber = value => Number(value).toLocaleString('fa-IR',{useGrouping:false});
-  const displayDate = iso => iso ? persianDateFormat.format(new Date(iso+'T12:00:00Z')) : '—';
-  function persianParts(date) {
-    const parts=Object.fromEntries(persianPartsFormat.formatToParts(date).map(part=>[part.type,part.value]));
-    return {year:Number(parts.year),month:Number(parts.month),day:Number(parts.day)};
-  }
-  function persianMonthStart(year,month) {
-    const target=year*10000+month*100+1;
-    let low=Math.floor(Date.UTC(year+621,0,1)/86400000),high=Math.floor(Date.UTC(year+622,11,31)/86400000);
-    while(low<high){
-      const mid=Math.floor((low+high)/2),p=persianParts(new Date(mid*86400000));
-      if(p.year*10000+p.month*100+p.day<target)low=mid+1;else high=mid;
-    }
-    return low;
   }
   function rankDateControl(type,edge,label) {
     const value=rankState[type][edge]||todayDate();
@@ -355,13 +356,10 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
       closeRankCalendar(true);loadRank(trigger.dataset.rankDate);
     };
     const render=()=>{
-      const first=persianMonthStart(year,month),next=persianMonthStart(month===12?year+1:year,month===12?1:month+1);
-      const offset=(new Date(first*86400000).getUTCDay()+1)%7,today=todayDate();
-      const cells=Array.from({length:offset},()=>'<span aria-hidden="true"></span>');
-      for(let day=1;day<=next-first;day++){
-        const iso=new Date((first+day-1)*86400000).toISOString().slice(0,10);
-        cells.push(`<button type="button" class="jalali-day${iso===selected?' is-selected':''}${iso===today?' is-today':''}" data-calendar-day="${iso}" aria-label="${displayDate(iso)}" aria-pressed="${iso===selected}">${faNumber(day)}</button>`);
-      }
+      const today=todayDate();
+      const cells=monthDays(year,month).map(day=>day
+        ? `<button type="button" class="jalali-day${day.iso===selected?' is-selected':''}${day.iso===today?' is-today':''}" data-calendar-day="${day.iso}" aria-label="${displayDate(day.iso)}" aria-pressed="${day.iso===selected}">${faNumber(day.number)}</button>`
+        : '<span aria-hidden="true"></span>');
       menu.innerHTML=`<div class="jalali-calendar"><div class="jalali-calendar-head"><button type="button" class="button small" data-calendar-prev aria-label="ماه قبل"><i class="fas fa-chevron-right" aria-hidden="true"></i></button><select data-calendar-month aria-label="ماه">${persianMonths.map((name,index)=>`<option value="${index+1}" ${index+1===month?'selected':''}>${name}</option>`).join('')}</select><select data-calendar-year aria-label="سال">${Array.from({length:201},(_,index)=>initial.year-100+index).map(value=>`<option value="${value}" ${value===year?'selected':''}>${faNumber(value)}</option>`).join('')}</select><button type="button" class="button small" data-calendar-next aria-label="ماه بعد"><i class="fas fa-chevron-left" aria-hidden="true"></i></button></div><div class="jalali-calendar-grid">${['ش','ی','د','س','چ','پ','ج'].map(name=>`<span class="jalali-weekday">${name}</span>`).join('')}${cells.join('')}</div><div class="jalali-calendar-footer"><button type="button" class="button small" data-calendar-today>امروز</button></div></div>`;
       menu.querySelector('[data-calendar-month]').onchange=e=>{month=Number(e.target.value);render();};
       menu.querySelector('[data-calendar-year]').onchange=e=>{year=Number(e.target.value);render();};
@@ -748,6 +746,7 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
     const results=background?[await api('/nodes')]:await Promise.all([api('/nodes'),api('/machines'),api('/groups'),api('/routes')]);
     if(version!==nodeFetchVersion||state.view!=='nodes')return;
     state.nodes=results[0].data;state.kernelCapabilities=results[0].meta?.kernel_capabilities;
+    nodeEditorDispose?.refreshOperatorStatus?.();
     if(!background){state.machines=results[1].data;state.groups=results[2].data;state.routes=results[3].data;scope.getElementById('addNode').disabled=false;}
     if(draggingNode===null){hideEntityTooltip();renderNodeRows();}scheduleNodeRefresh();
   }
@@ -765,10 +764,23 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
     const [color,label]=states[code]||['red','در حال اجرا نیست'];
     return `<button type="button" class="node-runtime-dot ${color}" data-entity-tooltip="${escape(label)}" aria-label="${escape(label)}"><span aria-hidden="true"></span></button>`;
   }
+  function nodeOperatorLabels(node) {
+    const live = node.operator_filter_live;
+    const names = {mci:'همراه اول', irancell:'ایرانسل'};
+    const blocked = (live?.blocked || []).map(operator => names[operator]).filter(name => typeof name === 'string');
+    const status = node.operator_filter_status;
+    const notice = status && !['applied','manual'].includes(status)
+      ? window.SpeedboxNodeEditor.operatorFilterStatus(status)
+      : live?.manual === 'partial' && !blocked.includes(names.mci) ? 'محدودیت جزئی همراه اول' : '';
+    const icon = '<i class="fas fa-ban operator-filter-icon" role="img" aria-label="محدودیت"></i>';
+    const labels = blocked.map(name => `${icon} ${escape(name)}`).join(' / ');
+    return [labels, escape(notice)].filter(Boolean)
+      .map(message => `<small class="operator-filter-state" dir="rtl">${message}</small>`).join('');
+  }
   function nodeTable(list){
     if(!list.length)return empty('نودی ساخته نشده است');
     const markup = `<div class="table-wrap"><table class="node-table"><thead><tr><th>ترتیب</th><th>شماره نود</th><th>نود</th><th>نمایش</th><th>کاربران آنلاین</th><th>سرور مقصد</th><th>هسته</th><th>پورت</th><th>ترافیک مصرفی</th><th>عملیات</th></tr></thead><tbody>${list.map(n=>{
-      return `<tr data-node-row="${n.id}"><td><div class="node-order-controls"><button type="button" class="node-drag" draggable="true" data-drag-node="${n.id}" aria-label="جابه‌جایی نود" title="برای مرتب‌سازی بکشید"><svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><circle cx="9" cy="5" r="1.6"/><circle cx="15" cy="5" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="19" r="1.6"/><circle cx="15" cy="19" r="1.6"/></svg></button><span><button type="button" data-node-move="${n.id}" data-step="-1" aria-label="یک ردیف بالاتر" ${state.nodes[0]?.id===n.id?'disabled':''}><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 15 12 9 18 15"/></svg></button><button type="button" data-node-move="${n.id}" data-step="1" aria-label="یک ردیف پایین‌تر" ${state.nodes.at(-1)?.id===n.id?'disabled':''}><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button></span></div></td><td><span class="node-number"><span class="node-id-badge"><bdi dir="ltr">${escape(n.id)}${n.parent_id?` <span class="node-parent-arrow" aria-hidden="true">→</span> ${escape(n.parent_id)}`:''}</bdi></span>${window.SpeedboxNodeEditor.protocolBadge(n.type)}</span></td><td><div class="entity node-identity"><div><div class="node-name-line">${nodeStatusDot(n)}<b>${escape(n.name)}</b></div><small dir="ltr">${escape(n.host)}</small></div></div></td><td><label class="switch-line ios"><input type="checkbox" data-node-show="${n.id}" aria-label="نمایش ${escape(n.name)} در سابسکرایب" ${n.show?'checked':''}></label></td><td><span dir="ltr">${Number(n.runtime?.online_users||0)}</span>${n.parent_id?'<small class="server-system">مشترک با نود اصلی</small>':''}</td><td>${escape(n.machine?.name||'—')}${n.parent_id?`<small class="server-system">نود اصلی: ${escape(n.parent_id)}</small>`:''}</td><td><span class="badge">${n.kernel==='xray'?'Xray':'Sing-box'}</span></td><td><span dir="ltr">${escape(n.port)}</span></td><td>${nodeTraffic(n)}</td><td><div class="actions"><button class="button entity-edit" data-node-edit="${n.id}">ویرایش</button><button class="button entity-copy" data-node-clone="${n.id}">کپی</button><button class="button entity-delete" data-node-delete="${n.id}">حذف</button></div></td></tr>`;
+      return `<tr data-node-row="${n.id}"><td><div class="node-order-controls"><button type="button" class="node-drag" draggable="true" data-drag-node="${n.id}" aria-label="جابه‌جایی نود" title="برای مرتب‌سازی بکشید"><svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><circle cx="9" cy="5" r="1.6"/><circle cx="15" cy="5" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="19" r="1.6"/><circle cx="15" cy="19" r="1.6"/></svg></button><span><button type="button" data-node-move="${n.id}" data-step="-1" aria-label="یک ردیف بالاتر" ${state.nodes[0]?.id===n.id?'disabled':''}><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 15 12 9 18 15"/></svg></button><button type="button" data-node-move="${n.id}" data-step="1" aria-label="یک ردیف پایین‌تر" ${state.nodes.at(-1)?.id===n.id?'disabled':''}><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button></span></div></td><td><span class="node-number"><span class="node-id-badge"><bdi dir="ltr">${escape(n.id)}${n.parent_id?` <span class="node-parent-arrow" aria-hidden="true">→</span> ${escape(n.parent_id)}`:''}</bdi></span>${window.SpeedboxNodeEditor.protocolBadge(n.type)}</span></td><td><div class="entity node-identity"><div><div class="node-name-line">${nodeStatusDot(n)}<b>${escape(n.name)}</b></div><small dir="ltr">${escape(n.host)}</small>${nodeOperatorLabels(n)}</div></div></td><td><label class="switch-line ios"><input type="checkbox" data-node-show="${n.id}" aria-label="نمایش ${escape(n.name)} در سابسکرایب" ${n.show?'checked':''}></label></td><td><span dir="ltr">${Number(n.runtime?.online_users||0)}</span>${n.parent_id?'<small class="server-system">مشترک با نود اصلی</small>':''}</td><td>${escape(n.machine?.name||'—')}${n.parent_id?`<small class="server-system">نود اصلی: ${escape(n.parent_id)}</small>`:''}</td><td><span class="badge">${n.kernel==='xray'?'Xray':'Sing-box'}</span></td><td><span dir="ltr">${escape(n.port)}</span></td><td>${nodeTraffic(n)}</td><td><div class="actions"><button class="button entity-edit" data-node-edit="${n.id}">ویرایش</button><button class="button entity-copy" data-node-clone="${n.id}">کپی</button><button class="button entity-delete" data-node-delete="${n.id}">حذف</button></div></td></tr>`;
     }).join('')}</tbody></table></div>`;
     return entityCardLayout(markup, 'nodes');
   }
@@ -907,12 +919,15 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
   function renderPlanRows(){
     const query=(scope.getElementById('planSearch')?.value||'').trim().toLowerCase();
     const list=state.plans.filter(p=>`${p.name} ${planTags(p).join(' ')} ${state.groups.find(g=>g.id==p.group_id)?.name||''}`.toLowerCase().includes(query));
-    updateEntityList(list.length?entityCardLayout(`<div class="table-wrap"><table class="plan-table"><thead><tr><th>نام پلن</th><th>گروه دسترسی</th><th>ترافیک پلن</th><th>محدودیت سرعت</th><th>محدودیت اتصال</th><th>بازنشانی ترافیک</th><th>عملیات</th></tr></thead><tbody>${list.map(p=>`<tr data-plan-row="${p.id}"><td><b>${escape(p.name)}</b>${planUserStats(p)}</td><td>${escape(state.groups.find(g=>g.id==p.group_id)?.name||p.group_id||'—')}</td><td><span dir="ltr">${escape(p.transfer_enable)} GB</span></td><td>${Number(p.speed_limit)>0?`<span dir="ltr">${escape(p.speed_limit)} Mbps</span>`:'نامحدود'}</td><td>${Number(p.device_limit)>0?escape(p.device_limit):'نامحدود'}</td><td>${escape(trafficResetLabel(p.reset_traffic_method))}</td><td><div class="actions"><button class="button entity-edit" data-plan-edit="${p.id}">ویرایش</button><button class="button entity-delete" data-plan-delete="${p.id}">حذف</button></div></td></tr>`).join('')}</tbody></table></div>`, 'plans'):empty(query?'پلنی با این جستجو پیدا نشد':'پلنی تعریف نشده است'));
+    updateEntityList(list.length?entityCardLayout(`<div class="table-wrap"><table class="plan-table"><thead><tr><th>نام پلن</th><th>گروه دسترسی</th><th>ترافیک پلن</th><th>محدودیت سرعت</th><th>محدودیت اتصال</th><th>بازنشانی ترافیک</th><th>عملیات</th></tr></thead><tbody>${list.map(p=>`<tr data-plan-row="${p.id}"><td><div class="plan-name-service"><b>${escape(p.name)}</b><span class="plan-service-badge ${p.service_type==='wireguard'?'wireguard':'v2ray'}" dir="ltr">${p.service_type==='wireguard'?'WireGuard':'V2Ray'}</span></div>${planUserStats(p)}</td><td>${escape(state.groups.find(g=>g.id==p.group_id)?.name||p.group_id||'—')}</td><td><span dir="ltr">${escape(p.transfer_enable)} GB</span></td><td>${Number(p.speed_limit)>0?`<span dir="ltr">${escape(p.speed_limit)} Mbps</span>`:'نامحدود'}</td><td>${Number(p.device_limit)>0?escape(p.device_limit):'نامحدود'}</td><td>${escape(trafficResetLabel(p.reset_traffic_method))}</td><td><div class="actions"><button class="button entity-edit" data-plan-edit="${p.id}">ویرایش</button><button class="button entity-delete" data-plan-delete="${p.id}">حذف</button></div></td></tr>`).join('')}</tbody></table></div>`, 'plans'):empty(query?'پلنی با این جستجو پیدا نشد':'پلنی تعریف نشده است'));
     content.querySelectorAll('[data-plan-edit]').forEach(b=>b.onclick=()=>planForm(state.plans.find(p=>p.id==b.dataset.planEdit)));
     content.querySelectorAll('[data-plan-delete]').forEach(b=>b.onclick=()=>deletePlan(state.plans.find(p=>p.id==b.dataset.planDelete)));
   }
-  function planForm(plan=null){
+  async function planForm(plan=null){
+    let wg;try{wg=(await api('/wireguard')).data;}catch(err){toast(err.message,'error');return;}
     openModal(plan?'ویرایش پلن':'ساخت پلن',`<form id="planForm"><div class="form-grid">
+      <div class="field plan-service-field"><label for="planService">نوع سرویس</label><select id="planService" name="service_type" ${plan?'disabled':''}><option value="v2ray">V2Ray</option><option value="wireguard" ${plan?.service_type==='wireguard'?'selected':''}>WireGuard</option></select></div>
+      <div class="field" data-wg-plan-instance><label for="planWgInstance">سرویس WireGuard</label><select id="planWgInstance" name="wireguard_instance_id" ${plan?'disabled':''}><option value="">انتخاب</option>${wg.map(i=>`<option value="${i.id}" ${plan?.wireguard_instance_id==i.id?'selected':''} ${['deleting','delete_failed'].includes(i.status)?'disabled':''}>${escape(i.name)}</option>`).join('')}</select></div>
       ${field('name','نام پلن',plan?.name||'',true)}
       ${field('tags','تگ‌های پلن',planTags(plan).join(', '))}
       <div class="field"><label for="planGroup">گروه دسترسی</label><select id="planGroup" name="group_id" required><option value="" disabled ${!plan?.group_id?'selected':''}>انتخاب گروه دسترسی</option>${state.groups.map(g=>`<option value="${g.id}" ${plan?.group_id==g.id?'selected':''}>${escape(g.name)}</option>`).join('')}</select></div>
@@ -925,10 +940,14 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
       ${plan?'<div class="switch-field full"><span>اعمال تغییرات روی کاربران فعلی</span><label class="switch-line ios"><input type="checkbox" name="force_update" aria-label="اعمال تغییرات روی کاربران فعلی"></label></div><p class="plan-form-hint">فقط گزینه‌های تغییرکردهٔ گروه دسترسی، ترافیک، محدودیت سرعت و اتصال روی کاربران این پلن اعمال می‌شوند. محدودیت اختصاصی تعرفه، مصرف و تاریخ انقضا حفظ می‌شود.</p>':''}
       </div><div class="form-actions"><button class="button primary" type="submit">ذخیره پلن</button></div></form>`,{kind:'plan'});
     const form=scope.getElementById('planForm');
+    const adjustService=()=>{const wireguard=form.elements.service_type.value==='wireguard';form.querySelector('[data-wg-plan-instance]').hidden=!wireguard;form.elements.wireguard_instance_id.required=wireguard;form.elements.group_id.closest('.field').hidden=wireguard;form.elements.group_id.required=!wireguard;form.elements.device_limit.closest('.field').querySelector('label').textContent=wireguard?'تعداد پروفایل دستگاه (۱ تا ۱۶)':'محدودیت اتصال (تعداد IP)';if(wireguard&&!form.elements.device_limit.value)form.elements.device_limit.value=1;};
+    form.elements.service_type.onchange=adjustService;adjustService();
     for(const key of ['transfer_enable','speed_limit','device_limit','capacity_limit'])form.elements[key].min='0';
     for(const key of ['speed_limit','device_limit','capacity_limit'])form.elements[key].placeholder='بدون محدودیت';
     form.onsubmit=async e=>{
       e.preventDefault();const body=Object.fromEntries(new FormData(form));
+      body.service_type=plan?.service_type||body.service_type||'v2ray';
+      body.wireguard_instance_id=plan?.wireguard_instance_id||Number(body.wireguard_instance_id)||null;
       body.group_id=Number(body.group_id);body.transfer_enable=Number(body.transfer_enable);
       for(const key of ['speed_limit','device_limit','capacity_limit','reset_traffic_method'])body[key]=body[key]===''?null:Number(body[key]);
       body.tags=[...new Set(body.tags.split(/[,،\n]/).map(tag=>tag.trim()).filter(Boolean))];
@@ -1098,6 +1117,7 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
       const wrap = document.createElement('div');
       const protocolPicker=select.hasAttribute('data-protocol-picker');
       wrap.className = 'invoice-custom-select'+(protocolPicker?' protocol-select':'');
+      wrap.classList.toggle('cipher-select', select.hasAttribute('data-allow-custom'));
       wrap.setAttribute(invoiceScope,'');
       select.before(wrap); wrap.appendChild(select);
       select.classList.add('infrastructure-native-select');
@@ -1164,12 +1184,8 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
         if(e.key==='Escape'){e.preventDefault();e.stopPropagation();closeSelect(wrap);trigger.focus({preventScroll:true});}
       };
       select.addEventListener('change',update);
-      select.addEventListener('invalid',()=>{if(!mobileMedia.matches)trigger.focus({preventScroll:true});wrap.classList.add('is-invalid');});
+      select.addEventListener('invalid',()=>{if(!mobileMedia.matches || select.hasAttribute('data-allow-custom'))trigger.focus({preventScroll:true});wrap.classList.add('is-invalid');});
       wrap.append(trigger,menu);
-      if(select.hasAttribute('data-allow-custom')){
-        const custom=document.createElement('input');custom.className='form-input speedbox-mobile-custom';custom.placeholder='رمزنگاری سفارشی';custom.setAttribute('aria-label','رمزنگاری سفارشی');custom.dir='ltr';
-        custom.onchange=()=>{const value=custom.value.trim();if(!value)return;if(![...select.options].some(option=>option.value===value))select.add(new Option(value,value));select.value=value;select.dispatchEvent(new Event('change',{bubbles:true}));custom.value='';};wrap.append(custom);
-      }
       update();
     });
     updateNativeSelects();
@@ -1178,7 +1194,7 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
   function updateNativeSelects(){
     scope.querySelectorAll('.infrastructure-native-select').forEach(select=>{
       const trigger=select.parentElement.querySelector('.invoice-custom-select__trigger');
-      if(mobileMedia.matches){
+      if(mobileMedia.matches && !select.hasAttribute('data-allow-custom')){
         select.removeAttribute('aria-hidden');select.removeAttribute('tabindex');
         trigger?.setAttribute('aria-hidden','true');if(trigger)trigger.tabIndex=-1;
         if(select.parentElement.classList.contains('is-open'))closeSelect(select.parentElement);
@@ -1197,6 +1213,7 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
     if (state.view === 'servers') renderServerRows();
     else if (state.view === 'nodes' && draggingNode === null) renderNodeRows();
     else if (state.view === 'plans') renderPlanRows();
+    else if (state.view === 'wireguard') tunnelSession?.redraw?.();
   }
   mobileMedia.addEventListener('change',updateEntityLayout);
   function closeSelect(wrap){wrap.classList.remove('is-open');wrap.querySelector('[role=listbox]').hidden=true;wrap.querySelector('.invoice-custom-select__trigger').setAttribute('aria-expanded','false');}
@@ -1226,6 +1243,7 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
     closeRankCalendar(); closeModal(true); closeAllSelects(); hideRankTooltip();
     state.view = selected;
     scope.getElementById('pageTitle').textContent = titles[selected];
+    scope.getElementById('pageTitle').dir = 'rtl';
     loadView();
   }
   showView(state.view);
@@ -1248,6 +1266,8 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
     }
   };
 }};
+
+
 
 
 

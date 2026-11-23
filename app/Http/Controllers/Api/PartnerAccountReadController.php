@@ -46,27 +46,16 @@ final class PartnerAccountReadController extends Controller
     public function details(Request $request, int $id)
     {
         $account = $this->accounts($request)->where('id', $id)->first([
-            'id', 'email', 'token', 'u', 'd', 't', 'transfer_enable', 'expired_at', 'plan_id', 'group_id',
+            'id','service_type','wireguard_instance_id', 'email', 'token', 'u', 'd', 't', 'transfer_enable', 'expired_at', 'plan_id', 'group_id',
             'speed_limit', 'device_limit', 'banned', 'remarks', 'account_plan_name', 'account_group_type',
             'account_tariff_group_id', 'account_plan_key', 'reset_count', 'last_reset_at', 'next_reset_at',
             'remind_expire', 'remind_traffic', 'created_at', 'updated_at',
         ]);
         abort_unless($account, 404);
         if (\Illuminate\Support\Facades\Schema::hasColumn('v2_user', 'account_reset_traffic_method')) $account->account_reset_traffic_method = DB::table('v2_user')->where('id', $id)->value('account_reset_traffic_method');
-        // Imported accounts may predate the stored tariff snapshot. Use the same
-        // fallback as the list until a purchase/renewal saves that snapshot.
-        if ($account->plan_id && ($account->account_plan_name === null || $account->account_group_type === null || $account->account_tariff_group_id === null)) {
-            $fallback = DB::table('panel_plan as pp')->join('panel_tariff_groups as tg', 'tg.id', '=', 'pp.tariff_group_id')
-                ->where('pp.v2_plan_id', $account->plan_id)
-                ->selectRaw("MIN(tg.name) as name, MIN(pp.tariff_group_id) as group_id, MAX(CASE WHEN tg.group_type = 'volume' OR pp.plan_key = 'volume_gig' THEN 1 ELSE 0 END) as is_volume")
-                ->first();
-            $account->account_plan_name ??= $fallback?->name;
-            $account->account_tariff_group_id ??= $fallback?->group_id;
-            $account->account_group_type ??= $fallback?->is_volume ? 'volume' : 'time';
-        }
+        app(\App\Services\SubscriptionReservationPresenter::class)->attach([$account]);
         $account->account_is_volume = $account->account_group_type === 'volume' || $account->account_plan_key === 'volume_gig' ? 1 : 0;
         $token = (string) ($account->token ?? '');
-        app(\App\Services\SubscriptionReservationPresenter::class)->attach([$account]);
         $account->subscribe_url = $token === '' ? '' : \App\Utils\Helper::getSubscribeUrl($token);
         return response()->json(['data' => $account])->header('Cache-Control', 'no-store');
     }

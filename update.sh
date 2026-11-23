@@ -105,7 +105,7 @@ speedbox_banner "PANEL UPDATER"
 
 fail() { printf '[X] %s\n' "$*" >&2; exit 1; }
 step() { printf '[*] %s\n' "$*"; }
-for command in git realpath flock tar gzip curl systemctl runuser awk sha256sum; do
+for command in git realpath flock tar gzip curl systemctl runuser awk sha256sum stat; do
   command -v "$command" >/dev/null || fail "Missing command: $command"
 done
 [[ "$(id -u)" = 0 ]] || fail 'Run this server updater as root.'
@@ -141,17 +141,6 @@ TARGET="${SPEEDBOX_UPDATE_COMMIT:-$UPSTREAM}"
 [[ "$TARGET" =~ ^[0-9a-f]{40}$ ]] || fail 'Target must be a full commit SHA.'
 git merge-base --is-ancestor "$OLD" "$TARGET" || fail 'Update is not a fast-forward.'
 git merge-base --is-ancestor "$TARGET" "$UPSTREAM" || fail 'Target is not on the fetched upstream.'
-if [[ "$OLD" = "$TARGET" ]]; then
-  printf 'Already updated: %s\n' "$TARGET"
-  rm -f -- "${BASH_SOURCE[0]}"
-  exit 0
-fi
-
-CHANGES_MIGRATIONS=0
-git diff --quiet "$OLD" "$TARGET" -- database/migrations || CHANGES_MIGRATIONS=1
-if (( CHANGES_MIGRATIONS )) && [[ "${SPEEDBOX_ALLOW_MIGRATIONS:-}" != 1 ]]; then
-  fail 'Migration files changed. Review them, then explicitly set SPEEDBOX_ALLOW_MIGRATIONS=1.'
-fi
 DEPENDENCIES=0
 git diff --quiet "$OLD" "$TARGET" -- composer.json composer.lock || DEPENDENCIES=1
 AGENT=0
@@ -194,6 +183,76 @@ read -r ENABLED PORT HEALTH_HOST < <(run_php scripts/update-database.php inspect
 [[ "$ENABLED" = 1 && "$PORT" =~ ^[0-9]+$ ]] || fail 'Existing Octane configuration is required.'
 (( PORT > 0 && PORT < 65536 )) || fail 'Invalid Octane port.'
 
+# Compare files in the target release with Laravel's database ledger.
+migration_ledger() {
+  run_php -r '
+    require "vendor/autoload.php";
+    $app = require "bootstrap/app.php";
+    $app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
+    $migrator = $app->make("migrator");
+    if ($migrator->paths()) {
+        fwrite(STDERR, "Extra Laravel migration paths require manual review.".PHP_EOL);
+        exit(1);
+    }
+    $repo = $migrator->getRepository();
+    echo "ledger-ready", PHP_EOL;
+    if ($repo->repositoryExists()) foreach ($repo->getRan() as $migration) echo $migration, PHP_EOL;
+  '
+}
+LEDGER="$(migration_ledger)" || fail 'Could not read the database migration ledger.'
+[[ "$LEDGER" = ledger-ready || "$LEDGER" = ledger-ready$'\n'* ]] || fail 'Invalid migration ledger response.'
+declare -A APPLIED=() REVIEWED=()
+while IFS= read -r migration; do
+  [[ "$migration" = ledger-ready ]] && continue
+  [[ "$migration" =~ ^[a-zA-Z0-9_]+$ ]] || fail 'Unexpected migration name in the database ledger.'
+  APPLIED["$migration"]=1
+done <<< "$LEDGER"
+# Laravel strips every ".php" from the basename when recording a migration.
+# This also covers the older release-table migration ending in ".php.php".
+migration_path_pattern='^database/migrations/[A-Za-z0-9_]+(\.php)+$'
+migration_name() {
+  local filename="${1##*/}"
+  printf '%s' "${filename//.php/}"
+}
+
+REVIEW_LIST="$(git show "$TARGET:scripts/automatic-migrations.txt" 2>/dev/null || true)"
+while read -r digest path extra; do
+  [[ -z "$digest" || "$digest" = \#* ]] && continue
+  [[ "$digest" =~ ^[a-f0-9]{64}$ && "$path" =~ $migration_path_pattern && -z "$extra" ]] || fail 'Invalid automatic migration review entry.'
+  REVIEWED["$path"]="$digest"
+done <<< "$REVIEW_LIST"
+
+MIGRATION_DIFF="$(git diff --name-only --no-renames "$OLD" "$TARGET" -- database/migrations)"
+while IFS= read -r path; do
+  [[ "$path" =~ $migration_path_pattern ]] || continue
+  name="$(migration_name "$path")"
+  if [[ -n "${APPLIED[$name]:-}" && "${SPEEDBOX_ALLOW_MIGRATIONS:-}" != 1 ]]; then
+    fail "An applied migration has changed ($path). Review the schema before updating."
+  fi
+done <<< "$MIGRATION_DIFF"
+
+MIGRATION_FILES="$(git ls-tree -r --name-only "$TARGET" -- database/migrations)"
+declare -a MIGRATIONS=()
+declare -A TARGET_MIGRATION_NAMES=()
+while IFS= read -r path; do
+  [[ -n "$path" && "$path" = *_*.php ]] || continue
+  [[ "$path" =~ $migration_path_pattern ]] || fail "Unsupported migration path: $path"
+  name="$(migration_name "$path")"
+  [[ -z "${TARGET_MIGRATION_NAMES[$name]:-}" ]] || fail "Duplicate migration name: $name"
+  TARGET_MIGRATION_NAMES["$name"]="$path"
+  [[ -z "${APPLIED[$name]:-}" ]] || continue
+  blob="$(git show "$TARGET:$path" | sha256sum)"
+  if [[ "${REVIEWED[$path]:-}" != "${blob%% *}" && "${SPEEDBOX_ALLOW_MIGRATIONS:-}" != 1 ]]; then
+    fail "Pending migration requires review ($path). Then explicitly set SPEEDBOX_ALLOW_MIGRATIONS=1."
+  fi
+  MIGRATIONS+=("--path=$path")
+done <<< "$MIGRATION_FILES"
+
+if [[ "$OLD" = "$TARGET" && "${#MIGRATIONS[@]}" = 0 ]]; then
+  printf 'Already updated: %s\n' "$TARGET"
+  exit 0
+fi
+
 # Verify and unpack the TARGET release before pausing queues or entering maintenance.
 if (( AGENT )); then
   step 'Checking target prebuilt node release before maintenance'
@@ -204,10 +263,51 @@ if (( AGENT )); then
 fi
 
 BACKUP_BASE="${SPEEDBOX_BACKUP_DIR:-$(dirname "$TOP")/speedbox-backups}"
+BACKUP_BASE="$(realpath -ms -- "$BACKUP_BASE")"
+[[ "$(realpath -m -- "$BACKUP_BASE")" = "$BACKUP_BASE" ]] || fail 'Backup directory must not traverse symlinks.'
 mkdir -p -- "$BACKUP_BASE"
-BACKUP_BASE="$(realpath "$BACKUP_BASE")"
+[[ "$(realpath -- "$BACKUP_BASE")" = "$BACKUP_BASE" ]] || fail 'Backup directory must not traverse symlinks.'
 [[ "$BACKUP_BASE/" != "$TOP/"* ]] || fail 'Backup directory must be outside the project.'
-BACKUP="$(mktemp -d "$BACKUP_BASE/update-$(date +%Y%m%d-%H%M%S)-XXXXXXXX")"
+backup_permissions() {
+  local mode owner
+  [[ -d "$1" && ! -L "$1" ]] || return 1
+  read -r owner mode < <(stat -c '%u %a' -- "$1")
+  [[ "$owner" = 0 && "$mode" =~ ^[0-7]{3,4}$ ]] && (( (8#$mode & $2) == 0 ))
+}
+backup_permissions "$BACKUP_BASE" 0022 || fail 'Backup base must be root-owned and protected from writes by other users.'
+installation_id="$(printf '%s' "$TOP" | sha256sum)"
+installation_id="${installation_id%% *}"
+BACKUP_NAMESPACE="$BACKUP_BASE/panel-$installation_id"
+if [[ ! -e "$BACKUP_NAMESPACE" && ! -L "$BACKUP_NAMESPACE" ]]; then
+  mkdir -m 700 -- "$BACKUP_NAMESPACE"
+fi
+backup_permissions "$BACKUP_NAMESPACE" 0077 || fail 'Backup installation directory must be private and root-owned.'
+BACKUP="$(mktemp -d "$BACKUP_NAMESPACE/update-$(date +%Y%m%d-%H%M%S)-XXXXXXXX")"
+
+retain_latest_backup() {
+  local previous marker
+  if ! (
+    sha256sum -c --status "$BACKUP/database.sha256" &&
+    gzip -t -- "$BACKUP/source.tar.gz" &&
+    printf '%s\n' "$installation_id" > "$BACKUP/.successful.tmp" &&
+    mv -T -- "$BACKUP/.successful.tmp" "$BACKUP/.successful"
+  ); then
+    printf '[!] Backup validation or recording failed. Existing backups retained.\n' >&2
+    return 0
+  fi
+
+  for previous in "$BACKUP_NAMESPACE"/update-*; do
+    [[ "$previous" != "$BACKUP" && "${previous##*/}" =~ ^update-[0-9]{8}-[0-9]{6}-[a-zA-Z0-9]{8}$ ]] || continue
+    backup_permissions "$previous" 0077 || continue
+    [[ "$(realpath -- "$previous")" = "$previous" ]] || continue
+    marker="$previous/.successful"
+    [[ -f "$marker" && ! -L "$marker" && "$(stat -c %u -- "$marker")" = 0 && "$(<"$marker")" = "$installation_id" ]] || continue
+    if ! rm -rf --one-file-system -- "$previous"; then
+      printf '[!] Could not remove old automatic backup: %s\n' "$previous" >&2
+    fi
+  done
+}
+
 git archive "$OLD" | gzip > "$BACKUP/source.tar.gz"
 gzip -t "$BACKUP/source.tar.gz"
 cp -- .env "$BACKUP/environment.before"
@@ -315,9 +415,16 @@ fi
 mkdir -p storage/app/public
 chown -R "$WEB_USER":"$(id -gn "$WEB_USER")" storage bootstrap/cache
 run_php artisan optimize:clear
-if (( CHANGES_MIGRATIONS )); then
+if (( ${#MIGRATIONS[@]} )); then
+  [[ "$(migration_ledger)" = "$LEDGER" ]] || fail 'The migration ledger changed during update; retry safely.'
+  sha256sum -c --status "$BACKUP/database.sha256"
   DB_STARTED=1
-  run_php artisan migrate --force
+  run_php artisan migrate --force "${MIGRATIONS[@]}"
+  RESULT_LEDGER="$(migration_ledger)"
+  for migration in "${MIGRATIONS[@]}"; do
+    name="$(migration_name "${migration#--path=}")"
+    [[ $'\n'"${RESULT_LEDGER}"$'\n' = *$'\n'"${name}"$'\n'* ]] || fail "Migration was not recorded: $name"
+  done
 fi
 run_php artisan config:cache
 run_php artisan route:cache
@@ -342,4 +449,5 @@ systemctl start "$QUEUE_SERVICE"
 systemctl is-active --quiet "$QUEUE_SERVICE"
 [[ "$(git rev-parse HEAD)" = "$TARGET" ]]
 SUCCESS=1
+retain_latest_backup
 printf 'UPDATE FINISHED\nCommit: %s\nBackup: %s\n' "$TARGET" "$BACKUP"

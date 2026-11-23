@@ -33,6 +33,8 @@ class UserBotTrafficPricing
     private function accountGroup(object $account): ?object
     {
         $group = app(AccountTariffResolver::class)->group($account);
+        $plan = empty($account->plan_id) ? null : DB::table('v2_plan')->find((int) $account->plan_id);
+        if (!$plan || !\App\Services\SubscriptionServiceType::available($plan)) return null;
 
         return $group && (int) $group->enable === 1
             && in_array($group->group_type, ['time', 'volume'], true)

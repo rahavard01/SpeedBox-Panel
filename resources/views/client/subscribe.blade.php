@@ -12,6 +12,7 @@
     <title>SPEEDBOX | USER INFO</title>
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
     <link rel="stylesheet" href="/speedbox/branding.css?v={{ filemtime(public_path('speedbox/branding.css')) }}">
+    <link rel="stylesheet" href="/speedbox/subscription-wide.css?v={{ filemtime(public_path('speedbox/subscription-wide.css')) }}">
 
     @php
         $faNumber = function ($value) {
@@ -1025,6 +1026,20 @@
             }
         }
         .speedbox-online-count{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-width:70px;box-sizing:border-box;border:1px solid #67aee54a;background:#4c9dcc15;color:#9ac8ec;border-radius:8px;padding:5px 9px;font-size:11px;font-weight:700;white-space:nowrap;font-variant-numeric:tabular-nums;direction:ltr;font-family:"Vazirmatn Variable",Vazirmatn,ui-sans-serif,system-ui,sans-serif}.speedbox-online-count i{font-size:10px;flex-shrink:0}.speedbox-online-count bdi{display:inline-block;font:inherit;white-space:nowrap;line-height:1.4}.speedbox-online-count.is-offline{color:#9da7b8;border-color:#ffffff20;background:#ffffff07}.speedbox-online-count.is-at-limit{color:#ffadad;background:#dc5b5b18;border-color:#df73734f}
+
+        .wireguard-profile-grid{--wireguard-profile-gap:clamp(28px,4vw,48px);display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--wireguard-profile-gap);width:100%;max-width:none;margin:24px auto 0}
+        .wireguard-profile-grid--single{grid-template-columns:minmax(0,1fr);max-width:340px}
+        .wireguard-profile-block{display:grid;justify-items:center;align-content:start;gap:16px;width:100%;min-width:0;padding:18px 16px;box-sizing:border-box;text-align:center;border:1px dashed rgba(255,255,255,.14);border-radius:10px;background:rgba(0,0,0,.38)}
+        .wireguard-profile-grid:not(.wireguard-profile-grid--single)>.wireguard-profile-block:last-child:nth-child(odd){grid-column:1/-1;width:calc((100% - var(--wireguard-profile-gap))/2);justify-self:center}
+        .wireguard-profile-config{display:grid;gap:14px;width:min(100%,280px);min-width:0}
+        .wireguard-profile-config .qr-box{width:100%;max-width:100%;height:auto;aspect-ratio:1;box-sizing:border-box}
+        .wireguard-profile-config .qr-box img{display:block;width:100%;height:auto;max-width:100%}
+        .wireguard-profile-config .copy-button{width:100%;max-width:100%;box-sizing:border-box;text-decoration:none}
+        .wireguard-profiles-empty{grid-column:1/-1}
+        @media(max-width:600px){
+          .wireguard-profile-grid{grid-template-columns:minmax(0,1fr);max-width:340px;gap:16px}
+          .wireguard-profile-grid:not(.wireguard-profile-grid--single)>.wireguard-profile-block:last-child:nth-child(odd){grid-column:auto;width:100%}
+        }
     </style>
 </head>
 <body>
@@ -1122,6 +1137,27 @@
             </div>
         </section>
 
+        @if(($service_type ?? 'v2ray') === 'wireguard')
+        <section class="card">
+            <div class="card-header"><span class="card-header-title">پروفایل‌های WireGuard</span></div>
+            <div class="card-body">
+                <p class="subscription-note">در برنامه رسمی WireGuard، فایل را وارد کنید یا QR همان دستگاه را اسکن کنید. هر پروفایل مخصوص یک دستگاه است.</p>
+                <div class="wireguard-profile-grid {{ count($wireguard_profiles) === 1 ? 'wireguard-profile-grid--single' : '' }}">
+                @forelse($wireguard_profiles as $profile)
+                <div class="wireguard-profile-block">
+                    <b>{{ $faNumber($profile['name']) }}</b>
+                    <div class="wireguard-profile-config">
+                        <div class="qr-box"><img src="data:image/svg+xml;base64,{{ $profile['qr'] }}" alt="QR پیکربندی WireGuard"></div>
+                        <a class="copy-button" href="{{ $profile['download'] }}" download>دانلود پروفایل</a>
+                    </div>
+                </div>
+                @empty
+                <p class="subscription-note wireguard-profiles-empty">پروفایل اتصال فعالی موجود نیست؛ وضعیت حساب یا سرویس را از پشتیبانی پیگیری کنید.</p>
+                @endforelse
+                </div>
+            </div>
+        </section>
+        @else
         <section class="card">
             <div class="card-header">
                 <svg class="card-header-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
@@ -1191,6 +1227,7 @@
             </div>
         </section>
 
+        @endif
         <div class="footer">لینک اشتراک خود را هرگز در اختیار دیگران قرار ندهید</div>
         @include('partials.speedbox-brand')
 
@@ -1547,4 +1584,6 @@
 
 </body>
 </html>
+
+
 

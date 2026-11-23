@@ -26,6 +26,7 @@ class SubscriptionOrderPolicy
 
     public function prepare(object $user, array $update): array
     {
+        if(isset($update['plan_id'])) SubscriptionServiceType::same($user,(int)$update['plan_id']);
         // Every time-account extension follows the same rule, including a different selected plan.
         $expired = !SubscriptionValidity::unexpired($user->expired_at ?? null);
         $reset = $expired || (int) RuntimeSetting::get('renew_order_event_id', 1) === 1;

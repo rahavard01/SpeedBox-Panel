@@ -88,6 +88,11 @@ Schema::create('speedbox_emergency_configs', function ($t) {
     $t->id(); $t->string('name'); $t->string('protocol'); $t->text('config_uri');
     $t->boolean('show')->default(true); $t->integer('sort')->default(0); $t->timestamps();
 });
+Schema::create('panel_tariff_groups', function ($t) {
+    $t->id(); $t->string('name'); $t->string('group_type'); $t->boolean('enable');
+    $t->boolean('is_default'); $t->integer('sort_order')->default(0);
+});
+(require $root . '/database/migrations/2026_11_16_000001_add_independent_wireguard.php')->up();
 $gb = 1073741824;
 DB::table('v2_plan')->insert(['id' => 1, 'reset_traffic_method' => 2]);
 DB::table('v2_user')->insert(['id' => 1, 'token' => str_repeat('a', 32), 'uuid' => '11111111-1111-4111-8111-111111111111',

@@ -430,6 +430,7 @@ class V2UserController extends Controller
                 'is_default' => (int) $group->is_default,
                 'min_traffic_gb' => (string) $group->group_type === 'volume' ? (int) ($group->min_traffic_gb ?? 10) : 1,
                 'group_type' => (string) $group->group_type,
+                'service_type'=>$group->service_type??'v2ray',
                 'plan_enabled' => $enabled,
             ];
         })->values();

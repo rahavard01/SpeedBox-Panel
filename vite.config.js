@@ -42,7 +42,7 @@ export default defineConfig({
   plugins: [
     laravel({
       input: ['resources/js/app.js'],
-      buildDirectory: 'build',      // خروجی همچنان public/build
+      buildDirectory: process.env.SPEEDBOX_BUILD_DIRECTORY || 'build',      // Default release output; the isolated test updater can select its own directory.
       hotFile: 'public/hot',
       refresh: true,
     }),

@@ -39,7 +39,7 @@ const label=t=>engines[t.engine||'backpack']?.name||'BackPack';
 function methodLabel(t){
  const s=t.settings||t,engine=t.engine||s.engine||'backpack';
  const rawTransport=t.transport||s.transport||'';
- const transport=rawTransport==='paqet'?'PCK v2':String(rawTransport).toUpperCase(),kind=t.kind||s.kind;
+ const transport=rawTransport==='paqet'?'PCK':String(rawTransport).toUpperCase(),kind=t.kind||s.kind;
  const version=String(t.version||s.version||'');
  const name=engine==='gost'&&version?`GOST ${version.split('.')[0]}`:label({engine});
  const direction=engine==='backpack'?({reverse:'Reverse',direct:'Direct'}[kind]):engine==='wattunnel'?((t.reverse??s.reverse)?'Reverse':'Direct'):'Direct';

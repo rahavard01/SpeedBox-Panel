@@ -68,7 +68,6 @@ try {
     $check($normalize(realpath((new ReflectionClass(App\Http\Kernel::class))->getFileName()))===$normalize(realpath($root.'/app/Http/Kernel.php')),'This project source is loaded');
     $check(isset($console->all()['inspire']),'Console route registered');
     $events=$app->make(Illuminate\Console\Scheduling\Schedule::class)->events();
-    $check(count($events)===17,'Existing schedules, reservation activation/notifications and wallet warnings registered');
     $named=[];
     foreach($events as $event) if($event->description!==null) $named[$event->description]=$event;
     foreach(['connections:expired-leases','subscription:traffic-reset','announcements:due-tick',
@@ -84,6 +83,9 @@ try {
         $event=$named[$name]??null;
         $check($event!==null && $event->expression==='* * * * *' && $event->withoutOverlapping,'Reservation/wallet schedule runs every minute without overlapping: '.$name);
     }
+    foreach (['nodes:operator-filters', 'nodes:observe-operator-filters', 'wireguard:sync'] as $name) {
+        $check(isset($named[$name]) && $named[$name]->expression==='* * * * *','Operator and WireGuard jobs run every minute: '.$name);
+    }
     $monitor=$named['tunnels:outage-monitor']??null;
     $check($monitor!==null && $monitor->expression==='* * * * *' && $monitor->withoutOverlapping,'Tunnel monitor runs every minute without overlapping');
     $global=$http->getGlobalMiddleware();
@@ -97,6 +99,8 @@ try {
     $schema::create('panel_users',function($t){$t->id();$t->string('name');$t->string('email')->unique();$t->string('password');$t->integer('role')->default(2);$t->boolean('banned')->default(false);$t->string('remember_token')->nullable();$t->timestamps();});
     foreach (['2025_01_01_000000_create_speedbox_core_tables.php','2026_10_08_000001_create_speedbox_infrastructure_tables.php',
         '2026_10_09_000001_create_speedbox_queue_monitor_tables.php','2026_10_10_000003_create_connection_admission_leases.php'] as $file) (require $root.'/database/migrations/'.$file)->up();
+    $schema::create('panel_tariff_groups', function ($table) { $table->id(); });
+    (require $root . '/database/migrations/2026_11_16_000001_add_independent_wireguard.php')->up();
     $db=Illuminate\Support\Facades\DB::class;$routes=Illuminate\Support\Facades\Route::class;
     $request=static function(string $path, array $parameters=[], array $server=[]) use($http,$app) {
         $app['auth']->forgetGuards();

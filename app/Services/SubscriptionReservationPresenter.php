@@ -12,11 +12,13 @@ final class SubscriptionReservationPresenter
     {
         $users = collect($users);
         if ($users->isEmpty()) return;
+        app(AccountTariffResolver::class)->present($users);
         $plans = DB::table('v2_plan')->whereIn('id', $users->pluck('plan_id')->filter()->unique()->all())->get(['id', 'reset_traffic_method'])->keyBy('id');
         $rows = Schema::hasTable('speedbox_subscription_reservations')
             ? DB::table('speedbox_subscription_reservations')->whereIn('reserved_user_id', $users->pluck('id')->all())->get()->keyBy('user_id') : collect();
         foreach ($users as $user) {
             $isVolume = ($user->account_group_type ?? '') === 'volume' || (!isset($user->account_group_type) && app(AccountTariffResolver::class)->isVolume($user));
+            $user->account_is_volume = $isVolume ? 1 : 0;
             $method = $isVolume ? 2
                 : (int) ($user->account_reset_traffic_method ?? $plans[$user->plan_id]->reset_traffic_method ?? RuntimeSetting::get('reset_traffic_method', 2));
             $user->account_has_periodic_reset = in_array($method, [0, 1, 3, 4], true);

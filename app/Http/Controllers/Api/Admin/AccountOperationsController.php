@@ -3,7 +3,7 @@
 namespace App\Http\Controllers\Api\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Models\UserBotSession;
+use App\Services\AccountIdentityOperations;
 use App\Services\AccountOnlineStatus;
 use App\Services\SubscriptionTrafficReset;
 use App\Services\TariffConnectionPolicy;
@@ -12,15 +12,12 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Schema;
-use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
 class AccountOperationsController extends Controller
 {
-    private const FIELDS = ['id', 'email', 'u', 'd', 'transfer_enable', 'expired_at', 'plan_id', 'group_id',
-        'speed_limit', 'device_limit', 'banned', 'remarks', 'account_plan_name', 'account_group_type',
-        'account_tariff_group_id', 'account_plan_key', 'reset_count', 'last_reset_at', 'next_reset_at', 'updated_at'];
+    private const FIELDS = AccountIdentityOperations::FIELDS;
 
     public function online(Request $request)
     {
@@ -42,9 +39,9 @@ class AccountOperationsController extends Controller
             ->where(function ($query) use ($current) {
                 $query->where('pp.enable', 1);
                 if ($current) $query->orWhere('pp.id', $current->id);
-            })->orderBy('tg.name')->orderBy('pp.id')
+            })->where('vp.service_type',$user->service_type??'v2ray')->when(($user->service_type??'v2ray')==='wireguard',fn($q)=>$q->where('vp.wireguard_instance_id',$user->wireguard_instance_id))->orderBy('tg.name')->orderBy('pp.id')
             ->get(['pp.id', 'pp.plan_key', 'pp.enable', 'pp.v2_plan_id', 'tg.name', 'tg.group_type', 'vp.speed_limit', 'vp.device_limit as default_device_limit', 'pp.device_limit as tariff_device_limit']);
-        return response()->json(['data' => $this->publicAccount($user), 'panel_plan_id' => $current?->id,
+        return response()->json(['data' => AccountIdentityOperations::publicAccount($user), 'panel_plan_id' => $current?->id,
             'plans' => $plans])->header('Cache-Control', 'no-store');
     }
 
@@ -78,7 +75,7 @@ class AccountOperationsController extends Controller
                 if (strtolower($domain) !== strtolower($oldDomain) || ($legacyOwner && strtolower($local) !== strtolower($oldLocal))) {
                     throw ValidationException::withMessages(['email' => 'کد مالک اکانت در ایمیل باید حفظ شود؛ فقط بخش نام کاربری را ویرایش کنید.']);
                 }
-                abort_if($email !== strtolower($user->email) && $this->hasOpenBotOrders($user), 422, 'این اکانت سفارش در جریان در ربات دارد؛ ابتدا آن سفارش را تعیین تکلیف کنید.');
+                abort_if($email !== strtolower($user->email) && AccountIdentityOperations::hasOpenBotOrders($user), 422, 'این اکانت سفارش در جریان در ربات دارد؛ ابتدا آن سفارش را تعیین تکلیف کنید.');
                 $update['email'] = $email;
             }
             if (!empty($data['password'])) {
@@ -91,6 +88,7 @@ class AccountOperationsController extends Controller
                 $current = $this->currentTariff($user);
                 abort_if(!$tariff || (!$tariff->enable && (int) ($current?->id ?? 0) !== (int) $tariff->id), 422, 'پلن انتخابی فعال نیست.');
                 $plan = DB::table('v2_plan')->where('id', $tariff->v2_plan_id)->first();
+                \App\Services\SubscriptionServiceType::same($user,(int)$tariff->v2_plan_id);
                 $group = DB::table('panel_tariff_groups')->where('id', $tariff->tariff_group_id)->first();
                 abort_unless($plan && $group, 422, 'تعرفه به پلن معتبر متصل نیست.');
                 $update += [
@@ -112,16 +110,21 @@ class AccountOperationsController extends Controller
                 $update['traffic_warning_version'] = (int) ($user->traffic_warning_version ?? 0) + 1;
             }
             if (!Schema::hasColumn('v2_user', 'account_reset_traffic_method')) unset($update['account_reset_traffic_method']);
+            if(($user->service_type??'v2ray')==='wireguard') {
+                abort_if(isset($update['device_limit']) && ((int)$update['device_limit']<1 || (int)$update['device_limit']>16),422,'تعداد پروفایل وایرگارد بین ۱ و ۱۶ باشد.');
+                abort_if((int)($update['speed_limit']??0)>10000,422,'سقف سرعت وایرگارد ۱۰۰۰۰ مگابیت است.');
+            }
             $update['updated_at'] = time();
             DB::table('v2_user')->where('id', $id)->update($update);
+            if(($user->service_type??'v2ray')==='wireguard')\App\Jobs\SyncWireGuard::dispatch((int)$user->wireguard_instance_id)->afterCommit();
             $after = $this->account($id);
             $changes = [];
             foreach (self::FIELDS as $field) {
                 if (array_key_exists($field, $update) && $field !== 'updated_at') $changes[$field] = ['before' => $user->$field ?? null, 'after' => $after->$field ?? null];
             }
-            $this->audit($user, $request, 'edit', ['changes' => $changes, 'password_changed' => !empty($data['password'])]);
-            $this->syncBotSessions($user, $after);
-            return $this->publicAccount($after);
+            AccountIdentityOperations::audit($user, $request->user(), 'edit', ['changes' => $changes, 'password_changed' => !empty($data['password'])]);
+            AccountIdentityOperations::syncBotSessions($user, $after);
+            return AccountIdentityOperations::publicAccount($after);
         }, 3);
         return response()->json(['message' => 'اطلاعات اکانت ذخیره شد.', 'data' => $result]);
     }
@@ -131,14 +134,8 @@ class AccountOperationsController extends Controller
         $this->confirm($request);
         $result = DB::transaction(function () use ($id, $request) {
             $user = $this->account($id, true);
-            DB::table('v2_user')->where('id', $id)->update([
-                'uuid' => (string) Str::uuid(), 'token' => bin2hex(random_bytes(16)), 'updated_at' => time(),
-            ]);
-            DB::table('speedbox_connection_leases')->where('user_id', $id)->delete();
-            $after = $this->account($id);
-            $this->syncBotSessions($user, $after);
-            $this->audit($user, $request, 'reset_secret');
-            return $this->publicAccount($after);
+            $after = AccountIdentityOperations::rotate($user, $request->user());
+            return AccountIdentityOperations::publicAccount($after);
         }, 3);
         return response()->json(['message' => 'UUID و لینک بازنشانی شد؛ لینک جدید را از مشاهده دریافت کنید.', 'data' => $result]);
     }
@@ -153,7 +150,7 @@ class AccountOperationsController extends Controller
             $log->reason = is_array($log->metadata) && is_string($log->metadata['reason'] ?? null) ? $log->metadata['reason'] : '';
             return $log;
         });
-        return response()->json(['data' => $items, 'user' => $this->publicAccount($user),
+        return response()->json(['data' => $items, 'user' => AccountIdentityOperations::publicAccount($user),
             'can_reset' => $this->canReset($user), 'meta' => [
                 'current_page' => $logs->currentPage(), 'last_page' => $logs->lastPage(), 'total' => $logs->total(),
             ]])->header('Cache-Control', 'no-store');
@@ -178,8 +175,8 @@ class AccountOperationsController extends Controller
                 'reason' => $data['reason'] ?? null, 'admin_id' => $request->user()?->id,
                 'operator_email' => $request->user()?->email,
             ]);
-            $this->audit($user, $request, 'reset_traffic', ['reason' => $data['reason'] ?? null]);
-            return $this->publicAccount($this->account($id));
+            AccountIdentityOperations::audit($user, $request->user(), 'reset_traffic', ['reason' => $data['reason'] ?? null]);
+            return AccountIdentityOperations::publicAccount($this->account($id));
         }, 3);
         return response()->json(['message' => 'مصرف ترافیک بازنشانی و در تاریخچه ثبت شد.', 'data' => $result]);
     }
@@ -190,9 +187,9 @@ class AccountOperationsController extends Controller
         DB::transaction(function () use ($id, $request) {
             $user = $this->account($id, true);
             abort_if(app(\App\Services\SubscriptionReservationService::class)->current($id), 422, 'این اکانت طرح رزرو دارد؛ ابتدا رزرو را تعیین تکلیف کنید.');
-            abort_if($this->hasOpenBotOrders($user), 422, 'این اکانت سفارش در جریان در ربات دارد؛ ابتدا آن سفارش را تعیین تکلیف کنید.');
-            $this->audit($user, $request, 'delete', ['account' => $this->publicAccount($user)]);
-            $this->syncBotSessions($user, null);
+            abort_if(AccountIdentityOperations::hasOpenBotOrders($user), 422, 'این اکانت سفارش در جریان در ربات دارد؛ ابتدا آن سفارش را تعیین تکلیف کنید.');
+            AccountIdentityOperations::audit($user, $request->user(), 'delete', ['account' => AccountIdentityOperations::publicAccount($user)]);
+            AccountIdentityOperations::syncBotSessions($user, null);
             DB::table('speedbox_connection_leases')->where('user_id', $id)->delete();
             DB::table('v2_user')->where('id', $id)->delete();
             // Financial transactions, usage reports and audit/reset history are retained.
@@ -207,12 +204,6 @@ class AccountOperationsController extends Controller
         $user = $query->first();
         abort_unless($user, 404, 'اکانت یافت نشد.');
         return $user;
-    }
-
-    private function publicAccount(object $user): array
-    {
-        app(\App\Services\SubscriptionReservationPresenter::class)->attach([$user]);
-        return array_intersect_key((array) $user, array_flip(array_merge(self::FIELDS, ['reservation', 'account_has_periodic_reset', 'account_ended'])));
     }
 
     private function currentTariff(object $user): ?object
@@ -235,39 +226,4 @@ class AccountOperationsController extends Controller
         $request->validate(['confirmed' => ['required', 'accepted']]);
     }
 
-    private function audit(object $user, Request $request, string $action, array $metadata = []): void
-    {
-        DB::table('speedbox_account_operations')->insert([
-            'user_id' => $user->id, 'account_email' => $user->email,
-            'operator_id' => $request->user()?->id, 'operator_email' => $request->user()?->email,
-            'action' => $action, 'metadata' => json_encode($metadata, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR), 'created_at' => now(),
-        ]);
-    }
-
-    private function hasOpenBotOrders(object $user): bool
-    {
-        return Schema::hasTable('user_bot_orders') && DB::table('user_bot_orders')->where('account_email', $user->email)
-            ->whereNotIn('status', ['done', 'rejected', 'failed', 'expired', 'cancelled', 'invalid'])->exists();
-    }
-
-    private function syncBotSessions(object $before, ?object $after): void
-    {
-        $sessions = UserBotSession::where('account_email', $before->email)
-            ->orWhere('account_snapshot->id', $before->id)->lockForUpdate()->get();
-        foreach ($sessions as $session) {
-            if ($after === null) {
-                $session->fill(['is_logged_in' => false, 'account_email' => null, 'account_sub_link' => null,
-                    'account_snapshot' => null, 'state' => null, 'state_data' => null]);
-            } else {
-                $snapshot = $session->account_snapshot ?: [];
-                $snapshot = array_merge($snapshot, $this->publicAccount($after));
-                $session->account_email = $after->email;
-                $session->account_snapshot = $snapshot;
-                if ($before->token !== $after->token && $session->account_sub_link) {
-                    $session->account_sub_link = preg_replace('/(?<![A-Za-z0-9_-])' . preg_quote($before->token, '/') . '(?![A-Za-z0-9_-])/', $after->token, $session->account_sub_link);
-                }
-            }
-            $session->save();
-        }
-    }
 }

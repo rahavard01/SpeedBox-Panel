@@ -1,0 +1,87 @@
+/* Use the panel's entity tables/toolbars and modal surfaces. */
+.speedbox-infrastructure #pageTitle,.infrastructure-modal.wireguard-modal #modalTitle{direction:rtl;unicode-bidi:isolate}
+.speedbox-infrastructure [data-wg-new]{direction:rtl;unicode-bidi:isolate}
+.speedbox-infrastructure .wg-table .entity-loading-cell{direction:rtl;unicode-bidi:isolate}
+.speedbox-infrastructure [data-wg-row] .actions{direction:rtl}
+
+.speedbox-infrastructure .wg-table .actions{flex-wrap:nowrap;white-space:nowrap}.speedbox-infrastructure .wg-table small{display:block;margin-top:.4em;color:var(--muted)}.speedbox-infrastructure .wg-table bdi{display:inline-block;white-space:nowrap}.speedbox-infrastructure .wg-error{max-width:24em;margin:.5em 0 0;color:#ff9292;white-space:normal;overflow-wrap:anywhere}
+.speedbox-infrastructure .plan-name-service{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:.6em}.speedbox-infrastructure .plan-service-badge{display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;height:calc(20 * var(--speedbox-ui-unit,1px));min-height:0;margin:0;padding:0 calc(7 * var(--speedbox-ui-unit,1px));border:1px solid;border-radius:calc(5 * var(--speedbox-ui-unit,1px));font-family:Arial,sans-serif;font-size:calc(10 * var(--speedbox-ui-unit,1px))!important;font-weight:500;line-height:1;vertical-align:middle;flex:0 0 auto;white-space:nowrap}.speedbox-infrastructure .plan-service-badge.wireguard{color:#e5baff;background:#ad4ce81a;border-color:#bb78ef66}.speedbox-infrastructure .plan-service-badge.v2ray{color:#9edcff;background:#329ce51a;border-color:#58b6ef66}
+:root:root body .speedbox-infrastructure-overlay .infrastructure-modal.wireguard-modal{width:min(calc(576 * var(--speedbox-ui-unit,1px)),94vw);max-width:calc(576 * var(--speedbox-ui-unit,1px));min-width:0;padding:calc(18 * var(--speedbox-ui-unit,1px))}
+:root:root body .speedbox-infrastructure-overlay .infrastructure-modal.wireguard-modal .form-grid{display:grid;grid-template-columns:minmax(0,1fr);gap:calc(20 * var(--speedbox-ui-unit,1px))}
+:root:root body .speedbox-infrastructure-overlay .infrastructure-modal.wireguard-modal .field{display:grid;grid-template-columns:minmax(0,1fr);gap:calc(9 * var(--speedbox-ui-unit,1px));min-width:0;text-align:right}
+:root:root body .speedbox-infrastructure-overlay .infrastructure-modal.wireguard-modal .field>label{font-size:calc(12 * var(--speedbox-ui-unit,1px))!important;padding:0;line-height:1.5;text-align:right}
+:root:root body .speedbox-infrastructure-overlay .infrastructure-modal.wireguard-modal .wg-field-row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:calc(16 * var(--speedbox-ui-unit,1px));align-items:start;min-width:0}
+:root:root body .speedbox-infrastructure-overlay .infrastructure-modal.wireguard-modal .field :is(input,select){box-sizing:border-box;width:100%;min-width:0;height:calc(38 * var(--speedbox-ui-unit,1px));padding:calc(8 * var(--speedbox-ui-unit,1px)) calc(12 * var(--speedbox-ui-unit,1px));font-size:calc(11 * var(--speedbox-ui-unit,1px))!important;border-radius:calc(10 * var(--speedbox-ui-unit,1px))}
+:root:root body .speedbox-infrastructure-overlay .infrastructure-modal.wireguard-modal .wg-advanced{border-top:1px dashed #ffffff30;padding-top:calc(16 * var(--speedbox-ui-unit,1px))}
+:root:root body .speedbox-infrastructure-overlay .infrastructure-modal.wireguard-modal .wg-advanced summary{cursor:pointer;font-size:calc(12 * var(--speedbox-ui-unit,1px));font-weight:600;padding-block:calc(8 * var(--speedbox-ui-unit,1px))}
+:root:root body .speedbox-infrastructure-overlay .infrastructure-modal.wireguard-modal .wg-advanced[open]>.wg-field-row{margin-top:calc(16 * var(--speedbox-ui-unit,1px))}
+:root:root body .speedbox-infrastructure-overlay .infrastructure-modal.wireguard-modal .form-actions>.button{min-height:calc(38 * var(--speedbox-ui-unit,1px));padding:calc(8 * var(--speedbox-ui-unit,1px)) calc(20 * var(--speedbox-ui-unit,1px));font-size:calc(12 * var(--speedbox-ui-unit,1px))!important;border-radius:calc(10 * var(--speedbox-ui-unit,1px))}
+:root:root body .speedbox-infrastructure-overlay .infrastructure-modal.plan-modal .form-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+:root:root body .speedbox-infrastructure-overlay .infrastructure-modal.plan-modal .plan-service-field{grid-column:1/-1}
+:root:root body .speedbox-infrastructure-overlay .infrastructure-modal.wireguard-modal [hidden],:root:root body .speedbox-infrastructure-overlay .infrastructure-modal.plan-modal .field[hidden]{display:none!important}
+@media(max-width:600px){:root:root body .speedbox-infrastructure-overlay .infrastructure-modal.plan-modal .form-grid,:root:root body .speedbox-infrastructure-overlay .infrastructure-modal.wireguard-modal .wg-field-row{grid-template-columns:minmax(0,1fr)}}
+
+/* Match the tariff header badges and the panel's shared dropdown on all displays. */
+:root:root body .settings-final .tariff-group-card .tariff-service-select{--sb-service-border:#75cfff66;--sb-service-ink:#c5eaff;--sb-service-shadow:none;position:relative;flex:0 0 auto;width:calc(112 * var(--speedbox-ui-unit,1px));min-width:0;height:calc(34 * var(--speedbox-ui-unit,1px));box-sizing:border-box}
+:root:root body .settings-final .tariff-group-card .tariff-service-select .invoice-custom-select__trigger{height:100%;min-height:0;max-height:none;border:1px solid var(--sb-service-border);border-radius:calc(8 * var(--speedbox-ui-unit,1px));padding:0 calc(10 * var(--speedbox-ui-unit,1px));color:var(--sb-service-ink);background:linear-gradient(180deg,#234154cc,#1b2d3dcc);box-shadow:var(--sb-service-shadow);font-size:calc(12.48 * var(--speedbox-ui-unit,1px))!important;font-weight:400;line-height:1;gap:calc(6 * var(--speedbox-ui-unit,1px));margin:0}
+:root:root body .settings-final .tariff-group-card .tariff-service-select .invoice-custom-select__trigger>span{display:flex;align-items:center;justify-content:center;align-self:stretch;min-width:0;font-family:Arial,sans-serif;line-height:1;direction:ltr}
+:root:root body .settings-final .tariff-group-card .tariff-service-select.is-open .invoice-custom-select__trigger{border-radius:calc(8 * var(--speedbox-ui-unit,1px)) calc(8 * var(--speedbox-ui-unit,1px)) 0 0;border-bottom-color:transparent}
+:root:root body .settings-final .tariff-group-card .tariff-service-select .invoice-custom-select__menu{border:1px solid var(--sb-service-border);border-top:0;border-radius:0 0 calc(8 * var(--speedbox-ui-unit,1px)) calc(8 * var(--speedbox-ui-unit,1px));box-shadow:var(--sb-service-shadow)}
+:root:root body .settings-final .tariff-group-card .tariff-service-select .invoice-custom-select__option{font-family:Arial,sans-serif;font-size:calc(12.48 * var(--speedbox-ui-unit,1px))!important;text-align:center;direction:ltr}
+:root:root body .settings-final .tariff-group-card .tariff-service-select>.speedbox-native-select{height:100%!important}
+:root:root body .tariff-plan-select .tariff-plan-label{display:flex;align-items:center;justify-content:center;gap:.35em;min-width:0;max-width:100%;direction:ltr;unicode-bidi:isolate}
+:root:root body .tariff-plan-select .tariff-plan-label>bdi{unicode-bidi:isolate;line-height:inherit}
+:root:root body .tariff-plan-select .tariff-plan-label>.tariff-plan-title{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+:root:root body .tariff-plan-select .tariff-plan-label>:is(.tariff-plan-protocol,.tariff-plan-separator,.tariff-plan-traffic){flex-shrink:0}
+/* Keep the original mobile header/actions; only the new service occupies its own row. */
+@media(max-width:900px){
+ :root:root body .settings-final .tariff-group-card:not(.tariff-sort-mode) .tariff-secondary-controls{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-items:stretch;width:100%;min-width:0;gap:8px}
+ :root:root body .settings-final .tariff-group-card .tariff-secondary-controls>.tariff-service-select{grid-column:1/-1;grid-row:1;flex:none;width:100%;min-width:0;max-width:100%}
+ :root:root body .settings-final .tariff-group-card .tariff-secondary-controls>.partner-access-badge1{grid-column:1;grid-row:2;width:100%;min-width:0}
+ :root:root body .settings-final .tariff-group-card .tariff-secondary-controls>.tariff-connection-field{grid-column:2;grid-row:2;flex:none;width:100%;min-width:0;max-width:none}
+}
+
+/* Keep dense configuration QR codes independent of the URL QR sizing rules. */
+:root:root body .create-modal .final-qr .wireguard-profiles img.wg-profile-qr{
+  display:block;width:min(100%,calc(280 * var(--speedbox-ui-unit,1px)));max-width:100%;height:auto;
+  margin:0 auto;padding:0;box-sizing:border-box;object-fit:contain;background:#fff;
+}
+/* Match the existing plan/status pills while keeping Latin text vertically centered. */
+:root:root body .account-service-badge{display:inline-flex;align-items:center;justify-content:center;
+  box-sizing:border-box;vertical-align:middle;height:calc(24 * var(--speedbox-ui-unit,1px));min-height:calc(24 * var(--speedbox-ui-unit,1px));
+  padding:0 calc(10 * var(--speedbox-ui-unit,1px));
+  border:1px solid #6d6d6d;border-radius:999px;background:rgba(13,13,13,.12);
+  box-shadow:0 0 calc(10 * var(--speedbox-ui-unit,1px)) rgba(0,132,255,.5);
+  backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);color:#fff;
+  font-family:Arial,system-ui,sans-serif;font-size:calc(10 * var(--speedbox-ui-unit,1px));font-weight:700;line-height:1;white-space:nowrap}
+:root:root body .account-service-badge .account-service-label{display:block;flex:none;font:inherit;line-height:1;transform:translateY(.05em)}
+:root:root body table.users-table.reservation-users-table :is(th.account-service-col,td.account-service-cell){
+  width:1%;min-width:0;max-width:none;padding-inline:calc(8 * var(--speedbox-ui-unit,1px));text-align:center;white-space:nowrap}
+/* The service column shifted expiry, traffic and actions one position to the left. */
+ :root:root body #app .center-box table.users-table.reservation-users-table:is(.admin-user-list-table,.speedbox-partner-accounts-table) :is(th.expiry-date-col,td.expiry-date-cell){
+  width:1%;min-width:calc(170 * var(--speedbox-ui-unit,1px));max-width:none;padding-inline:calc(12 * var(--speedbox-ui-unit,1px));white-space:nowrap}
+:root:root body #app .center-box table.users-table.reservation-users-table td.expiry-date-cell .expiry-badge{
+  display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;width:max-content;max-width:none;margin-inline:auto;white-space:nowrap}
+:root:root body table.users-table.reservation-users-table:is(.admin-user-list-table,.speedbox-partner-accounts-table) :is(th,td):nth-child(8){
+  width:calc(200 * var(--speedbox-ui-unit,1px));min-width:calc(180 * var(--speedbox-ui-unit,1px));padding-inline:calc(12 * var(--speedbox-ui-unit,1px))}
+:root:root body table.users-table.reservation-users-table:is(.admin-user-list-table,.speedbox-partner-accounts-table) :is(th,td):nth-child(9){
+  width:calc(105 * var(--speedbox-ui-unit,1px));min-width:calc(100 * var(--speedbox-ui-unit,1px));padding-inline:calc(8 * var(--speedbox-ui-unit,1px))}
+:root:root body table.users-table.reservation-users-table:is(.admin-user-list-table,.speedbox-partner-accounts-table) :is(th,td):nth-child(10){
+  width:calc(140 * var(--speedbox-ui-unit,1px));min-width:calc(132 * var(--speedbox-ui-unit,1px));padding-inline:calc(8 * var(--speedbox-ui-unit,1px))}
+:root:root body .create-modal .final-qr .wireguard-profiles .wg-profile-actions{
+  width:min(100%,calc(280 * var(--speedbox-ui-unit,1px)));max-width:100%;margin-inline:auto}
+:root:root body .create-modal .final-qr .wireguard-profiles .wg-profile-actions button{
+  width:100%;display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box}
+
+/* Use the same QR/download rhythm and button treatment as the public subscription card. */
+:root:root body .create-modal .final-qr .wireguard-profiles .wg-profile-config{
+  display:grid;gap:calc(14 * var(--speedbox-ui-unit,1px));width:min(100%,calc(280 * var(--speedbox-ui-unit,1px)));min-width:0;margin-inline:auto}
+:root:root body .create-modal .final-qr .wireguard-profiles .wg-profile-config img.wg-profile-qr{
+  box-sizing:border-box;width:100%;max-width:100%;height:auto;padding:0;margin:0}
+:root:root body .create-modal .final-qr .wireguard-profiles .wg-profile-config .wg-profile-actions{width:100%;margin:0}
+:root:root body .create-modal .final-qr .wireguard-profiles .wg-profile-config .wg-profile-actions button{
+  width:100%;min-height:calc(44 * var(--speedbox-ui-unit,1px));padding:calc(10 * var(--speedbox-ui-unit,1px)) calc(14 * var(--speedbox-ui-unit,1px));
+  border:1px solid rgba(0,180,255,.35);border-radius:calc(10 * var(--speedbox-ui-unit,1px));
+  background:linear-gradient(180deg,rgba(0,128,255,.43),rgba(0,100,210,.22));
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.11),0 calc(5 * var(--speedbox-ui-unit,1px)) calc(14 * var(--speedbox-ui-unit,1px)) rgba(0,0,0,.2);
+  font-size:calc(12 * var(--speedbox-ui-unit,1px));font-weight:750;line-height:1.3}

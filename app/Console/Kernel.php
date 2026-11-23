@@ -21,6 +21,12 @@ class Kernel extends ConsoleKernel
      */
     protected function schedule(Schedule $schedule): void
     {
+        $schedule->call(fn () => \App\Services\OperatorFilters::schedule())
+            ->everyMinute()->name('nodes:operator-filters')->withoutOverlapping();
+        $schedule->job(new \App\Jobs\ObserveOperatorFilters)
+            ->everyMinute()->name('nodes:observe-operator-filters');
+        $schedule->call(fn () => app(\App\Services\WireGuardService::class)->tick())
+            ->everyMinute()->name('wireguard:sync')->withoutOverlapping();
         $schedule->call(fn () => app(\App\Services\PanelWalletLowBalanceRunner::class)->tick())
             ->everyMinute()->name('panel-wallet:low-balance-warning')->withoutOverlapping();
         $schedule->call(fn () => app(\App\Services\SubscriptionReservationService::class)->tick())
@@ -129,5 +135,6 @@ class Kernel extends ConsoleKernel
         require base_path('routes/console.php');
     }
 }
+
 
 

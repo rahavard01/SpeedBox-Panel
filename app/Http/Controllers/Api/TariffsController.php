@@ -85,6 +85,7 @@ class TariffsController extends Controller
                 'id' => (int) $group->id,
                 'name' => (string) $group->name,
                 'group_type' => (string)($group->group_type ?? 'time'),
+                'service_type'=>$group->service_type??'v2ray',
                 'is_default' => (int) $group->is_default,
                 'min_traffic_gb' => (string) $group->group_type === 'volume' ? (int) ($group->min_traffic_gb ?? 10) : 1,
                 'traffic' => [

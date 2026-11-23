@@ -18,6 +18,13 @@ class ProxyServer extends Model
             if($node->wasRecentlyCreated||$node->wasChanged(['machine_id','server_port','parent_id','enabled','type']))$schedule($node);
         });
         static::deleted($schedule);
+        $queueFilters = fn () => \App\Services\OperatorFilters::scheduleAfterCommit();
+        static::saved(function (self $node) use ($queueFilters) {
+            if ($node->wasRecentlyCreated || $node->wasChanged([
+                'operator_filters', 'host', 'port', 'server_port', 'machine_id', 'parent_id', 'protocol_settings', 'enabled', 'type',
+            ])) $queueFilters();
+        });
+        static::deleted($queueFilters);
     }
 
     public const TYPE_VMESS = 'vmess';
@@ -49,6 +56,7 @@ class ProxyServer extends Model
         'show' => 'boolean',
         'enabled' => 'boolean',
         'warp_enabled' => 'boolean',
+        'operator_filters' => 'array',
         'rate_time_enable' => 'boolean',
         'machine_id' => 'integer',
         'u' => 'integer',
@@ -83,4 +91,5 @@ class ProxyServer extends Model
         return $this->belongsTo(ServerMachine::class, 'machine_id');
     }
 }
+
 

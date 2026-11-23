@@ -85,6 +85,7 @@ class V2UserCreator
         // Creation runs in the caller's transaction; serialize capacity checks per plan.
         $plan = DB::table('v2_plan')->where('id', $v2PlanId)->lockForUpdate()->first();
         if (!$plan) return ['created' => [], 'errors' => ['v2_plan not found']];
+        SubscriptionServiceType::ready($plan);
 
         if ($plan->capacity_limit !== null) {
             $activeCount = DB::table('v2_user')->where('plan_id', $v2PlanId)
@@ -187,8 +188,14 @@ class V2UserCreator
                 $insert['reset_count'] = 0;
 
                 try {
-                    $id = DB::table('v2_user')->insertGetId($insert);
-                    $created[] = ['id' => (int)$id, 'email' => $email, 'token' => $token];
+                    $id=DB::transaction(function()use($insert,$plan){
+                    $id = DB::table('v2_user')->insertGetId($insert + ['service_type'=>SubscriptionServiceType::of($plan),'wireguard_instance_id'=>$plan->wireguard_instance_id??null]);
+                    if(SubscriptionServiceType::of($plan)==='wireguard') {
+                        app(WireGuardService::class)->provision(DB::table('v2_user')->find($id));
+                    }
+                        return $id;
+                    });
+                    $created[] = ['id' => (int)$id,'service_type'=>SubscriptionServiceType::of($plan), 'email' => $email, 'token' => $token];
                     break;
                 } catch (\Throwable $e) {
                     $msg = $e->getMessage();

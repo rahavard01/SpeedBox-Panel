@@ -16,7 +16,18 @@ final class AccountOnlineStatus
             ->select('leases.user_id', 'leases.source_ip')->distinct();
         $totals = DB::query()->fromSub($pairs, 'active_pairs')
             ->selectRaw('COUNT(DISTINCT user_id) AS users_online, COUNT(*) AS ips_online')->first();
-        return ['users' => (int) $totals->users_online, 'ips' => (int) $totals->ips_online];
+        $wg=$this->wireguardCounts($partnerCode);
+        return ['users' => (int) $totals->users_online+count($wg), 'ips' => (int) $totals->ips_online+array_sum($wg)];
+    }
+
+    private function wireguardCounts(?string $partnerCode=null): array {
+        $q=DB::table('speedbox_wireguard_peers as p')->join('v2_user','v2_user.id','=','p.user_id')
+            ->join('speedbox_wireguard_instances as i','i.id','=','p.instance_id')
+            ->where('p.enabled',1)->where('i.enabled',1)->where('i.status','ready')->where('i.last_synced_at','>',now()->subMinutes(3))
+            ->where('p.last_handshake','>',time()-180)->where('v2_user.banned',0)->whereRaw('(v2_user.u+v2_user.d)<v2_user.transfer_enable');
+        SubscriptionValidity::whereUnexpired($q,'v2_user.expired_at');
+        if($partnerCode!==null)PanelAccountOwnership::scope($q,$partnerCode);
+        return $q->select('p.user_id')->selectRaw('COUNT(*) AS total')->groupBy('p.user_id')->pluck('total','p.user_id')->map(fn($n)=>(int)$n)->all();
     }
 
     public function activeIpTotal(?string $partnerCode = null): int
@@ -39,9 +50,10 @@ final class AccountOnlineStatus
     public function counts(array $ids): array
     {
         if (!$ids) return [];
-        return DB::table('speedbox_connection_leases')
+        $counts=DB::table('speedbox_connection_leases')
             ->whereIn('user_id', $ids)->where('expires_at', '>', time())
             ->select('user_id')->selectRaw('COUNT(DISTINCT source_ip) AS online_count')
             ->groupBy('user_id')->pluck('online_count', 'user_id')->map(fn ($count) => (int) $count)->all();
+        return array_replace($counts,array_intersect_key($this->wireguardCounts(),array_flip($ids)));
     }
 }

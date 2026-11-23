@@ -90,6 +90,18 @@ class TransactionLogger
             $meta = array_merge($meta, $final['extra_meta']);
         }
 
+        if(in_array($row->type,['account_purchase','account_extend'],true)) {
+            $ids=(array)($meta['user_ids']??[]);
+            $types=DB::table('v2_user')->whereIn('id',$ids)->pluck('service_type')->unique();
+            if($types->count()===1)$meta['service_type']=$types->first();
+            if($ids)$meta['account_count']=count($ids);
+            if(!empty($meta['tariff_group_id'])) {
+                $group=DB::table('panel_tariff_groups')->find($meta['tariff_group_id']);
+                $meta['tariff_group_name']=$meta['tariff_group_name']??($group->name??null);
+                $meta['service_type']=$meta['service_type']??($group->service_type??null);
+            }
+        }
+
         $update = [
             'reference_type' => $final['reference_type'] ?? $row->reference_type,
             'reference_id'   => $final['reference_id']   ?? $row->reference_id,

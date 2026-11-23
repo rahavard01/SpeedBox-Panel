@@ -145,30 +145,30 @@
 .speedbox-infrastructure .traffic-rank-card>.panel-head{flex-wrap:wrap;gap:10px;margin-bottom:12px}
 .speedbox-infrastructure .rank-range{display:flex;align-items:center;gap:7px}
 .speedbox-infrastructure .rank-range .invoice-custom-select{width:125px}
-.speedbox-infrastructure .rank-dates{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-items:start;gap:12px;margin:20px 0;padding:0}
-.speedbox-infrastructure .rank-dates[hidden]{display:none}
-.speedbox-infrastructure .rank-date-control{display:grid;gap:8px;min-width:0;font-size:11px}
-.speedbox-infrastructure .rank-date-control>span{color:var(--muted);white-space:nowrap}
-.speedbox-infrastructure .rank-date-picker{position:relative;width:100%;min-width:0}
-.speedbox-infrastructure .rank-date-trigger{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;height:38px;padding:0 12px;margin:0;color:#e1e5ee;background:radial-gradient(120% 120% at 50% -10%,#00a0ff24,#0000 60%),linear-gradient(180deg,#ffffff12,#ffffff0a);border:1px solid rgba(255,255,255,.2);border-radius:10px;box-shadow:0 3px 10px #3b82f640;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);cursor:pointer;font:inherit;text-align:center;transition:border-color .2s ease,background .2s ease}
-.speedbox-infrastructure .rank-date-trigger b{font-weight:600;white-space:nowrap;flex:1}
-.speedbox-infrastructure .rank-date-caret{font-size:9px;transition:transform .18s ease}
-.speedbox-infrastructure .rank-date-picker.is-calendar-open .rank-date-trigger{border-radius:10px 10px 0 0;border-color:rgba(255,255,255,.3);border-bottom-color:transparent}
-.speedbox-infrastructure .rank-date-picker.is-calendar-open .rank-date-caret{transform:rotate(180deg)}
+:is(.speedbox-infrastructure,.invoice-date-range) .rank-dates{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-items:start;gap:12px;margin:20px 0;padding:0}
+:is(.speedbox-infrastructure,.invoice-date-range) .rank-dates[hidden]{display:none}
+:is(.speedbox-infrastructure,.invoice-date-range) .rank-date-control{display:grid;gap:8px;min-width:0;font-size:11px}
+:is(.speedbox-infrastructure,.invoice-date-range) .rank-date-control>span{color:var(--muted);white-space:nowrap}
+:is(.speedbox-infrastructure,.invoice-date-range) .rank-date-picker{position:relative;width:100%;min-width:0}
+:is(.speedbox-infrastructure,.invoice-date-range) .rank-date-trigger{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;height:38px;padding:0 12px;margin:0;color:#e1e5ee;background:radial-gradient(120% 120% at 50% -10%,#00a0ff24,#0000 60%),linear-gradient(180deg,#ffffff12,#ffffff0a);border:1px solid rgba(255,255,255,.2);border-radius:10px;box-shadow:0 3px 10px #3b82f640;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);cursor:pointer;font:inherit;text-align:center;transition:border-color .2s ease,background .2s ease}
+:is(.speedbox-infrastructure,.invoice-date-range) .rank-date-trigger b{font-weight:600;white-space:nowrap;flex:1}
+:is(.speedbox-infrastructure,.invoice-date-range) .rank-date-caret{font-size:9px;transition:transform .18s ease}
+:is(.speedbox-infrastructure,.invoice-date-range) .rank-date-picker.is-calendar-open .rank-date-trigger{border-radius:10px 10px 0 0;border-color:rgba(255,255,255,.3);border-bottom-color:transparent}
+:is(.speedbox-infrastructure,.invoice-date-range) .rank-date-picker.is-calendar-open .rank-date-caret{transform:rotate(180deg)}
 .speedbox-infrastructure .traffic-rank-card{position:relative;overflow:visible}
 .speedbox-infrastructure .traffic-rank-card.is-calendar-open{z-index:110}
-.speedbox-infrastructure .rank-calendar-menu{position:absolute;z-index:120;top:calc(100% - 1px);right:0;width:100%;padding:10px;background:radial-gradient(120% 120% at 50% -10%,#20202024,#0000 60%),linear-gradient(180deg,#ffffff12,#ffffff0a),#1d1d1df5;border:1px solid rgba(255,255,255,.3);border-radius:0 0 10px 10px;box-shadow:0 8px 24px #00000060,0 3px 10px #3b82f640;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
-.speedbox-infrastructure .rank-date-trigger:hover{border-color:rgba(255,255,255,.45);background:rgba(255,255,255,.08)}
-.speedbox-infrastructure .jalali-calendar{max-width:340px;margin:auto}
-.speedbox-infrastructure .jalali-calendar-head{display:flex;align-items:center;gap:5px;margin-bottom:10px}
-.speedbox-infrastructure .jalali-calendar-head .invoice-custom-select{flex:1;min-width:0}
-.speedbox-infrastructure .jalali-calendar-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:3px;text-align:center}
-.speedbox-infrastructure .jalali-weekday{padding:4px 0;font-size:10px;color:var(--muted)}
-.speedbox-infrastructure .jalali-day{aspect-ratio:1;border:1px solid transparent;border-radius:9px;background:rgba(255,255,255,.04);color:#fff;font:inherit;cursor:pointer}
-.speedbox-infrastructure .jalali-day:hover,.speedbox-infrastructure .jalali-day:focus-visible{background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.35);outline:none}
-.speedbox-infrastructure .jalali-day.is-today{border-color:rgba(255,255,255,.3)}
-.speedbox-infrastructure .jalali-day.is-selected{background:rgba(255,255,255,.2);border-color:rgba(255,255,255,.6)}
-.speedbox-infrastructure .jalali-calendar-footer{display:flex;justify-content:center;margin-top:10px}
+:is(.speedbox-infrastructure,.invoice-date-range) .rank-calendar-menu{position:absolute;z-index:120;top:calc(100% - 1px);right:0;width:100%;padding:10px;background:radial-gradient(120% 120% at 50% -10%,#20202024,#0000 60%),linear-gradient(180deg,#ffffff12,#ffffff0a),#1d1d1df5;border:1px solid rgba(255,255,255,.3);border-radius:0 0 10px 10px;box-shadow:0 8px 24px #00000060,0 3px 10px #3b82f640;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
+:is(.speedbox-infrastructure,.invoice-date-range) .rank-date-trigger:hover{border-color:rgba(255,255,255,.45);background:rgba(255,255,255,.08)}
+:is(.speedbox-infrastructure,.invoice-date-range) .jalali-calendar{max-width:340px;margin:auto}
+:is(.speedbox-infrastructure,.invoice-date-range) .jalali-calendar-head{display:flex;align-items:center;gap:5px;margin-bottom:10px}
+:is(.speedbox-infrastructure,.invoice-date-range) .jalali-calendar-head .invoice-custom-select{flex:1;min-width:0}
+:is(.speedbox-infrastructure,.invoice-date-range) .jalali-calendar-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:3px;text-align:center}
+:is(.speedbox-infrastructure,.invoice-date-range) .jalali-weekday{padding:4px 0;font-size:10px;color:var(--muted)}
+:is(.speedbox-infrastructure,.invoice-date-range) .jalali-day{aspect-ratio:1;border:1px solid transparent;border-radius:9px;background:rgba(255,255,255,.04);color:#fff;font:inherit;cursor:pointer}
+:is(.speedbox-infrastructure,.invoice-date-range) .jalali-day:hover,:is(.speedbox-infrastructure,.invoice-date-range) .jalali-day:focus-visible{background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.35);outline:none}
+:is(.speedbox-infrastructure,.invoice-date-range) .jalali-day.is-today{border-color:rgba(255,255,255,.3)}
+:is(.speedbox-infrastructure,.invoice-date-range) .jalali-day.is-selected{background:rgba(255,255,255,.2);border-color:rgba(255,255,255,.6)}
+:is(.speedbox-infrastructure,.invoice-date-range) .jalali-calendar-footer{display:flex;justify-content:center;margin-top:10px}
 .speedbox-infrastructure .rank-list{height:400px;overflow:auto;display:flex;flex-direction:column;gap:12px;scrollbar-width:thin;padding:2px}
 .speedbox-infrastructure .rank-list .empty{margin:auto 0}
 .speedbox-infrastructure .loading.compact{min-height:340px}
@@ -234,10 +234,10 @@
 
 
 /* Each calendar follows its own date field, without extending under its neighbour. */
-.speedbox-infrastructure .jalali-calendar-head .button.small{padding:4px 5px;font-size:10px;min-width:22px;flex-shrink:0}
-.speedbox-infrastructure .jalali-day{min-height:24px;font-size:11px;border-radius:6px}
-.speedbox-infrastructure .rank-date-trigger:focus-visible{outline:2px solid rgba(255,255,255,.65);outline-offset:2px}
-@media(max-width:480px){.speedbox-infrastructure .rank-dates{grid-template-columns:1fr}}
+:is(.speedbox-infrastructure,.invoice-date-range) .jalali-calendar-head .button.small{padding:4px 5px;font-size:10px;min-width:22px;flex-shrink:0}
+:is(.speedbox-infrastructure,.invoice-date-range) .jalali-day{min-height:24px;font-size:11px;border-radius:6px}
+:is(.speedbox-infrastructure,.invoice-date-range) .rank-date-trigger:focus-visible{outline:2px solid rgba(255,255,255,.65);outline-offset:2px}
+@media(max-width:480px){:is(.speedbox-infrastructure,.invoice-date-range) .rank-dates{grid-template-columns:1fr}}
 
 
 .speedbox-infrastructure .configuration-shell{width:100%;margin-inline:auto}
@@ -298,9 +298,9 @@
 .speedbox-infrastructure .entity-toolbar input.search.form-input::placeholder{direction:rtl;unicode-bidi:plaintext;text-align:center!important}
 
 /* Date controls share the same fixed invoice palette, including hover/open. */
-.speedbox-infrastructure .rank-date-trigger,.speedbox-infrastructure .rank-date-trigger:hover{background:var(--speedbox-select-closed);color:#d0d0d0}
-.speedbox-infrastructure .rank-calendar-menu{background:var(--speedbox-select-open);border-color:rgba(255,255,255,.2);box-shadow:0 3px 10px #3b82f640}
-.speedbox-infrastructure .jalali-day:hover,.speedbox-infrastructure .jalali-day:focus-visible,.speedbox-infrastructure .jalali-day.is-selected{background:#434343}
+:is(.speedbox-infrastructure,.invoice-date-range) .rank-date-trigger,:is(.speedbox-infrastructure,.invoice-date-range) .rank-date-trigger:hover{background:var(--speedbox-select-closed);color:#d0d0d0}
+:is(.speedbox-infrastructure,.invoice-date-range) .rank-calendar-menu{background:var(--speedbox-select-open);border-color:rgba(255,255,255,.2);box-shadow:0 3px 10px #3b82f640}
+:is(.speedbox-infrastructure,.invoice-date-range) .jalali-day:hover,:is(.speedbox-infrastructure,.invoice-date-range) .jalali-day:focus-visible,:is(.speedbox-infrastructure,.invoice-date-range) .jalali-day.is-selected{background:#434343}
 
 /* Dashboard action follows the approved invoice surface. */
 .speedbox-infrastructure .invoice-surface-button,.speedbox-infrastructure .invoice-surface-button:hover:not(:disabled){background:var(--speedbox-select-closed);color:#d0d0d0;border:1px solid rgba(255,255,255,.2);box-shadow:0 3px 10px #3b82f640}
@@ -312,7 +312,8 @@
 .speedbox-infrastructure .node-table .actions,.speedbox-infrastructure .plan-table .actions{flex-wrap:nowrap;white-space:nowrap}
 .speedbox-infrastructure .node-table .actions .button,.speedbox-infrastructure .plan-table .actions .button{flex-shrink:0}
 .speedbox-infrastructure .plan-table th{white-space:nowrap}
-.speedbox-infrastructure .plan-table [dir=ltr]{display:inline-block;white-space:nowrap}
+/* Numeric LTR values must not replace the protocol badge flex alignment. */
+.speedbox-infrastructure .plan-table [dir=ltr]:not(.plan-service-badge){display:inline-block;white-space:nowrap}
 
 /* Compact editors retain Panel's outer modal and inner field-card surfaces. */
 .speedbox-infrastructure-overlay .infrastructure-modal.group-modal{width:min(460px,94vw);max-width:460px}
@@ -393,7 +394,10 @@
 .speedbox-infrastructure-overlay .node-modal .field>textarea,.speedbox-infrastructure-overlay .node-sub-modal .field>textarea,.speedbox-infrastructure-overlay .node-modal .field>.button{grid-column:1}
 .speedbox-infrastructure-overlay .node-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;align-items:end;width:100%}
 .speedbox-infrastructure-overlay .node-row.name-rate{grid-template-columns:minmax(0,2fr) minmax(0,1fr)}
-.speedbox-infrastructure-overlay .node-protocol-fields:not(:empty),.speedbox-infrastructure-overlay .node-assignment{margin-top:26px}
+.speedbox-infrastructure-overlay .node-protocol-fields:not(:empty),.speedbox-infrastructure-overlay .node-assignment{margin-top:16px}
+.speedbox-infrastructure-overlay .node-modal .node-protocol-fields:has(.transport-row){row-gap:14px}
+.speedbox-infrastructure-overlay .node-operator-controls{display:grid;gap:10px}
+.speedbox-infrastructure-overlay .node-operator-controls .switch-field{min-width:0}
 .speedbox-infrastructure-overlay .node-modal .switch-field,.speedbox-infrastructure-overlay .node-sub-modal .switch-field{display:flex;align-items:center;justify-content:space-between;min-height:38px;gap:10px;font-size:11px}
 .speedbox-infrastructure-overlay .node-row .switch-field{flex-direction:column;justify-content:center;gap:10px}
 .speedbox-infrastructure-overlay .node-modal textarea.form-input{min-height:70px;font-size:11px}
@@ -689,3 +693,11 @@
  .speedbox-infrastructure .dashboard-overview .loading{min-height:calc(220 * var(--dashboard-unit));font-size:inherit}
  .speedbox-infrastructure .dashboard-overview .loading.compact{min-height:calc(340 * var(--dashboard-unit))}
 }
+
+
+.speedbox-infrastructure .entity .operator-filter-state{direction:rtl;unicode-bidi:isolate}
+.speedbox-infrastructure .operator-filter-icon{color:#ff626b;font-size:max(10px,calc(1em - 2px))}
+.speedbox-infrastructure .entity-card-node-identity .entity{min-width:0;white-space:normal}
+.speedbox-infrastructure .entity-card-node-identity .node-name-line b{min-width:0;white-space:normal;overflow-wrap:anywhere}
+.speedbox-infrastructure .entity-card-node-identity .node-runtime-dot{flex:none}
+.speedbox-infrastructure .entity-card-node-identity .entity small{white-space:normal;overflow-wrap:anywhere}

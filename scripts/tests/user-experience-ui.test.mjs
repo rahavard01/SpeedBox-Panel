@@ -9,12 +9,14 @@ import vm from 'node:vm';
 const { JSDOM, VirtualConsole } = await import(process.env.SPEEDBOX_TEST_JSDOM || 'jsdom');
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const manifest = JSON.parse(readFileSync(path.join(root, 'public/build/manifest.json')));
+const { version, panelRelease: approvedRelease } = JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8'));
+const releaseId = approvedRelease.revision ? version + ':' + approvedRelease.revision : version;
 const requests = [];
 let failReset=true;
 const account = { id: 1, email: 'fixture@uxrep.com', token: '1234567890abcdef1234567890abcdef', subscribe_url: 'https://fixture.test/hooked/1234567890abcdef1234567890abcdef/client?sig=a%2Bb&x=1#tail', plan_id: 1, group_id: 1, u: 0, d: 1073741824, t: Math.floor(Date.now()/1000), transfer_enable: 10737418240, expired_at: Math.floor(Date.now()/1000)+864000, banned: 0, device_limit: 2, speed_limit: 0, reset_count: 1, account_plan_name: 'طرح ۱', account_group_type: 'time', account_tariff_group_id: 1, account_plan_key: '1m', created_at: Math.floor(Date.now()/1000), updated_at: Math.floor(Date.now()/1000) };
 const groups = Array.from({length:30}, (_,i)=>({id:i+1,name:`طرح ${i+1}`,group_type:'time',is_default:i===0?1:0,enable:1,items:['test','1m','3m','6m','12m'].map(plan_key=>({plan_key,enable:1,v2_plan_id:1,default_price:100})),plan_enabled:{test:true,'1m':true,'3m':true,'6m':true,'12m':true,'1m_noexp':true}}));
 const entry=manifest['resources/js/app.js'];
-const scripts=['node-editor','emergency-configs','infrastructure','register-infrastructure','panel-tooltip','partner-statistics'];
+const scripts=['node-editor','emergency-configs','jalali-calendar','infrastructure','register-infrastructure','panel-tooltip','partner-statistics'];
 const html='<!doctype html><html lang="fa"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'+entry.css.map(file=>`<link rel="stylesheet" href="/build/${file}">`).join('')+['panel-controls','bot-faqs','branding','infrastructure','emergency-configs','partner-statistics'].map(name=>`<link rel="stylesheet" href="/speedbox/${name}.css">`).join('')+'</head><body><div id="app"></div><script id="__BOOTSTRAP__" type="application/json">{}</script>'+scripts.map(name=>`<script src="/speedbox/${name}.js"></script>`).join('')+`<script type="module" src="/build/${entry.file}"></script></body></html>`;
 const server=createServer(async(req,res)=>{
   const url=new URL(req.url,'http://fixture.test');
@@ -81,13 +83,12 @@ try{
    await sleep(30);
   }
   await wait(()=>doc.querySelector('.btn-create-user'),'users page');
-  const releaseModal=await wait(()=>doc.querySelector('.update-modal'),'release 3.0 modal');
-  check(releaseModal.querySelector('.update-version-badge').textContent.trim()==='نسخه 3.0','Upgrade popup shows version 3.0');
+  const releaseModal=await wait(()=>doc.querySelector('.update-modal'),'release modal');
+  check(releaseModal.querySelector('.update-version-badge').textContent.trim()==='نسخه '+version,'Upgrade popup shows the configured version');
   const releaseLines=[...releaseModal.querySelectorAll('.update-modal-list li>span:last-child')].map(n=>n.textContent.trim());
-  const approvedRelease=JSON.parse(readFileSync(path.join(root,'package.json'),'utf8')).panelRelease;
   check(JSON.stringify(releaseLines)===JSON.stringify(approvedRelease.changes),'Every configured release note is shown in order');
   releaseModal.querySelector('[aria-label="بستن"]').click();await sleep(20);
-  check(!doc.querySelector('.update-modal')&&win.localStorage.getItem('panel_seen_version')==='3.0','Dismissing release 3.0 stores the new seen version');
+  check(!doc.querySelector('.update-modal')&&win.localStorage.getItem('panel_seen_version')===releaseId,'Dismissing the release stores the configured version and revision');
 
   if(role==='admin'){const expiry=await wait(()=>doc.querySelector('.users-table .expiry-badge'),'admin expiry badge');check(win.getComputedStyle(expiry).fontSize==='11px','Admin expiry date font is slightly larger');}
   button('ساخت کاربر جدید').click();const select=await wait(()=>doc.getElementById(role+'-create-tariff'),'create dropdown');
@@ -95,7 +96,7 @@ try{
    const codeToggle=doc.getElementById('admin-custom-code-toggle');check(!!codeToggle&&!codeToggle.checked&&!doc.getElementById('admin-custom-code'),'Custom panel code defaults off');codeToggle.click();await sleep(20);const code=doc.getElementById('admin-custom-code');check(!!code&&!code.hasAttribute('placeholder'),'Custom panel code reveals styled input');code.value='custom9';code.dispatchEvent(new win.Event('input',{bubbles:true}));codeToggle.click();await sleep(20);check(!doc.getElementById('admin-custom-code'),'Turning off custom code hides and clears input');codeToggle.click();await sleep(20);check(doc.getElementById('admin-custom-code').value==='','Custom code does not retain a stale value');
   }else check(!doc.getElementById('admin-custom-code-toggle'),'Custom panel code is admin-only');
   const createForm=select.closest('.account-create-form');const actions=createForm.querySelector(':scope > .create-actions');const back=createForm.querySelector(':scope > .back-button');check(win.getComputedStyle(actions).marginTop===win.getComputedStyle(back).marginTop,'Create action and Back use the same gap');check(win.getComputedStyle(actions.querySelector('.btn-create-user1')).marginTop==='0px'&&win.getComputedStyle(back.querySelector('a')).marginTop==='0px','Legacy button and link margins do not stack');check(win.getComputedStyle(select.closest('.account-plan-select')).marginBottom==='0px','Selector adds no extra bottom gap');
-  check(selectedPlan(role+'-create-tariff')==='انتخاب طرح','Create starts at placeholder');check(!select.closest('.account-plan-select').querySelector('label'),'Create has no duplicate plan label');check(select.closest('.account-plan-select').classList.contains('account-plan-select--compact'),'Only create selector uses compact width');check(win.getComputedStyle(select.closest('.account-plan-select').querySelector('.account-plan-select__trigger')).backgroundImage.includes('linear-gradient'),'Selector retains gradient styling');check(doc.querySelector('.create-modal .btn-create-user1').disabled,'Create waits for selection');
+  check(selectedPlan(role+'-create-tariff')==='انتخاب طرح','Create starts at placeholder');check(!select.closest('.account-plan-select').querySelector('label'),'Create has no duplicate plan label');check(select.closest('.account-service-plan-select')?.classList.contains('account-service-plan-select--single'),'Single-service create selector uses compact width');check(win.getComputedStyle(select.closest('.account-plan-select').querySelector('.account-plan-select__trigger')).backgroundImage.includes('linear-gradient'),'Selector retains gradient styling');check(doc.querySelector('.create-modal .btn-create-user1').disabled,'Create waits for selection');
   if(width<768){
    check(select.tagName==='SELECT'&&select.value==='','Mobile create uses a native select at its placeholder');
    check(select.options.length>=31,'Native mobile selector includes every plan');

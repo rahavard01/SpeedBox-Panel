@@ -4,6 +4,7 @@ namespace App\Protocols;
 
 use App\Models\ProxyServer as Server;
 use App\Services\RuntimeSetting;
+use App\Services\StreisandSmartSettings;
 use App\Services\SubscriptionTemplates;
 use App\Support\AbstractProtocol;
 use App\Support\RealityTransport;
@@ -104,6 +105,9 @@ class XrayJson extends AbstractProtocol
             ))->handle();
         }
 
+        $smart = StreisandSmartSettings::get();
+        $enableAll = $smart['enabled'] && $smart['all'];
+        $enableCountries = $smart['enabled'] && $smart['countries'];
         $configs = [];
         $smartGroups = [];
         $allSmartOutbounds = [];
@@ -122,7 +126,7 @@ class XrayJson extends AbstractProtocol
         // Build one SMART profile per country. Country flags are read from
         // node names (for example, "🇩🇪 Germany 1"). Nodes without a flag
         // are kept together in a separate "Other" SMART profile.
-        foreach ($supportedProxyServers as $index => $server) {
+        foreach (($enableAll || $enableCountries) ? $supportedProxyServers : [] as $index => $server) {
             [$countryKey, $countryLabel] = $this->detectCountryGroup($server);
 
             $tag = self::SMART_OUTBOUND_PREFIX
@@ -153,7 +157,7 @@ class XrayJson extends AbstractProtocol
 
         // Required order: Xboard information → all-country SMART profile →
         // country SMART profiles → normal nodes.
-        if ($allSmartOutbounds !== []) {
+        if ($enableAll && $allSmartOutbounds !== []) {
             $configs[] = $this->buildSmartConfig(
                 $allSmartOutbounds,
                 array_values(array_unique($allDnsDomains)),
@@ -163,7 +167,7 @@ class XrayJson extends AbstractProtocol
 
         // Array insertion order preserves the country order from the
         // original Xboard subscription.
-        foreach ($smartGroups as $smartGroup) {
+        foreach ($enableCountries ? $smartGroups : [] as $smartGroup) {
             $configs[] = $this->buildSmartConfig(
                 $smartGroup['outbounds'],
                 array_values(array_unique($smartGroup['dnsDomains'])),
@@ -191,13 +195,18 @@ class XrayJson extends AbstractProtocol
 
         $headers = [
             'Content-Type' => 'application/json; charset=utf-8',
-            'Content-Disposition' => 'inline; filename="xray-smart-subscription.json"',
-            'profile-title' => 'base64:' . base64_encode(self::SMART_NAME),
-            'profile-update-interval' => '1',
+            'Content-Disposition' => ($enableAll || $enableCountries)
+                ? 'inline; filename="xray-smart-subscription.json"'
+                : 'inline; filename="xray-subscription.json"',
             'subscription-userinfo' => $this->buildSubscriptionUserInfo(),
             'Cache-Control' => 'no-store, no-cache, must-revalidate',
             'X-Smart-Supported-Protocols' => implode(',', self::XRAY_SUPPORTED_PROTOCOLS),
         ];
+
+        if (($enableAll || $enableCountries) && $allSmartOutbounds !== []) {
+            $headers['profile-title'] = 'base64:' . base64_encode(self::SMART_NAME);
+            $headers['profile-update-interval'] = '1';
+        }
 
         if ($unsupportedTypes !== []) {
             $headers['X-Smart-Skipped-Protocols'] = implode(',', $unsupportedTypes);

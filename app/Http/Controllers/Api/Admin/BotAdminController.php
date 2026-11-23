@@ -4,9 +4,11 @@ namespace App\Http\Controllers\Api\Admin;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 use App\Models\PanelBotSetting;
+use App\Services\PartnerBotEntry;
 use App\Services\TelegramConfig;
 
 class BotAdminController extends Controller
@@ -41,8 +43,8 @@ class BotAdminController extends Controller
                     $webhookInfo = $j;
                     $webhookSet  = (bool) data_get($j, 'result.url');
                 }
-            } catch (\Throwable $e) {
-                $webhookInfo = ['error' => $e->getMessage()];
+            } catch (\Throwable) {
+                $webhookInfo = ['error' => 'پاسخ تلگرام در دسترس نیست'];
             }
         }
 
@@ -54,6 +56,9 @@ class BotAdminController extends Controller
             'webhook_url'    => $webhookUrl,
             'webhook_set'    => $webhookSet,
             'webhook_info'   => $webhookInfo,
+            'bot_url'        => data_get($webhookInfo, 'result.url') === $webhookUrl
+                ? PartnerBotEntry::configuredUrl($request->getSchemeAndHttpHost())
+                : null,
         ]);
     }
 
@@ -66,42 +71,51 @@ class BotAdminController extends Controller
      */
     public function setWebhook(Request $request)
     {
-        $token = trim((string) $request->input('token', TelegramConfig::token() ?? ''));
-        if ($token === '') {
-            return response()->json(['ok' => false, 'message' => 'توکن ربات را وارد کنید'], 422);
-        }
+        $result = Cache::lock(PartnerBotEntry::SETTINGS_LOCK, 30)->get(function () use ($request) {
+            $token = trim((string) $request->input('token', TelegramConfig::token() ?? ''));
+            if (!preg_match('/^\d+:[A-Za-z0-9_-]+$/D', $token)) {
+                return response()->json(['ok' => false, 'message' => 'توکن معتبر ربات را وارد کنید'], 422);
+            }
 
-        $secret = trim((string) (TelegramConfig::webhookSecret() ?? ''));
-        if ($secret === '') {
-            $secret = Str::random(48);
-        }
+            $secret = trim((string) (TelegramConfig::webhookSecret() ?? '')) ?: Str::random(48);
+            $url = TelegramConfig::webhookUrl($request->getSchemeAndHttpHost());
 
-        // ذخیرهٔ امن در DB (encrypted casts در مدل PanelBotSetting)
-        $s = PanelBotSetting::getSingleton();
-        $s->bot_token      = $token;
-        $s->webhook_secret = $secret;
-        $s->enabled        = true;
-        $s->save();
+            try {
+                $botUrl = PartnerBotEntry::fetchPublicUrl($token);
+                if ($botUrl === null) {
+                    return response()->json(['ok' => false, 'message' => 'نام کاربری ربات از تلگرام تأیید نشد'], 422);
+                }
 
-        $url = TelegramConfig::webhookUrl($request->getSchemeAndHttpHost());
+                $webhook = Http::timeout(8)->asForm()->post("https://api.telegram.org/bot{$token}/setWebhook", [
+                    'url'                  => $url,
+                    'secret_token'         => $secret,
+                    'allowed_updates'      => json_encode(['message', 'callback_query'], JSON_UNESCAPED_UNICODE),
+                    'drop_pending_updates' => true,
+                ]);
+                if (!$webhook->ok() || $webhook->json('ok') !== true) {
+                    return response()->json(['ok' => false, 'message' => 'تلگرام تنظیم وبهوک را تأیید نکرد'], 422);
+                }
+            } catch (\Throwable) {
+                return response()->json(['ok' => false, 'message' => 'خطا در ارتباط با تلگرام هنگام تنظیم وبهوک'], 422);
+            }
 
-        try {
-            $api = "https://api.telegram.org/bot{$token}";
-            Http::asForm()->post("{$api}/setWebhook", [
-                'url'                  => $url,
-                'secret_token'         => $secret, // تلگرام این مقدار را در هدر X-Telegram-Bot-Api-Secret-Token می‌فرستد
-                'allowed_updates'      => json_encode(['message','callback_query'], JSON_UNESCAPED_UNICODE),
-                'drop_pending_updates' => true,
-            ])->throw();
-        } catch (\Throwable $e) {
-            return response()->json(['ok' => false, 'message' => 'خطا در تنظیم وبهوک: ' . $e->getMessage()], 422);
-        }
+            $setting = PanelBotSetting::getSingleton();
+            $setting->bot_token = $token;
+            $setting->webhook_secret = $secret;
+            $setting->enabled = true;
+            $setting->save();
 
-        return response()->json([
-            'ok'      => true,
-            'message' => 'وبهوک با موفقیت تنظیم شد',
-            'webhook' => $url,
-        ]);
+            PartnerBotEntry::remember($token, $url, $botUrl);
+
+            return response()->json([
+                'ok'      => true,
+                'message' => 'وبهوک با موفقیت تنظیم شد',
+                'webhook' => $url,
+                'bot_url' => $botUrl,
+            ]);
+        });
+
+        return $result ?: response()->json(['ok' => false, 'message' => 'تنظیمات ربات در حال بررسی است؛ دوباره تلاش کنید'], 409);
     }
 
     /**
@@ -109,26 +123,27 @@ class BotAdminController extends Controller
      */
     public function removeWebhook()
     {
-        $token = (string) (TelegramConfig::token() ?? '');
-
-        if (trim($token) !== '') {
-            try {
-                $api = "https://api.telegram.org/bot{$token}";
-                Http::asForm()->post("{$api}/deleteWebhook", [
-                    'drop_pending_updates' => true,
-                ])->throw();
-            } catch (\Throwable $e) {
-                // اگر حذف از تلگرام خطا داد، ادامه می‌دهیم تا مقادیر DB پاک شوند
+        $result = Cache::lock(PartnerBotEntry::SETTINGS_LOCK, 30)->get(function () {
+            $token = (string) (TelegramConfig::token() ?? '');
+            if (trim($token) !== '') {
+                try {
+                    Http::timeout(8)->asForm()->post("https://api.telegram.org/bot{$token}/deleteWebhook", [
+                        'drop_pending_updates' => true,
+                    ])->throw();
+                } catch (\Throwable) {
+                    // The panel settings are removed even if Telegram is unreachable.
+                }
             }
-        }
 
-        // پاکسازی امن از DB
-        $s = PanelBotSetting::getSingleton();
-        $s->bot_token      = null;
-        $s->webhook_secret = null;
-        $s->enabled        = false;
-        $s->save();
+            $setting = PanelBotSetting::getSingleton();
+            $setting->bot_token = null;
+            $setting->webhook_secret = null;
+            $setting->enabled = false;
+            $setting->save();
 
-        return response()->json(['ok' => true, 'message' => 'وبهوک حذف شد']);
+            return response()->json(['ok' => true, 'message' => 'وبهوک حذف شد']);
+        });
+
+        return $result ?: response()->json(['ok' => false, 'message' => 'تنظیمات ربات در حال بررسی است؛ دوباره تلاش کنید'], 409);
     }
 }
