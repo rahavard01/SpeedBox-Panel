@@ -30,11 +30,6 @@ final class TariffConnectionPolicy
             DB::table('panel_plan')->where('tariff_group_id', $groupId)->where('plan_key', $key)
                 ->update(['device_limit' => $item['device_limit'] === null || $item['device_limit'] === '' ? null : (int) $item['device_limit']]);
         }
-        $tariff = DB::table('panel_plan')->where('tariff_group_id', $groupId)->where('plan_key', $key)->first();
-        if (!$tariff || !$tariff->v2_plan_id) return;
-        $limit = $this->resolve((int) $tariff->v2_plan_id, $groupId, $key);
-        DB::table('v2_user')->where('account_tariff_group_id', $groupId)->where('account_plan_key', $key)
-            ->update(['device_limit' => $limit, 'updated_at' => time()]);
     }
 
     public function applyPlanDefault(int $planId, ?int $limit): void
