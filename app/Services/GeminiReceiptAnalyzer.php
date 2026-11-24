@@ -103,7 +103,7 @@ class GeminiReceiptAnalyzer
 
         $response = Http::timeout(60)
             ->withToken($apiKey)
-            ->post('https://api.gapgpt.app/v1/chat/completions', [
+            ->post('https://api.gapgpt.ir/v1/chat/completions', [
                 'model' => 'gemini-2.5-flash',
                 'temperature' => 0,
                 'max_tokens' => 1500,
