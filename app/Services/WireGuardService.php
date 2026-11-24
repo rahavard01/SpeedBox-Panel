@@ -1,6 +1,6 @@
 <?php
 namespace App\Services;
-use App\Models\{WireGuardInstance,WireGuardPeer,ManagedServer};
+use App\Models\{WireGuardInstance,WireGuardPeer,ManagedServer,VpnOperation};
 use Illuminate\Support\Facades\{DB,Cache};
 final class WireGuardService {
     public static function keyPair(): array {
@@ -94,12 +94,15 @@ final class WireGuardService {
         $lock=Cache::lock('wireguard:instance:'.$id,1290);if(!$lock->get())return;
         try{
             $i=WireGuardInstance::find($id);if(!$i || $i->status!=='deleting')return;
+            $operation = VpnOperation::start('wireguard', $id);
             $this->assertUnused($i);
+            $operation?->recordProgress(25, 'حذف تنظیمات اختصاصی از سرورها.');
             // Keep the row and ownership keys until every owned host is clean.
             app(WireGuardRemote::class)->call($i,'remove',$this->policy($i));
             if($i->site_keys)foreach(['iran','foreign'] as $side)app(WireGuardRemote::class)->site($i,$side,'remove',$this->sitePolicy($i,$side));
             DB::transaction(function()use($i){$current=WireGuardInstance::whereKey($i->id)->lockForUpdate()->firstOrFail();$this->assertUnused($current);$current->delete();});
-        }catch(\Throwable $e){WireGuardInstance::whereKey($id)->update(['status'=>'delete_failed','last_error'=>mb_substr($e->getMessage(),0,1000)]);throw $e;}
+            $operation?->recordProgress(100, 'سرویس حذف شد.', 'succeeded');
+        }catch(\Throwable $e){if (isset($operation)) $operation->fail($e->getMessage());WireGuardInstance::whereKey($id)->update(['status'=>'delete_failed','last_error'=>mb_substr($e->getMessage(),0,1000)]);throw $e;}
         finally{$lock->release();}
     }
     public function validateTunnel(array $data):void {
@@ -170,17 +173,25 @@ final class WireGuardService {
         try {
             $i=WireGuardInstance::find($id);
             if(!$i || in_array($i->status,['deleting','delete_failed'],true))return;
-            if($i->mode==='tunnel' && !$i->enabled && !$i->public_key){$this->stopPath($i);$i->update(['status'=>'disabled','last_error'=>null,'last_synced_at'=>now()]);return;}
+            $operation = VpnOperation::start('wireguard', $id);
+            $install = $install || $operation?->action === 'install';
+            $operation?->recordProgress(15, 'آماده‌سازی شبکه و مسیر اتصال.');
+            if($i->mode==='tunnel' && !$i->enabled && !$i->public_key){$this->stopPath($i);$i->update(['status'=>'disabled','last_error'=>null,'last_synced_at'=>now()]);$operation?->recordProgress(100, 'سرویس غیرفعال شد.', 'succeeded');return;}
             if($i->enabled){$this->prepareNetwork($i);if($i->mode==='tunnel'){$this->validateTunnel($i->getAttributes());$this->preparePath($i);}}
             // Read durable native totals, charge only their delta, then grant the
             // remaining balance anchored at those exact totals. Retry is idempotent.
+            $operation?->recordProgress(35, $install ? 'نصب WireGuard روی سرور خروجی.' : 'دریافت وضعیت WireGuard از سرور خروجی.');
             $report=app(WireGuardRemote::class)->call($i,$install?'install':'status',$this->policy($i));
             $this->ingest($i,$report);
             $i->refresh();
+            $operation?->recordProgress(65, 'اعمال تنظیمات سرویس و همگام‌سازی پروفایل‌ها.');
             app(WireGuardRemote::class)->call($i,'sync',$this->policy($i));
+            $operation?->recordProgress(90, 'ثبت وضعیت نهایی سرویس.');
             if($i->mode==='tunnel'&&!$i->enabled)$this->stopPath($i);
             $i->update(['public_key'=>$report['public_key'],'status'=>$i->enabled?'ready':'disabled','last_error'=>null,'last_synced_at'=>now()]);
+            $operation?->recordProgress(100, 'عملیات با موفقیت تکمیل شد.', 'succeeded');
         } catch(\Throwable $e) {
+            if (isset($operation)) $operation->fail($e->getMessage());
             if(isset($i) && !$i->public_key){
                 try{$stopped=clone $i;$stopped->enabled=false;app(WireGuardRemote::class)->call($stopped,'sync',$this->policy($stopped));}catch(\Throwable $ignored){}
                 if($i->mode==='tunnel'&&$i->site_keys)try{$this->stopPath($i);}catch(\Throwable $ignored){}

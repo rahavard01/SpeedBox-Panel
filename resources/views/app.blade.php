@@ -34,6 +34,7 @@
   <link rel="stylesheet" href="/speedbox/wireguard.css?v={{ filemtime(public_path('speedbox/wireguard.css')) }}">
   <script src="/speedbox/wireguard.js?v={{ filemtime(public_path('speedbox/wireguard.js')) }}"></script>
   <script src="/speedbox/jalali-calendar.js?v={{ filemtime(public_path('speedbox/jalali-calendar.js')) }}"></script>
+  <script src="/speedbox/anyconnect.js?v={{ filemtime(public_path('speedbox/anyconnect.js')) }}"></script>
   <script src="/speedbox/infrastructure.js?v={{ filemtime(public_path('speedbox/infrastructure.js')) }}"></script>
   <script src="/speedbox/register-infrastructure.js?v={{ filemtime(public_path('speedbox/register-infrastructure.js')) }}"></script>
   <script src="/speedbox/panel-tooltip.js?v={{ filemtime(public_path('speedbox/panel-tooltip.js')) }}"></script>

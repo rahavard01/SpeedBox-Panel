@@ -24,7 +24,7 @@ class TariffsAdminController extends Controller
                     'service_type'=>$r->service_type,
                     'plan_name'=>(string)($r->name??''),
                     'traffic_label'=>(string)($r->transfer_enable??0).'G',
-                    'label' => "\u{2066}".($r->service_type==='wireguard'?'WireGuard':'V2Ray').' · '."\u{2068}".(string)($r->name??'')."\u{2069}".' · '.(string)($r->transfer_enable??0)."G\u{2069}",
+                    'label' => "\u{2066}".\App\Services\SubscriptionServiceType::label($r->service_type ?? 'v2ray').' · '."\u{2068}".(string)($r->name??'')."\u{2069}".' · '.(string)($r->transfer_enable??0)."G\u{2069}",
                     'device_limit' => $r->device_limit === null ? null : (int) $r->device_limit,
                 ];
             })
@@ -561,6 +561,9 @@ class TariffsAdminController extends Controller
             $items=$group['items']??[$group];
             $ids=array_filter(array_column($items,'v2_plan_id'));
             $types=DB::table('v2_plan')->whereIn('id',$ids)->pluck('service_type')->unique();
+            if ($types->first() === 'anyconnect' && DB::table('v2_plan')->whereIn('id', $ids)->pluck('anyconnect_instance_id')->unique()->count() > 1) {
+                throw new \DomainException('مدت‌های یک تعرفهٔ AnyConnect باید روی یک سرور باشند.');
+            }
             if($types->first()==='wireguard' && DB::table('v2_plan')->whereIn('id',$ids)->pluck('wireguard_instance_id')->unique()->count()>1)throw new \DomainException('مدت‌های یک تعرفه وایرگارد باید روی یک سرور باشند؛ برای سرور دیگر تعرفه جدا بسازید.');
             $type=$types->first()??($group['service_type']??'v2ray');
             if(isset($group['service_type']) && $group['service_type']!==$type)throw new \DomainException('پلن‌های متصل باید متعلق به سرویس انتخابی تعرفه باشند.');

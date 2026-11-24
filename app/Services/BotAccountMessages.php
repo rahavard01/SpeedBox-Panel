@@ -8,11 +8,12 @@ final class BotAccountMessages
 {
     public static function service(object $account): string
     {
-        return SubscriptionServiceType::of($account) === 'wireguard' ? 'WireGuard' : 'V2Ray';
+        return SubscriptionServiceType::label(SubscriptionServiceType::of($account));
     }
 
     public static function username(object $account): string
     {
+        if (SubscriptionServiceType::of($account) === 'anyconnect') return e(app(AnyConnectService::class)->credentials($account)['username']);
         return e(str_replace(['@', '.com'], ['-', ''], (string) $account->email));
     }
 
@@ -21,8 +22,21 @@ final class BotAccountMessages
         return 'فایل یا QR را در برنامه رسمی وایرگارد وارد کنید.';
     }
 
+    public static function anyConnectDetails(object $account, string $url, bool $showUsername = true): string
+    {
+        $connection = app(AnyConnectService::class)->credentials($account);
+        return ($showUsername ? "👤 نام کاربری:\n<code>".e($connection['username'])."</code>\n\n" : '')
+            ."🔑 رمز عبور:\n<code>".e($connection['password'])."</code>\n\n"
+            ."🌐 آدرس سرور:\n<code>".e($connection['address'])."</code>\n\n"
+            ."🔗 لینک اطلاعات اشتراک:\n<code>".e($url)."</code>";
+    }
+
     public static function created(object $account, string $url): string
     {
+        if (SubscriptionServiceType::of($account) === 'anyconnect') {
+            return "✅ اکانت شما با موفقیت ساخته شد\n\n".self::anyConnectDetails($account, $url)
+                ."\n\n🛡 سرویس: AnyConnect\nاز Cisco Secure Client یا OpenConnect برای اتصال استفاده کنید.";
+        }
         $wireguard = SubscriptionServiceType::of($account) === 'wireguard';
         return "✅ اکانت شما با موفقیت ساخته شد\n\n👤 نام کاربری:\n<code>" . self::username($account)
             . "</code>\n\n🔗 " . ($wireguard ? 'لینک اشتراک:' : 'لینک سابسکرایب:')

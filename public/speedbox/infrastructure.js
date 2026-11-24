@@ -38,6 +38,7 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
   const modalBackdrop = scope.getElementById('modalBackdrop');
   const titles = {
     wireguard:'مدیریت WireGuard',
+    anyconnect:'مدیریت \u2066AnyConnect\u2069',
     tunnels:'مدیریت تونل‌ها', configuration:'پیکربندی سیستم', overview:'داشبورد', servers:'مدیریت سرورها', nodes:'مدیریت نودها', 'emergency-configs':'کانفیگ‌های اضطراری',
     plans:'مدیریت پلن‌ها', routing:'گروه‌های دسترسی و مسیریابی', settings:'تنظیمات سرورها',
     'site-settings':'تنظیمات سایت', 'security-settings':'تنظیمات امنیت',
@@ -172,8 +173,8 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
     const selection=focused&&typeof focused.selectionStart==='number'?[focused.selectionStart,focused.selectionEnd]:null;
     modalCloseHandler=options.onClose||null;
     nodeEditorDispose?.(); nodeEditorDispose=null;
-    overlay.querySelector('.infrastructure-modal').classList.toggle('node-modal',!!options.node||options.kind==='wireguard');
-    for(const kind of ['group','routing','plan','server','server-delete','job','emergency','emergency-delete','tunnel','wireguard']) overlay.querySelector('.infrastructure-modal').classList.toggle(`${kind}-modal`, options.kind===kind);
+    overlay.querySelector('.infrastructure-modal').classList.toggle('node-modal',!!options.node||['wireguard','anyconnect'].includes(options.kind));
+    for(const kind of ['group','routing','plan','server','server-delete','job','emergency','emergency-delete','tunnel','wireguard','anyconnect']) overlay.querySelector('.infrastructure-modal').classList.toggle(`${kind}-modal`, options.kind===kind);
     scope.getElementById('modalTitle').textContent=title;
     const modalBody=scope.getElementById('modalBody');
     modalBody.innerHTML=body;
@@ -216,7 +217,13 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
       }
       if(currentView==='wireguard') {
         tunnelSession?.dispose();
-        tunnelSession=window.SpeedboxWireGuard.mount(content,{api,toast,openModal,closeModal,modalBody:()=>scope.getElementById('modalBody'),enhanceControls,entityLayout:entityCardLayout,isBusy:()=>savingCount>0});
+        tunnelSession=window.SpeedboxWireGuard.mount(content,{api,toast,openModal,closeModal,modalBody:()=>scope.getElementById('modalBody'),enhanceControls,entityLayout:entityCardLayout,operationStatus,showDeployments,isBusy:()=>savingCount>0});
+        await tunnelSession.load();
+      }
+      if (currentView === 'anyconnect') {
+        tunnelSession?.dispose();
+        tunnelSession = window.SpeedboxAnyConnect.mount(content, { api, toast, openModal, closeModal,
+          modalBody: () => scope.getElementById('modalBody'), enhanceControls, entityLayout: entityCardLayout, operationStatus, showDeployments, isBusy: () => savingCount > 0 });
         await tunnelSession.load();
       }
       if(currentView==='tunnels') {
@@ -528,6 +535,9 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
     const label=new Intl.NumberFormat('en-US',{style:'percent',maximumFractionDigits:0}).format(progress/100);
     return `<div class="deployment-progress ${escape(deployment.status)}"><small class="progress-value" dir="ltr">${label}</small><div class="progress" role="progressbar" aria-label="پیشرفت عملیات" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${progress}"><span style="width:${progress}%"></span></div></div>`;
   }
+  function operationStatus(operation) {
+    return operation ? badge(operation.status) + deploymentProgress(operation) : '';
+  }
   function serverLoad(machine){
     const load=machine?.load_status;if(!load)return '<span class="resource-unseen">بدون گزارش منابع</span>';
     const memory=Number(load.mem?.total??load.mem_total??0),disk=Number(load.disk?.total??load.disk_total??0),memUsed=Number(load.mem?.used??load.mem_used??0),diskUsed=Number(load.disk?.used??load.disk_used??0);
@@ -631,7 +641,7 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
     const markup = `<div class="table-wrap"><table><thead><tr><th>سرور</th><th>وضعیت</th><th>نودهای متصل</th><th>منابع</th><th>آخرین عملیات</th>${actions?'<th>عملیات</th>':''}</tr></thead><tbody>${list.map(s=>{
       const d=s.deployments?.[0],busy=['queued','running'].includes(d?.status)||s.status==='removing';
       const connection=s.connection_status||'not_seen';
-      return `<tr data-server-row="${s.id}"><td><div class="entity server-identity"><div><b>${escape(s.name)}</b><small>${escape(s.ssh_user)}@${escape(s.host)}:${s.ssh_port}</small></div></div></td><td>${badge(connection,({inactive:'غیرفعال',not_seen:'هنوز متصل نشده'})[connection])}${busy?`<small class="server-operation-label">${s.status==='removing'?'در حال حذف':statusLabel(d?.status)}</small>`:''}<small class="server-last-seen">${timeAgo(s.machine?.last_seen_at)}</small></td><td><span class="server-node-count" dir="ltr">${Number(s.machine?.nodes_count||0).toLocaleString('fa-IR')}</span><small class="server-system">${escape(s.operating_system||'—')} ${escape(s.architecture||'')}</small></td><td>${serverLoad(s.machine)}</td><td class="server-operation-progress">${d?`${badge(d.status)}${deploymentProgress(d)}`:'—'}</td>${actions?`<td><div class="actions"><button class="button entity-install" data-server-action="install" data-id="${s.id}" ${busy?'disabled':''} title="${s.status==='draft'?'نصب سرویس مدیریت نود':'نصب دوباره فایل‌ها و سرویس مدیریت نود و تنظیم مجدد اتصال به پنل'}">${s.status==='draft'?'نصب':'نصب مجدد'}</button><button class="button entity-restart" data-server-action="restart" data-id="${s.id}" ${busy?'disabled':''} title="راه‌اندازی مجدد هسته‌های نود؛ بدون ریبوت ماشین">راه‌اندازی مجدد هسته‌ها</button><button class="button entity-report" data-server-log="${s.id}">گزارش</button><button class="button entity-edit" data-server-edit="${s.id}" ${busy?'disabled':''}>ویرایش</button><button class="button entity-delete" data-server-delete="${s.id}" ${busy?'disabled':''}>حذف</button></div></td>`:''}</tr>`;
+      return `<tr data-server-row="${s.id}"><td><div class="entity server-identity"><div><b>${escape(s.name)}</b><small>${escape(s.ssh_user)}@${escape(s.host)}:${s.ssh_port}</small></div></div></td><td>${badge(connection,({inactive:'غیرفعال',not_seen:'هنوز متصل نشده'})[connection])}${busy?`<small class="server-operation-label">${s.status==='removing'?'در حال حذف':statusLabel(d?.status)}</small>`:''}<small class="server-last-seen">${timeAgo(s.machine?.last_seen_at)}</small></td><td><span class="server-node-count" dir="ltr">${Number(s.machine?.nodes_count||0).toLocaleString('fa-IR')}</span><small class="server-system">${escape(s.operating_system||'—')} ${escape(s.architecture||'')}</small></td><td>${serverLoad(s.machine)}</td><td class="server-operation-progress">${d?operationStatus(d):'—'}</td>${actions?`<td><div class="actions"><button class="button entity-install" data-server-action="install" data-id="${s.id}" ${busy?'disabled':''} title="${s.status==='draft'?'نصب سرویس مدیریت نود':'نصب دوباره فایل‌ها و سرویس مدیریت نود و تنظیم مجدد اتصال به پنل'}">${s.status==='draft'?'نصب':'نصب مجدد'}</button><button class="button entity-restart" data-server-action="restart" data-id="${s.id}" ${busy?'disabled':''} title="راه‌اندازی مجدد هسته‌های نود؛ بدون ریبوت ماشین">راه‌اندازی مجدد هسته‌ها</button><button class="button entity-report" data-server-log="${s.id}">گزارش</button><button class="button entity-edit" data-server-edit="${s.id}" ${busy?'disabled':''}>ویرایش</button><button class="button entity-delete" data-server-delete="${s.id}" ${busy?'disabled':''}>حذف</button></div></td>`:''}</tr>`;
     }).join('')}</tbody></table></div>`;
     return actions ? entityCardLayout(markup, 'servers') : markup;
   }
@@ -692,8 +702,9 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
     scope.getElementById('serverForm').onsubmit=async e=>{e.preventDefault();const body=Object.fromEntries(new FormData(e.target));try{const r=await api(server?`/servers/${server.id}`:'/servers',{method:server?'PUT':'POST',body:JSON.stringify(body)});toast(r.message);closeModal();await loadServers(true);}catch(err){toast(err.message,'error')}};
   }
   async function runDeployment(id,action){try{const r=await api(`/servers/${id}/deploy`,{method:'POST',body:JSON.stringify({action,kernel:'singbox'})});toast(r.message);await loadServers(true);}catch(e){toast(e.message,'error')}}
-  const deploymentActionLabel=action=>({sync_nodes:'اعمال تنظیمات نود',install:'نصب',upgrade:'ارتقا',repair:'نصب مجدد',restart:'راه‌اندازی مجدد هسته‌ها',check:'بررسی وضعیت',uninstall:'حذف کامل سرویس مدیریت نود',warp_prepare:'آماده‌سازی WARP',warp_test:'تست اتصال WARP'}[action]||action);
-  async function showDeployments(id){
+  const deploymentActionLabel=action=>({sync_nodes:'اعمال تنظیمات نود',install:'نصب',upgrade:'ارتقا',repair:'نصب مجدد',restart:'راه‌اندازی مجدد هسته‌ها',check:'بررسی وضعیت',uninstall:'حذف کامل سرویس مدیریت نود',enable:'فعال‌سازی',disable:'غیرفعال‌سازی',sync:'همگام‌سازی',delete:'حذف',previous:'آخرین خطای ثبت‌شده',warp_prepare:'آماده‌سازی WARP',warp_test:'تست اتصال WARP'}[action]||action);
+  async function showDeployments(id, service){
+    const path = service ? `/${service}/${id}/operations` : `/servers/${id}/deployments`;
     openModal('گزارش عملیات', '<div data-deployment-log aria-live="polite">'+loading()+'</div>');
     const revision=modalRevision, target=scope.querySelector('[data-deployment-log]');
     let hasSnapshot=false;
@@ -702,7 +713,7 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
       if(!active())return;
       try{
         const initial=!hasSnapshot;
-        const {data}=await api(`/servers/${id}/deployments${initial?'':'?latest=1'}`);
+        const {data}=await api(`${path}${initial?'':'?latest=1'}`);
         if(!active())return;
         hasSnapshot=true;target.removeAttribute('data-error');
         if(!data.length)target.innerHTML=empty('گزارشی وجود ندارد');
@@ -919,15 +930,19 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
   function renderPlanRows(){
     const query=(scope.getElementById('planSearch')?.value||'').trim().toLowerCase();
     const list=state.plans.filter(p=>`${p.name} ${planTags(p).join(' ')} ${state.groups.find(g=>g.id==p.group_id)?.name||''}`.toLowerCase().includes(query));
-    updateEntityList(list.length?entityCardLayout(`<div class="table-wrap"><table class="plan-table"><thead><tr><th>نام پلن</th><th>گروه دسترسی</th><th>ترافیک پلن</th><th>محدودیت سرعت</th><th>محدودیت اتصال</th><th>بازنشانی ترافیک</th><th>عملیات</th></tr></thead><tbody>${list.map(p=>`<tr data-plan-row="${p.id}"><td><div class="plan-name-service"><b>${escape(p.name)}</b><span class="plan-service-badge ${p.service_type==='wireguard'?'wireguard':'v2ray'}" dir="ltr">${p.service_type==='wireguard'?'WireGuard':'V2Ray'}</span></div>${planUserStats(p)}</td><td>${escape(state.groups.find(g=>g.id==p.group_id)?.name||p.group_id||'—')}</td><td><span dir="ltr">${escape(p.transfer_enable)} GB</span></td><td>${Number(p.speed_limit)>0?`<span dir="ltr">${escape(p.speed_limit)} Mbps</span>`:'نامحدود'}</td><td>${Number(p.device_limit)>0?escape(p.device_limit):'نامحدود'}</td><td>${escape(trafficResetLabel(p.reset_traffic_method))}</td><td><div class="actions"><button class="button entity-edit" data-plan-edit="${p.id}">ویرایش</button><button class="button entity-delete" data-plan-delete="${p.id}">حذف</button></div></td></tr>`).join('')}</tbody></table></div>`, 'plans'):empty(query?'پلنی با این جستجو پیدا نشد':'پلنی تعریف نشده است'));
+    updateEntityList(list.length?entityCardLayout(`<div class="table-wrap"><table class="plan-table"><thead><tr><th>نام پلن</th><th>گروه دسترسی</th><th>ترافیک پلن</th><th>محدودیت سرعت</th><th>محدودیت اتصال</th><th>بازنشانی ترافیک</th><th>عملیات</th></tr></thead><tbody>${list.map(p=>`<tr data-plan-row="${p.id}"><td><div class="plan-name-service"><b>${escape(p.name)}</b><span class="plan-service-badge ${['wireguard','anyconnect'].includes(p.service_type)?p.service_type:'v2ray'}" dir="ltr">${({wireguard:'WireGuard',anyconnect:'AnyConnect'}[p.service_type]||'V2Ray')}</span></div>${planUserStats(p)}</td><td>${escape(state.groups.find(g=>g.id==p.group_id)?.name||p.group_id||'—')}</td><td><span dir="ltr">${escape(p.transfer_enable)} GB</span></td><td>${Number(p.speed_limit)>0?`<span dir="ltr">${escape(p.speed_limit)} Mbps</span>`:'نامحدود'}</td><td>${Number(p.device_limit)>0?escape(p.device_limit):'نامحدود'}</td><td>${escape(trafficResetLabel(p.reset_traffic_method))}</td><td><div class="actions"><button class="button entity-edit" data-plan-edit="${p.id}">ویرایش</button><button class="button entity-delete" data-plan-delete="${p.id}">حذف</button></div></td></tr>`).join('')}</tbody></table></div>`, 'plans'):empty(query?'پلنی با این جستجو پیدا نشد':'پلنی تعریف نشده است'));
     content.querySelectorAll('[data-plan-edit]').forEach(b=>b.onclick=()=>planForm(state.plans.find(p=>p.id==b.dataset.planEdit)));
     content.querySelectorAll('[data-plan-delete]').forEach(b=>b.onclick=()=>deletePlan(state.plans.find(p=>p.id==b.dataset.planDelete)));
   }
   async function planForm(plan=null){
-    let wg;try{wg=(await api('/wireguard')).data;}catch(err){toast(err.message,'error');return;}
+    let wg, ac;
+    try {
+      [wg, ac] = (await Promise.all([api('/wireguard'), api('/anyconnect')])).map(response => response.data);
+    } catch (err) { toast(err.message, 'error'); return; }
     openModal(plan?'ویرایش پلن':'ساخت پلن',`<form id="planForm"><div class="form-grid">
-      <div class="field plan-service-field"><label for="planService">نوع سرویس</label><select id="planService" name="service_type" ${plan?'disabled':''}><option value="v2ray">V2Ray</option><option value="wireguard" ${plan?.service_type==='wireguard'?'selected':''}>WireGuard</option></select></div>
+      <div class="field plan-service-field"><label for="planService">نوع سرویس</label><select id="planService" name="service_type" ${plan?'disabled':''}><option value="v2ray">V2Ray</option><option value="wireguard" ${plan?.service_type==='wireguard'?'selected':''}>WireGuard</option><option value="anyconnect" ${plan?.service_type==='anyconnect'?'selected':''}>AnyConnect</option></select></div>
       <div class="field" data-wg-plan-instance><label for="planWgInstance">سرویس WireGuard</label><select id="planWgInstance" name="wireguard_instance_id" ${plan?'disabled':''}><option value="">انتخاب</option>${wg.map(i=>`<option value="${i.id}" ${plan?.wireguard_instance_id==i.id?'selected':''} ${['deleting','delete_failed'].includes(i.status)?'disabled':''}>${escape(i.name)}</option>`).join('')}</select></div>
+      <div class="field" data-ac-plan-instance><label for="planAcInstance">سرور <bdi dir="ltr">AnyConnect</bdi></label><select id="planAcInstance" name="anyconnect_instance_id" ${plan?'disabled':''}><option value="">انتخاب</option>${ac.map(i=>`<option value="${i.id}" ${plan?.anyconnect_instance_id==i.id?'selected':''} ${i.status==='deleting'?'disabled':''}>${escape(i.name)}</option>`).join('')}</select></div>
       ${field('name','نام پلن',plan?.name||'',true)}
       ${field('tags','تگ‌های پلن',planTags(plan).join(', '))}
       <div class="field"><label for="planGroup">گروه دسترسی</label><select id="planGroup" name="group_id" required><option value="" disabled ${!plan?.group_id?'selected':''}>انتخاب گروه دسترسی</option>${state.groups.map(g=>`<option value="${g.id}" ${plan?.group_id==g.id?'selected':''}>${escape(g.name)}</option>`).join('')}</select></div>
@@ -940,14 +955,28 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
       ${plan?'<div class="switch-field full"><span>اعمال تغییرات روی کاربران فعلی</span><label class="switch-line ios"><input type="checkbox" name="force_update" aria-label="اعمال تغییرات روی کاربران فعلی"></label></div><p class="plan-form-hint">فقط گزینه‌های تغییرکردهٔ گروه دسترسی، ترافیک، محدودیت سرعت و اتصال روی کاربران این پلن اعمال می‌شوند. محدودیت اختصاصی تعرفه، مصرف و تاریخ انقضا حفظ می‌شود.</p>':''}
       </div><div class="form-actions"><button class="button primary" type="submit">ذخیره پلن</button></div></form>`,{kind:'plan'});
     const form=scope.getElementById('planForm');
-    const adjustService=()=>{const wireguard=form.elements.service_type.value==='wireguard';form.querySelector('[data-wg-plan-instance]').hidden=!wireguard;form.elements.wireguard_instance_id.required=wireguard;form.elements.group_id.closest('.field').hidden=wireguard;form.elements.group_id.required=!wireguard;form.elements.device_limit.closest('.field').querySelector('label').textContent=wireguard?'تعداد پروفایل دستگاه (۱ تا ۱۶)':'محدودیت اتصال (تعداد IP)';if(wireguard&&!form.elements.device_limit.value)form.elements.device_limit.value=1;};
+    const adjustService = () => {
+      const type = form.elements.service_type.value;
+      const wireguard = type === 'wireguard';
+      const anyconnect = type === 'anyconnect';
+      form.querySelector('[data-wg-plan-instance]').hidden = !wireguard;
+      form.querySelector('[data-ac-plan-instance]').hidden = !anyconnect;
+      form.elements.wireguard_instance_id.required = wireguard;
+      form.elements.anyconnect_instance_id.required = anyconnect;
+      form.elements.group_id.closest('.field').hidden = type !== 'v2ray';
+      form.elements.group_id.required = type === 'v2ray';
+      form.elements.device_limit.closest('.field').querySelector('label').textContent =
+        wireguard ? 'تعداد پروفایل دستگاه (۱ تا ۱۶)' : (anyconnect ? 'محدودیت اتصال هم‌زمان' : 'محدودیت اتصال (تعداد IP)');
+      if (wireguard && !form.elements.device_limit.value) form.elements.device_limit.value = 1;
+    };
     form.elements.service_type.onchange=adjustService;adjustService();
     for(const key of ['transfer_enable','speed_limit','device_limit','capacity_limit'])form.elements[key].min='0';
     for(const key of ['speed_limit','device_limit','capacity_limit'])form.elements[key].placeholder='بدون محدودیت';
     form.onsubmit=async e=>{
       e.preventDefault();const body=Object.fromEntries(new FormData(form));
       body.service_type=plan?.service_type||body.service_type||'v2ray';
-      body.wireguard_instance_id=plan?.wireguard_instance_id||Number(body.wireguard_instance_id)||null;
+      body.wireguard_instance_id = body.service_type === 'wireguard' ? plan?.wireguard_instance_id || Number(body.wireguard_instance_id) || null : null;
+      body.anyconnect_instance_id = body.service_type === 'anyconnect' ? plan?.anyconnect_instance_id || Number(body.anyconnect_instance_id) || null : null;
       body.group_id=Number(body.group_id);body.transfer_enable=Number(body.transfer_enable);
       for(const key of ['speed_limit','device_limit','capacity_limit','reset_traffic_method'])body[key]=body[key]===''?null:Number(body[key]);
       body.tags=[...new Set(body.tags.split(/[,،\n]/).map(tag=>tag.trim()).filter(Boolean))];
@@ -1213,7 +1242,7 @@ window.SpeedboxInfrastructure = { mount(root, { router, notify, view = 'overview
     if (state.view === 'servers') renderServerRows();
     else if (state.view === 'nodes' && draggingNode === null) renderNodeRows();
     else if (state.view === 'plans') renderPlanRows();
-    else if (state.view === 'wireguard') tunnelSession?.redraw?.();
+    else if (['wireguard', 'anyconnect'].includes(state.view)) tunnelSession?.redraw?.();
   }
   mobileMedia.addEventListener('change',updateEntityLayout);
   function closeSelect(wrap){wrap.classList.remove('is-open');wrap.querySelector('[role=listbox]').hidden=true;wrap.querySelector('.invoice-custom-select__trigger').setAttribute('aria-expanded','false');}

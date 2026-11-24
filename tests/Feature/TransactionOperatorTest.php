@@ -26,6 +26,12 @@ class TransactionOperatorTest extends TestCase
         Schema::create('v2_user', function (Blueprint $table) {
             $table->id();
             $table->string('email');
+            $table->string('service_type')->default('v2ray');
+        });
+        Schema::create('panel_tariff_groups', function (Blueprint $table) {
+            $table->id();
+            $table->string('name');
+            $table->string('service_type')->default('v2ray');
         });
         Schema::create('panel_transactions', function (Blueprint $table) {
             $table->id();

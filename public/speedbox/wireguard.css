@@ -1,29 +1,31 @@
-/* Use the panel's entity tables/toolbars and modal surfaces. */
-.speedbox-infrastructure #pageTitle,.infrastructure-modal.wireguard-modal #modalTitle{direction:rtl;unicode-bidi:isolate}
-.speedbox-infrastructure [data-wg-new]{direction:rtl;unicode-bidi:isolate}
+/* Shared management and status styling for WireGuard and AnyConnect. */
+.speedbox-infrastructure #pageTitle,.infrastructure-modal:is(.wireguard-modal,.anyconnect-modal) #modalTitle{direction:rtl;unicode-bidi:isolate}
+.speedbox-infrastructure :is([data-wg-new],[data-ac-new]){direction:rtl;unicode-bidi:isolate}
 .speedbox-infrastructure .wg-table .entity-loading-cell{direction:rtl;unicode-bidi:isolate}
-.speedbox-infrastructure [data-wg-row] .actions{direction:rtl}
+.speedbox-infrastructure :is([data-wg-row],[data-ac-row]) .actions{direction:rtl}
 
-.speedbox-infrastructure .wg-table .actions{flex-wrap:nowrap;white-space:nowrap}.speedbox-infrastructure .wg-table small{display:block;margin-top:.4em;color:var(--muted)}.speedbox-infrastructure .wg-table bdi{display:inline-block;white-space:nowrap}.speedbox-infrastructure .wg-error{max-width:24em;margin:.5em 0 0;color:#ff9292;white-space:normal;overflow-wrap:anywhere}
-.speedbox-infrastructure .plan-name-service{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:.6em}.speedbox-infrastructure .plan-service-badge{display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;height:calc(20 * var(--speedbox-ui-unit,1px));min-height:0;margin:0;padding:0 calc(7 * var(--speedbox-ui-unit,1px));border:1px solid;border-radius:calc(5 * var(--speedbox-ui-unit,1px));font-family:Arial,sans-serif;font-size:calc(10 * var(--speedbox-ui-unit,1px))!important;font-weight:500;line-height:1;vertical-align:middle;flex:0 0 auto;white-space:nowrap}.speedbox-infrastructure .plan-service-badge.wireguard{color:#e5baff;background:#ad4ce81a;border-color:#bb78ef66}.speedbox-infrastructure .plan-service-badge.v2ray{color:#9edcff;background:#329ce51a;border-color:#58b6ef66}
-:root:root body .speedbox-infrastructure-overlay .infrastructure-modal.wireguard-modal{width:min(calc(576 * var(--speedbox-ui-unit,1px)),94vw);max-width:calc(576 * var(--speedbox-ui-unit,1px));min-width:0;padding:calc(18 * var(--speedbox-ui-unit,1px))}
-:root:root body .speedbox-infrastructure-overlay .infrastructure-modal.wireguard-modal .form-grid{display:grid;grid-template-columns:minmax(0,1fr);gap:calc(20 * var(--speedbox-ui-unit,1px))}
-:root:root body .speedbox-infrastructure-overlay .infrastructure-modal.wireguard-modal .field{display:grid;grid-template-columns:minmax(0,1fr);gap:calc(9 * var(--speedbox-ui-unit,1px));min-width:0;text-align:right}
-:root:root body .speedbox-infrastructure-overlay .infrastructure-modal.wireguard-modal .field>label{font-size:calc(12 * var(--speedbox-ui-unit,1px))!important;padding:0;line-height:1.5;text-align:right}
-:root:root body .speedbox-infrastructure-overlay .infrastructure-modal.wireguard-modal .wg-field-row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:calc(16 * var(--speedbox-ui-unit,1px));align-items:start;min-width:0}
-:root:root body .speedbox-infrastructure-overlay .infrastructure-modal.wireguard-modal .field :is(input,select){box-sizing:border-box;width:100%;min-width:0;height:calc(38 * var(--speedbox-ui-unit,1px));padding:calc(8 * var(--speedbox-ui-unit,1px)) calc(12 * var(--speedbox-ui-unit,1px));font-size:calc(11 * var(--speedbox-ui-unit,1px))!important;border-radius:calc(10 * var(--speedbox-ui-unit,1px))}
-:root:root body .speedbox-infrastructure-overlay .infrastructure-modal.wireguard-modal .wg-advanced{border-top:1px dashed #ffffff30;padding-top:calc(16 * var(--speedbox-ui-unit,1px))}
-:root:root body .speedbox-infrastructure-overlay .infrastructure-modal.wireguard-modal .wg-advanced summary{cursor:pointer;font-size:calc(12 * var(--speedbox-ui-unit,1px));font-weight:600;padding-block:calc(8 * var(--speedbox-ui-unit,1px))}
-:root:root body .speedbox-infrastructure-overlay .infrastructure-modal.wireguard-modal .wg-advanced[open]>.wg-field-row{margin-top:calc(16 * var(--speedbox-ui-unit,1px))}
-:root:root body .speedbox-infrastructure-overlay .infrastructure-modal.wireguard-modal .form-actions>.button{min-height:calc(38 * var(--speedbox-ui-unit,1px));padding:calc(8 * var(--speedbox-ui-unit,1px)) calc(20 * var(--speedbox-ui-unit,1px));font-size:calc(12 * var(--speedbox-ui-unit,1px))!important;border-radius:calc(10 * var(--speedbox-ui-unit,1px))}
+.speedbox-infrastructure .wg-table .actions{flex-wrap:nowrap;white-space:nowrap}.speedbox-infrastructure .wg-table small{display:block;margin-top:.4em;color:var(--muted)}.speedbox-infrastructure .wg-table bdi{display:inline-block;white-space:nowrap}.speedbox-infrastructure .wg-error{max-width:24em;margin:.5em 0 0;color:#ff9292;unicode-bidi:plaintext;white-space:normal;overflow-wrap:anywhere}
+.anyconnect-details > [role="alert"]{unicode-bidi:plaintext;overflow-wrap:anywhere}
+.create-modal .final-qr:has(>.anyconnect-details),.create-modal .final-qr:has(>.anyconnect-details)+.final-link{box-sizing:border-box;width:min(100%,calc(320 * var(--speedbox-ui-unit,1px)));min-width:0;justify-self:center}
+.speedbox-infrastructure .plan-name-service{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:.6em}.speedbox-infrastructure .plan-service-badge{display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;height:calc(20 * var(--speedbox-ui-unit,1px));min-height:0;margin:0;padding:0 calc(7 * var(--speedbox-ui-unit,1px));border:1px solid;border-radius:calc(5 * var(--speedbox-ui-unit,1px));font-family:Arial,sans-serif;font-size:calc(10 * var(--speedbox-ui-unit,1px))!important;font-weight:500;line-height:1;vertical-align:middle;flex:0 0 auto;white-space:nowrap}
+:root:root body .speedbox-infrastructure-overlay .infrastructure-modal:is(.wireguard-modal,.anyconnect-modal){width:min(calc(576 * var(--speedbox-ui-unit,1px)),94vw);max-width:calc(576 * var(--speedbox-ui-unit,1px));min-width:0;padding:calc(18 * var(--speedbox-ui-unit,1px))}
+:root:root body .speedbox-infrastructure-overlay .infrastructure-modal:is(.wireguard-modal,.anyconnect-modal) .form-grid{display:grid;grid-template-columns:minmax(0,1fr);gap:calc(20 * var(--speedbox-ui-unit,1px))}
+:root:root body .speedbox-infrastructure-overlay .infrastructure-modal:is(.wireguard-modal,.anyconnect-modal) .field{display:grid;grid-template-columns:minmax(0,1fr);gap:calc(9 * var(--speedbox-ui-unit,1px));min-width:0;text-align:right}
+:root:root body .speedbox-infrastructure-overlay .infrastructure-modal:is(.wireguard-modal,.anyconnect-modal) .field>label{font-size:calc(12 * var(--speedbox-ui-unit,1px))!important;padding:0;line-height:1.5;text-align:right}
+:root:root body .speedbox-infrastructure-overlay .infrastructure-modal:is(.wireguard-modal,.anyconnect-modal) .wg-field-row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:calc(16 * var(--speedbox-ui-unit,1px));align-items:start;min-width:0}
+:root:root body .speedbox-infrastructure-overlay .infrastructure-modal:is(.wireguard-modal,.anyconnect-modal) .field :is(input,select){box-sizing:border-box;width:100%;min-width:0;height:calc(38 * var(--speedbox-ui-unit,1px));padding:calc(8 * var(--speedbox-ui-unit,1px)) calc(12 * var(--speedbox-ui-unit,1px));font-size:calc(11 * var(--speedbox-ui-unit,1px))!important;border-radius:calc(10 * var(--speedbox-ui-unit,1px))}
+:root:root body .speedbox-infrastructure-overlay .infrastructure-modal:is(.wireguard-modal,.anyconnect-modal) .wg-advanced{border-top:1px dashed #ffffff30;padding-top:calc(16 * var(--speedbox-ui-unit,1px))}
+:root:root body .speedbox-infrastructure-overlay .infrastructure-modal:is(.wireguard-modal,.anyconnect-modal) .wg-advanced summary{cursor:pointer;font-size:calc(12 * var(--speedbox-ui-unit,1px));font-weight:600;padding-block:calc(8 * var(--speedbox-ui-unit,1px))}
+:root:root body .speedbox-infrastructure-overlay .infrastructure-modal:is(.wireguard-modal,.anyconnect-modal) .wg-advanced[open]>.wg-field-row{margin-top:calc(16 * var(--speedbox-ui-unit,1px))}
+:root:root body .speedbox-infrastructure-overlay .infrastructure-modal:is(.wireguard-modal,.anyconnect-modal) .form-actions>.button{min-height:calc(38 * var(--speedbox-ui-unit,1px));padding:calc(8 * var(--speedbox-ui-unit,1px)) calc(20 * var(--speedbox-ui-unit,1px));font-size:calc(12 * var(--speedbox-ui-unit,1px))!important;border-radius:calc(10 * var(--speedbox-ui-unit,1px))}
 :root:root body .speedbox-infrastructure-overlay .infrastructure-modal.plan-modal .form-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
 :root:root body .speedbox-infrastructure-overlay .infrastructure-modal.plan-modal .plan-service-field{grid-column:1/-1}
-:root:root body .speedbox-infrastructure-overlay .infrastructure-modal.wireguard-modal [hidden],:root:root body .speedbox-infrastructure-overlay .infrastructure-modal.plan-modal .field[hidden]{display:none!important}
-@media(max-width:600px){:root:root body .speedbox-infrastructure-overlay .infrastructure-modal.plan-modal .form-grid,:root:root body .speedbox-infrastructure-overlay .infrastructure-modal.wireguard-modal .wg-field-row{grid-template-columns:minmax(0,1fr)}}
+:root:root body .speedbox-infrastructure-overlay .infrastructure-modal:is(.wireguard-modal,.anyconnect-modal) [hidden],:root:root body .speedbox-infrastructure-overlay .infrastructure-modal.plan-modal .field[hidden]{display:none!important}
+@media(max-width:600px){:root:root body .speedbox-infrastructure-overlay .infrastructure-modal.plan-modal .form-grid,:root:root body .speedbox-infrastructure-overlay .infrastructure-modal:is(.wireguard-modal,.anyconnect-modal) .wg-field-row{grid-template-columns:minmax(0,1fr)}}
 
 /* Match the tariff header badges and the panel's shared dropdown on all displays. */
-:root:root body .settings-final .tariff-group-card .tariff-service-select{--sb-service-border:#75cfff66;--sb-service-ink:#c5eaff;--sb-service-shadow:none;position:relative;flex:0 0 auto;width:calc(112 * var(--speedbox-ui-unit,1px));min-width:0;height:calc(34 * var(--speedbox-ui-unit,1px));box-sizing:border-box}
-:root:root body .settings-final .tariff-group-card .tariff-service-select .invoice-custom-select__trigger{height:100%;min-height:0;max-height:none;border:1px solid var(--sb-service-border);border-radius:calc(8 * var(--speedbox-ui-unit,1px));padding:0 calc(10 * var(--speedbox-ui-unit,1px));color:var(--sb-service-ink);background:linear-gradient(180deg,#234154cc,#1b2d3dcc);box-shadow:var(--sb-service-shadow);font-size:calc(12.48 * var(--speedbox-ui-unit,1px))!important;font-weight:400;line-height:1;gap:calc(6 * var(--speedbox-ui-unit,1px));margin:0}
+:root:root body .settings-final .tariff-group-card .tariff-service-select{--sb-service-shadow:none;position:relative;flex:0 0 auto;width:calc(112 * var(--speedbox-ui-unit,1px));min-width:0;height:calc(34 * var(--speedbox-ui-unit,1px));box-sizing:border-box}
+:root:root body .settings-final .tariff-group-card .tariff-service-select .invoice-custom-select__trigger{height:100%;min-height:0;max-height:none;border:1px solid var(--sb-service-border);border-radius:calc(8 * var(--speedbox-ui-unit,1px));padding:0 calc(10 * var(--speedbox-ui-unit,1px));color:var(--sb-service-ink);background:var(--sb-service-trigger,linear-gradient(180deg,#234154cc,#1b2d3dcc));box-shadow:var(--sb-service-shadow);font-size:calc(12.48 * var(--speedbox-ui-unit,1px))!important;font-weight:400;line-height:1;gap:calc(6 * var(--speedbox-ui-unit,1px));margin:0}
 :root:root body .settings-final .tariff-group-card .tariff-service-select .invoice-custom-select__trigger>span{display:flex;align-items:center;justify-content:center;align-self:stretch;min-width:0;font-family:Arial,sans-serif;line-height:1;direction:ltr}
 :root:root body .settings-final .tariff-group-card .tariff-service-select.is-open .invoice-custom-select__trigger{border-radius:calc(8 * var(--speedbox-ui-unit,1px)) calc(8 * var(--speedbox-ui-unit,1px)) 0 0;border-bottom-color:transparent}
 :root:root body .settings-final .tariff-group-card .tariff-service-select .invoice-custom-select__menu{border:1px solid var(--sb-service-border);border-top:0;border-radius:0 0 calc(8 * var(--speedbox-ui-unit,1px)) calc(8 * var(--speedbox-ui-unit,1px));box-shadow:var(--sb-service-shadow)}
@@ -85,3 +87,37 @@
   background:linear-gradient(180deg,rgba(0,128,255,.43),rgba(0,100,210,.22));
   box-shadow:inset 0 1px 0 rgba(255,255,255,.11),0 calc(5 * var(--speedbox-ui-unit,1px)) calc(14 * var(--speedbox-ui-unit,1px)) rgba(0,0,0,.2);
   font-size:calc(12 * var(--speedbox-ui-unit,1px));font-weight:750;line-height:1.3}
+
+.speedbox-infrastructure-overlay .anyconnect-modal :is(.ac-certificate-form,.ac-certificate-settings){display:grid;grid-template-columns:minmax(0,1fr);gap:calc(12 * var(--speedbox-ui-unit,1px));min-width:0}
+.speedbox-infrastructure-overlay .anyconnect-modal .ac-certificate-form{padding-top:calc(12 * var(--speedbox-ui-unit,1px))}
+.speedbox-infrastructure-overlay .anyconnect-modal .ac-certificate-settings [data-ac-dns]{display:contents}
+.speedbox-infrastructure-overlay .anyconnect-modal .ac-certificate-settings textarea{box-sizing:border-box;width:100%;min-width:0;resize:vertical}
+
+:is(.plan-service-badge.v2ray, [data-service="v2ray"]) {
+  --sb-service-ink: #9edcff;
+  --sb-service-fill: #329ce51a;
+  --sb-service-border: #58b6ef66;
+  --sb-service-trigger: linear-gradient(180deg, #234154cc, #1b2d3dcc);
+}
+:is(.plan-service-badge.wireguard, [data-service="wireguard"]) {
+  --sb-service-ink: #e5baff;
+  --sb-service-fill: #ad4ce81a;
+  --sb-service-border: #bb78ef66;
+  --sb-service-trigger: linear-gradient(180deg, #463153cc, #30223dcc);
+}
+:is(.plan-service-badge.anyconnect, [data-service="anyconnect"]) {
+  --sb-service-ink: #ffdb92;
+  --sb-service-fill: #e6a83f20;
+  --sb-service-border: #e6a83f77;
+  --sb-service-trigger: linear-gradient(180deg, #55452bcc, #392b1bcc);
+}
+:root:root body :is(.plan-service-badge, .account-service-badge[data-service], .userbot-service-badge[data-service]) {
+  color: var(--sb-service-ink);
+}
+:root:root body :is(.plan-service-badge, .account-service-badge[data-service], .userbot-service-badge[data-service]) {
+  background: var(--sb-service-fill);
+  border-color: var(--sb-service-border);
+}
+:root:root body .account-service-badge[data-service] {
+  box-shadow: none;
+}

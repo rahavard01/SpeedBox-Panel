@@ -189,9 +189,12 @@ class V2UserCreator
 
                 try {
                     $id=DB::transaction(function()use($insert,$plan){
-                    $id = DB::table('v2_user')->insertGetId($insert + ['service_type'=>SubscriptionServiceType::of($plan),'wireguard_instance_id'=>$plan->wireguard_instance_id??null]);
+                    $id = DB::table('v2_user')->insertGetId($insert + ['service_type'=>SubscriptionServiceType::of($plan),'wireguard_instance_id'=>$plan->wireguard_instance_id??null,
+                        ... (SubscriptionServiceType::of($plan) === 'anyconnect' ? ['anyconnect_instance_id' => $plan->anyconnect_instance_id] : [])]);
                     if(SubscriptionServiceType::of($plan)==='wireguard') {
                         app(WireGuardService::class)->provision(DB::table('v2_user')->find($id));
+                    } elseif (SubscriptionServiceType::of($plan) === 'anyconnect') {
+                        app(AnyConnectService::class)->provision(DB::table('v2_user')->find($id));
                     }
                         return $id;
                     });

@@ -118,6 +118,8 @@ Route::middleware(['auth:sanctum', CheckTokenExpiration::class, CheckUserBanned:
     Route::get('/user/panel', [PanelController::class, 'getProfile']);
     Route::get('/user/wallet', [PanelController::class, 'getWallet']);
     Route::get('/users', [PanelController::class, 'listUsers']);
+    Route::get('/users/{id}/anyconnect', [\App\Http\Controllers\Api\AnyConnectAccountController::class, 'show'])->whereNumber('id');
+    Route::post('/users/{id}/anyconnect/password', [\App\Http\Controllers\Api\AnyConnectAccountController::class, 'rotate'])->whereNumber('id')->middleware('throttle:10,1');
     Route::get('/users/{id}/wireguard', [\App\Http\Controllers\Api\WireGuardAccountController::class,'index'])->whereNumber('id');
     Route::post('/users/{id}/wireguard', [\App\Http\Controllers\Api\WireGuardAccountController::class,'create'])->whereNumber('id');
     Route::patch('/users/{id}/wireguard/{peer}', [\App\Http\Controllers\Api\WireGuardAccountController::class,'update'])->whereNumber('id')->whereNumber('peer');
@@ -336,10 +338,17 @@ Route::middleware(['auth:sanctum', CheckTokenExpiration::class, CheckUserBanned:
 
         // === Unified infrastructure: managed servers, machines and nodes ===
         Route::prefix('infrastructure')->group(function () {
+            Route::get('/anyconnect', [\App\Http\Controllers\Api\Admin\AnyConnectController::class, 'index']);
+            Route::post('/anyconnect', [\App\Http\Controllers\Api\Admin\AnyConnectController::class, 'store']);
+            Route::put('/anyconnect/{instance}', [\App\Http\Controllers\Api\Admin\AnyConnectController::class, 'update'])->whereNumber('instance');
+            Route::get('/anyconnect/{instance}/operations', [\App\Http\Controllers\Api\Admin\AnyConnectController::class, 'operations'])->whereNumber('instance');
+            Route::post('/anyconnect/{instance}/actions', [\App\Http\Controllers\Api\Admin\AnyConnectController::class, 'action'])->whereNumber('instance');
+            Route::delete('/anyconnect/{instance}', [\App\Http\Controllers\Api\Admin\AnyConnectController::class, 'destroy'])->whereNumber('instance');
             Route::get('/wireguard', [\App\Http\Controllers\Api\Admin\WireGuardController::class,'index']);
             Route::post('/wireguard', [\App\Http\Controllers\Api\Admin\WireGuardController::class,'save']);
             Route::delete('/wireguard/{instance}', [\App\Http\Controllers\Api\Admin\WireGuardController::class,'destroy'])->whereNumber('instance');
             Route::put('/wireguard/{instance}', [\App\Http\Controllers\Api\Admin\WireGuardController::class,'save'])->whereNumber('instance');
+            Route::get('/wireguard/{instance}/operations', [\App\Http\Controllers\Api\Admin\WireGuardController::class, 'operations'])->whereNumber('instance');
             Route::post('/wireguard/{instance}/actions', [\App\Http\Controllers\Api\Admin\WireGuardController::class,'action'])->whereNumber('instance');
             Route::get('/network-tunnels/capabilities', [\App\Http\Controllers\Api\Admin\NetworkTunnelController::class, 'capabilities']);
             Route::post('/network-tunnels', [\App\Http\Controllers\Api\Admin\NetworkTunnelController::class, 'store']);

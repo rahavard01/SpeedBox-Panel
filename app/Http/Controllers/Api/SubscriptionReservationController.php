@@ -37,6 +37,7 @@ final class SubscriptionReservationController extends Controller
         app(\App\Services\PartnerTariffAccessService::class)->applyVisibleGroups($query, $owner, 'tg');
         $query->where('vp.service_type',$user->service_type??'v2ray');
         if(($user->service_type??'v2ray')==='wireguard')$query->where('vp.wireguard_instance_id',$user->wireguard_instance_id);
+        if (SubscriptionServiceType::of($user) === 'anyconnect') $query->where('vp.anyconnect_instance_id', $user->anyconnect_instance_id);
         $methods = SubscriptionServiceType::available($user)
             ? $query->get(['pp.tariff_group_id', 'pp.plan_key', 'vp.reset_traffic_method'])
             : [];

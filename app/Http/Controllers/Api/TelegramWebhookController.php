@@ -729,7 +729,9 @@ class TelegramWebhookController extends Controller
                     'payload' => ['action' => 'buy_account', 'service_type' => count($services) === 1 ? $services[0] : null]]);
                 if (count($services) > 1) {
                     $this->sendMsgKb($chatIdStr, 'سرویس مورد نظر را انتخاب کنید:', [
-                        'keyboard' => [[['text' => '🌐 V2Ray']], [['text' => '🛡 WireGuard']], [['text' => '↩️ بازگشت به منو']]],
+                        'keyboard' => collect(\App\Services\SubscriptionServiceType::BOT_LABELS)
+                            ->only($services)->map(fn ($label) => [['text' => $label]])->values()
+                            ->push([['text' => '↩️ بازگشت به منو']])->all(),
                         'resize_keyboard' => true]);
                 } else {
                     $this->sendMsgKb($chatIdStr, 'طرح مورد نظر را انتخاب کنید:',
@@ -851,7 +853,7 @@ class TelegramWebhookController extends Controller
         if ($s->state === self::STATE_BUY_SERVICE) {
             $user = $s->panel_user_id ? User::find($s->panel_user_id) : null;
             if (!$user) { $this->resetSession($s); return; }
-            $service = match ($text) { '🌐 V2Ray' => 'v2ray', '🛡 WireGuard' => 'wireguard', default => null };
+            $service = array_search($text, \App\Services\SubscriptionServiceType::BOT_LABELS, true);
             if (!$service || !$this->availableTariffGroupsForBot($user, 'buy', null, $service)) {
                 $s->update(['state' => self::STATE_LOGGED_IN, 'payload' => null, 'temp_username' => null]);
                 $this->sendMsgKb($chatIdStr, '⚠️ سرویس انتخاب‌شده در حال حاضر آماده فروش نیست؛ دوباره خرید اکانت جدید را انتخاب کنید.', $this->buildMainMenu(true, $user));
@@ -1503,7 +1505,7 @@ class TelegramWebhookController extends Controller
             }
             $mainMenu = $this->buildMainMenu(true, $user);
 
-            if ($v2User && !empty($v2User->token) && \App\Services\SubscriptionServiceType::of($v2User) !== 'wireguard' && empty($result['reserved'])) {
+            if ($v2User && !empty($v2User->token) && \App\Services\SubscriptionServiceType::of($v2User) === 'v2ray' && empty($result['reserved'])) {
                 $this->sendQrPhotoKb(
                     $chatIdStr,
                     $this->buildSubscribeUrl((string) $v2User->token),
@@ -2424,7 +2426,12 @@ class TelegramWebhookController extends Controller
 
     protected function deliverAccount(string $chatId, object $account, string $text, array $keyboard, bool $profiles = true): void
     {
-        if (\App\Services\SubscriptionServiceType::of($account) !== 'wireguard') {
+        $type = \App\Services\SubscriptionServiceType::of($account);
+        if ($type === 'anyconnect') {
+            $this->sendMsgKb($chatId, $text, $keyboard);
+            return;
+        }
+        if ($type !== 'wireguard') {
             $this->sendQrPhotoKb($chatId, $this->buildSubscribeUrl((string) $account->token), $text, $keyboard);
             return;
         }
@@ -3415,7 +3422,7 @@ class TelegramWebhookController extends Controller
         foreach ($groups as $group) {
             $label = '📁 ' . $group['name'];
             if ($names[$group['name']] > 1) {
-                $service = ($group['service_type'] ?? 'v2ray') === 'wireguard' ? 'WireGuard' : 'V2Ray';
+                $service = \App\Services\SubscriptionServiceType::label($group['service_type'] ?? 'v2ray');
                 $label .= ' — ' . $service . '، ' . (($group['type'] ?? 'time') === 'volume' ? 'حجمی' : 'زمانی');
             }
             $duration = match (true) {
@@ -3560,8 +3567,8 @@ class TelegramWebhookController extends Controller
                 break;
             }
         }
-        usort($eligible, fn ($a, $b) => (['v2ray' => 0, 'wireguard' => 1][$a['service_type']] ?? 2)
-            <=> (['v2ray' => 0, 'wireguard' => 1][$b['service_type']] ?? 2));
+        usort($eligible, fn ($a, $b) => (['v2ray' => 0, 'wireguard' => 1, 'anyconnect' => 2][$a['service_type']] ?? 2)
+            <=> (['v2ray' => 0, 'wireguard' => 1, 'anyconnect' => 2][$b['service_type']] ?? 2));
         return $eligible;
     }
 

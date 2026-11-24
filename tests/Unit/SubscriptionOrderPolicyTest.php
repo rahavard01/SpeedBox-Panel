@@ -4,11 +4,24 @@ namespace Tests\Unit;
 
 use App\Services\SubscriptionOrderPolicy;
 use App\Services\SubscriptionTrafficReset;
-use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\{Cache, DB};
+use Illuminate\Support\Facades\Schema;
+use Illuminate\Database\Schema\Blueprint;
 use Tests\TestCase;
 
 class SubscriptionOrderPolicyTest extends TestCase
 {
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        Schema::create('v2_plan', function (Blueprint $table) {
+            $table->id();
+            $table->string('service_type')->default('v2ray');
+        });
+        DB::table('v2_plan')->insert([['id' => 1], ['id' => 2]]);
+    }
+
     #[\PHPUnit\Framework\Attributes\DataProvider('renewalCases')]
     public function test_renewal_uses_one_rule_for_every_selected_plan(bool $expired, bool $enabled, int $selectedPlan, bool $reset): void
     {

@@ -10,6 +10,7 @@ final class SyncWireGuard implements ShouldQueue,ShouldBeUnique {
     public function __construct(public int $instanceId,public bool $install=false) {}
     public function uniqueId():string {return (string)$this->instanceId;}
     public function failed(\Throwable $error):void {
+        \App\Models\VpnOperation::failUnfinished('wireguard',$this->instanceId,'*','اجرای عملیات در صف متوقف شد.');
         $i=\App\Models\WireGuardInstance::find($this->instanceId);
         if($i && !in_array($i->status,['deleting','delete_failed'],true))$i->update(['status'=>'failed','last_error'=>mb_substr($error->getMessage(),0,1000)]+(!$i->public_key?['enabled'=>false]:[]));
     }

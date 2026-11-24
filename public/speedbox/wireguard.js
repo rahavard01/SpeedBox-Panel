@@ -1,14 +1,51 @@
-window.SpeedboxWireGuard={mount(content,{api,toast,openModal,closeModal,modalBody,enhanceControls,entityLayout,isBusy}){
-  let disposed=false,timer=null,version=0,fetching=false,editing=false,acting=false,rows=[],servers=[];
-  const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  const labels={draft:'آماده نصب',queued:'در صف',sync_queued:'در حال همگام‌سازی',ready:'آماده',failed:'ناموفق',disabled:'غیرفعال',deleting:'در حال حذف',delete_failed:'حذف ناموفق'};
-  const schedule=()=>{clearTimeout(timer);if(!disposed)timer=setTimeout(()=>{if(document.hidden||editing||acting||isBusy?.()){schedule();return;}load(true).catch(()=>{});},5000);};
+window.SpeedboxVpnManagement = (() => {
+  const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  })[char]);
+  function toolbar(service, key) {
+    return `<div class="toolbar entity-toolbar">
+      <button type="button" class="button primary" data-${key}-new><i class="fas fa-plus" aria-hidden="true"></i> <span dir="rtl">ساخت <bdi dir="ltr">${esc(service)}</bdi></span></button>
+      <input class="search" id="${key}Search" placeholder="جستجو" aria-label="جستجوی ${esc(service)}">
+      </div><article class="panel-card entity-list-shell" data-${key}-list></article>`;
+  }
+  function table(headers, rows, query) {
+    const empty = query ? 'موردی با این جستجو پیدا نشد' : 'هنوز سرویسی تعریف نشده است';
+    return `<div class="table-wrap"><table class="wg-table"><thead><tr>${headers.map(text => `<th>${esc(text)}</th>`).join('')}</tr></thead>
+      <tbody>${rows || `<tr><td colspan="${headers.length}" class="entity-loading-cell" dir="rtl">${empty}</td></tr>`}</tbody></table></div>`;
+  }
+  const operationPending = row => ['queued', 'running'].includes(row.operation?.status);
+  const resultVisibleMs = 10_000;
+
+  function resultExpiresAt(row) {
+    if (!['succeeded', 'failed'].includes(row.operation?.status)) return 0;
+    return Date.parse(row.operation.updated_at) + resultVisibleMs;
+  }
+
+  function scheduleResultExpiry(rows, now, redraw) {
+    const expiry = Math.min(...rows.map(resultExpiresAt).filter(time => time > now));
+    return Number.isFinite(expiry) ? setTimeout(redraw, Math.max(0, expiry - Date.now())) : null;
+  }
+
+  function status(row, operationStatus, now) {
+    if (operationPending(row) || resultExpiresAt(row) > now) {
+      return `<div class="server-operation-progress">${operationStatus(row.operation)}</div>`;
+    }
+    const active = row.status === 'ready';
+    return `<span class="badge ${active ? 'online' : 'offline'}">${active ? 'فعال' : 'غیرفعال'}</span>`;
+  }
+  return { esc, toolbar, table, status, operationPending, scheduleResultExpiry };
+})();
+
+window.SpeedboxWireGuard={mount(content,{api,toast,openModal,closeModal,modalBody,enhanceControls,entityLayout,operationStatus,showDeployments,isBusy}){
+  let disposed=false,timer=null,resultTimer=null,version=0,fetching=false,editing=false,acting=false,rows=[],servers=[];
+  const { esc, toolbar, table, status, operationPending, scheduleResultExpiry } = window.SpeedboxVpnManagement;
+  const schedule=()=>{clearTimeout(timer);if(!disposed)timer=setTimeout(()=>{if(document.hidden||editing||acting||isBusy?.()){schedule();return;}load(true).catch(()=>{});},rows.some(operationPending)?1500:5000);};
   const removing=i=>['deleting','delete_failed'].includes(i.status);
-  const busy=i=>['queued','sync_queued','deleting'].includes(i.status);
+  const busy=i=>operationPending(i)||['queued','sync_queued','deleting'].includes(i.status);
   function actions(i){
     const disabled=busy(i)||acting?'disabled':'';
     const main=removing(i)?'':`<button type="button" class="button ${i.enabled?'entity-restart':'entity-install'}" data-wg-action="${i.enabled?'disable':'enable'}" data-id="${i.id}" ${disabled}>${i.status==='queued'?(i.enabled?(i.public_key?'در حال فعال‌سازی':'در حال نصب'):'در حال غیرفعال‌سازی'):i.enabled?'غیرفعال‌سازی':i.public_key?'فعال‌سازی':'نصب و فعال‌سازی'}</button><button type="button" class="button entity-edit" data-wg-edit="${i.id}" ${disabled}>ویرایش</button>${i.public_key?`<button type="button" class="button entity-report" data-wg-action="sync" data-id="${i.id}" ${disabled}>${i.status==='sync_queued'?'در حال همگام‌سازی':'همگام‌سازی'}</button>`:''}`;
-    return `<div class="actions">${main}<button type="button" class="button entity-delete" data-wg-delete="${i.id}" ${disabled}>${i.status==='deleting'?'در حال حذف':i.status==='delete_failed'?'تلاش دوباره حذف':'حذف'}</button></div>`;
+    return `<div class="actions">${main}<button type="button" class="button entity-report" data-wg-report="${i.id}">گزارش</button><button type="button" class="button entity-delete" data-wg-delete="${i.id}" ${disabled}>${i.status==='deleting'?'در حال حذف':i.status==='delete_failed'?'تلاش دوباره حذف':'حذف'}</button></div>`;
   }
   async function operate(path,options){
     if(acting)return;acting=true;render();
@@ -24,15 +61,19 @@ window.SpeedboxWireGuard={mount(content,{api,toast,openModal,closeModal,modalBod
     }return used;
   }
   function freePort(server,exclude,extra=[]){const used=usedPorts(server,exclude);extra.forEach(p=>used.add(Number(p)));for(let p=51820;p<=65535;p++)if(!used.has(p))return p;throw new Error('پورت آزاد برای این سرور یافت نشد');}
-  function shell(){if(content.querySelector('#wgSearch'))return;content.innerHTML='<div class="toolbar entity-toolbar"><button type="button" class="button primary" data-wg-new><i class="fas fa-plus" aria-hidden="true"></i> <span dir="rtl">ساخت <bdi dir="ltr">WireGuard</bdi></span></button><input class="search" id="wgSearch" placeholder="جستجو" aria-label="جستجوی WireGuard"></div><article class="panel-card entity-list-shell" data-wg-list></article>';content.querySelector('[data-wg-new]').onclick=()=>form();content.querySelector('#wgSearch').oninput=render;}
+  function shell(){if(!content.querySelector('#wgSearch'))content.innerHTML=toolbar('WireGuard','wg');content.querySelector('[data-wg-new]').onclick=()=>form();content.querySelector('#wgSearch').oninput=render;}
   function render(){
+    const now=Date.now();
     const query=(content.querySelector('#wgSearch')?.value||'').trim().toLowerCase();
     const list=rows.filter(i=>`${i.name} ${i.server?.name||''} ${i.ingress?.name||''} ${i.endpoint_host}`.toLowerCase().includes(query));
-    const markup=`<div class="table-wrap"><table class="wg-table"><thead><tr><th>نام</th><th>سرور خروجی</th><th>مسیر اتصال</th><th>ورودی</th><th>پروفایل‌ها</th><th>وضعیت</th><th>عملیات</th></tr></thead><tbody>${list.map(i=>`<tr data-wg-row="${i.id}"><td><b>${esc(i.name)}</b></td><td>${esc(i.server?.name||'—')}</td><td>${i.mode==='tunnel'?`تونل${i.ingress?.name?'<small>'+esc(i.ingress.name)+'</small>':''}`:'مستقیم'}</td><td><bdi>${esc(i.endpoint_host)}:${esc(i.endpoint_port)}</bdi></td><td>${Number(i.peers_count||0).toLocaleString('fa-IR')}</td><td><span class="badge ${i.status==='ready'?'online':['failed','delete_failed'].includes(i.status)?'failed':i.status==='disabled'?'offline':'queued'}">${esc(labels[i.status]||i.status)}</span>${i.last_error?`<p class="wg-error">${esc(i.last_error)}</p>`:''}</td><td>${actions(i)}</td></tr>`).join('')||`<tr><td colspan="7" class="entity-loading-cell" dir="rtl">${query?'موردی با این جستجو پیدا نشد':'هنوز سرویسی تعریف نشده است'}</td></tr>`}</tbody></table></div>`;
+    const markup=table(['نام','سرور خروجی','مسیر اتصال','ورودی','پروفایل‌ها','وضعیت','عملیات'],list.map(i=>`<tr data-wg-row="${i.id}"><td><b>${esc(i.name)}</b></td><td>${esc(i.server?.name||'—')}</td><td>${i.mode==='tunnel'?`تونل${i.ingress?.name?'<small>'+esc(i.ingress.name)+'</small>':''}`:'مستقیم'}</td><td><bdi dir="ltr">${esc(i.endpoint_host)}:${esc(i.endpoint_port)}</bdi></td><td>${Number(i.peers_count||0).toLocaleString('fa-IR')}</td><td>${status(i,operationStatus,now)}</td><td>${actions(i)}</td></tr>`).join(''),query);
     const target=content.querySelector('[data-wg-list]');if(!target)return;
     const scroll=target.querySelector('.table-wrap')?.scrollLeft||0;
     target.innerHTML=entityLayout?entityLayout(markup,'wireguard'):markup;
     if(target.querySelector('.table-wrap'))target.querySelector('.table-wrap').scrollLeft=scroll;
+    clearTimeout(resultTimer);
+    resultTimer=scheduleResultExpiry(list,now,render);
+    target.querySelectorAll('[data-wg-report]').forEach(b=>b.onclick=()=>showDeployments(Number(b.dataset.wgReport),'wireguard'));
     target.querySelectorAll('[data-wg-edit]').forEach(b=>b.onclick=()=>form(rows.find(i=>i.id===Number(b.dataset.wgEdit))));
     target.querySelectorAll('[data-wg-action]').forEach(b=>b.onclick=()=>operate(`/wireguard/${b.dataset.id}/actions`,{method:'POST',body:JSON.stringify({action:b.dataset.wgAction})}));
     target.querySelectorAll('[data-wg-delete]').forEach(b=>b.onclick=()=>{if(confirm('این سرویس و منابع اختصاصی نصب‌شده آن حذف شوند؟'))operate(`/wireguard/${b.dataset.wgDelete}`,{method:'DELETE'});});
@@ -80,7 +121,7 @@ window.SpeedboxWireGuard={mount(content,{api,toast,openModal,closeModal,modalBod
       if(d.mode!=='tunnel'){d.ingress_server_id=null;d.link_network=null;d.tunnel_port=null;}
       try{const r=await api('/wireguard'+(i?'/'+i.id:''),{method:i?'PUT':'POST',body:JSON.stringify(d)});toast(r.message);closeModal();await load(true);}catch(err){if(!disposed&&err.name!=='AbortError')toast(err.message,'error');}
     };
-    enhanceControls?.();
+    enhanceControls?.(f);
   }
-  return{load,redraw:render,dispose(){disposed=true;version++;clearTimeout(timer);}};
+  return{load,redraw:render,dispose(){disposed=true;version++;clearTimeout(timer);clearTimeout(resultTimer);}};
 }};

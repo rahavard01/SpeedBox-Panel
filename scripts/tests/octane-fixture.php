@@ -19,10 +19,17 @@ Schema::create('panel_users', function (Blueprint $t) {
     $t->id(); $t->string('name'); $t->string('email'); $t->string('password');
     $t->integer('role'); $t->boolean('banned')->default(false); $t->timestamps();
 });
+Schema::create('panel_tariff_groups', function (Blueprint $t) {
+    $t->id();
+    $t->string('name');
+});
 foreach (['2025_01_01_000000_create_speedbox_core_tables.php',
     '2026_10_08_000001_create_speedbox_infrastructure_tables.php',
     '2026_10_09_000001_create_speedbox_queue_monitor_tables.php',
-    '2026_10_10_000003_create_connection_admission_leases.php'] as $file) {
+    '2026_10_10_000003_create_connection_admission_leases.php',
+    '2026_11_16_000001_add_independent_wireguard.php',
+    '2026_11_16_000002_add_native_wireguard_path.php',
+    '2026_11_24_000001_add_anyconnect_service.php'] as $file) {
     (require database_path('migrations/'.$file))->up();
 }
 $admin = new App\Models\User;

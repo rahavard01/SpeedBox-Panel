@@ -134,7 +134,12 @@ class UserBotAccountResolver
         $subLink = trim((string) $subLink);
         $subText = $subLink !== '' ? e($subLink) : '-';
 
-        $serviceName=($snapshot['service_type']??'v2ray')==='wireguard'?'WireGuard':'V2Ray';
+        $serviceType = $snapshot['service_type'] ?? 'v2ray';
+        $serviceName = \App\Services\SubscriptionServiceType::label($serviceType);
+        $anyConnect = $serviceType === 'anyconnect'
+            ? DB::table('v2_user')->where('id', $snapshot['id'] ?? 0)->where('email', $snapshot['email'] ?? '')
+                ->where('service_type', 'anyconnect')->first() : null;
+        if ($anyConnect) $email = \App\Services\BotAccountMessages::username($anyConnect);
         return "🔰 <b>اطلاعات کاربری</b>\n\n"
             . "👤 نام کاربری: <code>{$email}</code>\n"
             . "🛡 سرویس: <b>{$serviceName}</b>\n"
@@ -143,11 +148,14 @@ class UserBotAccountResolver
             . "🔥 ترافیک مصرفی: <b>" . $this->formatBytes($used) . "</b>\n"
             . "✅ ترافیک باقی‌مانده: <b>" . $this->formatBytes($remain) . "</b>\n"
             . "📅 تاریخ انقضا: <b>{$expireText}</b>\n"
-            . "🕒 زمان باقی‌مانده: <b>{$daysText}</b>\n\n"
+            . "🕒 زمان باقی‌مانده: <b>{$daysText}</b>\n"
+            . ($anyConnect ? "🔒 محدودیت اتصال: <b>".($anyConnect->device_limit ?: 'نامحدود')."</b>\n" : '')
+            . "\n"
             . (!empty($snapshot['reservation']) ? "📦 طرح رزرو: <b>" . e($snapshot['reservation']['title']) . "</b>\n📊 ترافیک: " . e($snapshot['reservation']['traffic_label']) . "\n⏳ " . e($snapshot['reservation']['activation_label']) . "\n\n" : '')
-            . (($snapshot['service_type']??'v2ray')==='wireguard' ? "🔗 لینک اشتراک:\n" : "🔗 لینک سابسکرایب:\n")
-            . "<code>{$subText}</code>"
-            . (($snapshot['service_type'] ?? 'v2ray') === 'wireguard' ? "\n\n" . \App\Services\BotAccountMessages::guidance() : '');
+            . ($anyConnect
+                ? \App\Services\BotAccountMessages::anyConnectDetails($anyConnect, $subLink, false)
+                : (($serviceType === 'wireguard' ? "🔗 لینک اشتراک:\n" : "🔗 لینک سابسکرایب:\n")
+                    . "<code>{$subText}</code>" . ($serviceType === 'wireguard' ? "\n\n".\App\Services\BotAccountMessages::guidance() : '')));
     }
 
     private function formatRemainingTime(?int $expiredAt): string

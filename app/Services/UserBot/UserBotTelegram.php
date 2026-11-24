@@ -173,6 +173,19 @@ class UserBotTelegram
         }
     }
 
+    public function sendPurchasedAccount(string|int $chatId, ?object $account, string $url, string $text, ?array $keyboard): ?array
+    {
+        $service = $account->service_type ?? 'v2ray';
+        if ($service === 'anyconnect') {
+            return $this->sendMessage($chatId, $text, $keyboard);
+        }
+        if ($service === 'wireguard') {
+            $this->sendMessage($chatId, $text, $keyboard);
+            return $this->sendWireGuardProfiles($chatId, $account, $keyboard);
+        }
+        return $this->sendQrPhotoOrMessage($chatId, $url, $text, $keyboard);
+    }
+
     public function sendWireGuardProfile(string|int $chatId, string $config, string $caption = '', ?array $keyboard = null, string $filename = 'speedbox.conf'): array
     {
         // The caller sends the device heading once. Neither attachment repeats it.

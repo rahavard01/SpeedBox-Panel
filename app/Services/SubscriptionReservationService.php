@@ -122,7 +122,7 @@ final class SubscriptionReservationService
 
     public function ensureGenerationSupport(object $user): void
     {
-        if(SubscriptionServiceType::of($user)==='wireguard') return;
+        if (SubscriptionServiceType::of($user) !== 'v2ray') return;
         if (!Schema::hasTable('v2_server')) return;
         $nodes = DB::table('v2_server')->where('enabled', 1)->where(fn ($q) => $q->whereJsonContains('group_ids', (int) ($user->group_id ?? 0))->orWhereJsonContains('group_ids', (string) ($user->group_id ?? '0')))->get();
         foreach ($nodes as $node) {
@@ -161,10 +161,11 @@ final class SubscriptionReservationService
             if ($this->periodic($user) && $mode === self::RESERVE_RESET) {
                 $update = $this->resetUpdate($user);
                 DB::table('v2_user')->where('id', $user->id)->update($update);
-        if(SubscriptionServiceType::of($nextUser)==='wireguard') {
-            app(WireGuardService::class)->provision($nextUser);
-            \App\Jobs\SyncWireGuard::dispatch((int)$nextUser->wireguard_instance_id)->afterCommit();
-        }
+                if (SubscriptionServiceType::of($user) === 'wireguard') {
+                    app(WireGuardService::class)->provision($user);
+                    \App\Jobs\SyncWireGuard::dispatch((int) $user->wireguard_instance_id)->afterCommit();
+                }
+                AnyConnectService::queue($user);
                 app(TrafficResetHistory::class)->renewal($user, $update);
             }
         } else {
@@ -194,6 +195,7 @@ final class SubscriptionReservationService
         $nextUser = (object) array_merge((array) $user, $update);
         $update['next_reset_at'] = app(SubscriptionTrafficReset::class)->next($nextUser, (object) ['reset_traffic_method' => $s['update']['account_reset_traffic_method']]);
         DB::table('v2_user')->where('id', $user->id)->update($update);
+        AnyConnectService::queue($nextUser);
         if ($reset) app(TrafficResetHistory::class)->record($user, $update, 'renewal', $automatic ? 'reservation' : 'order', ['reason' => 'فعال‌سازی طرح', 'reservation_id' => $row->id]);
         DB::table('speedbox_subscription_reservations')->where('id', $row->id)->update([
             'state' => 'activated', 'reserved_user_id' => null, 'activated_at' => now(),

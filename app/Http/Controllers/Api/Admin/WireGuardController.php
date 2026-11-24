@@ -1,15 +1,18 @@
 <?php
 namespace App\Http\Controllers\Api\Admin;
 use App\Http\Controllers\Controller;
-use App\Models\{WireGuardInstance,ManagedServer};
+use App\Models\{WireGuardInstance,ManagedServer,VpnOperation};
 use App\Services\WireGuardService;
 use App\Jobs\SyncWireGuard;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\{DB,Cache};
 final class WireGuardController extends Controller {
     public function index() {
-        return response()->json(['data'=>WireGuardInstance::with(['server:id,name,host','ingress:id,name,host'])->withCount('peers')->orderBy('id')->get(),
+        return response()->json(['data'=>VpnOperation::attachLatest('wireguard', WireGuardInstance::with(['server:id,name,host','ingress:id,name,host'])->withCount('peers')->orderBy('id')->get()),
             'servers'=>ManagedServer::orderBy('id')->get(['id','name','host'])])->header('Cache-Control','no-store');
+    }
+    public function operations(Request $request, int $instance) {
+        return response()->json(['data' => VpnOperation::history('wireguard', $instance, WireGuardInstance::find($instance), $request->boolean('latest'))])->header('Cache-Control', 'no-store');
     }
     private function cidr(?string $value,int $prefix):void {
         if(!$value)return;
@@ -62,10 +65,23 @@ final class WireGuardController extends Controller {
             }
             app(WireGuardService::class)->validateTunnel($data);
             $data['tunnel_id']=null;$i->fill($data);
-            if(!$instance)$i->interface='sbw'.random_int(10000000000,99999999999);
-            $i->save();return $i;
+            if (!$instance) {
+                abort_unless(extension_loaded('sodium'), 422, 'افزونه sodium در PHP فعال نیست.');
+                $i->interface = 'sbw'.random_int(10000000000,99999999999);
+                $i->enabled = true;
+                $i->status = 'queued';
+            }
+            if ($instance && $i->public_key) {
+                $i->status = 'sync_queued';
+                $i->last_error = null;
+            }
+            $i->save();
+            if (!$instance || $i->public_key) {
+                VpnOperation::record('wireguard', $i->id, $instance ? 'sync' : 'install');
+            }
+            return $i;
         });}finally{$lock?->release();}
-        if($i->public_key)SyncWireGuard::dispatch($i->id);
+        if (!$instance || $i->public_key) SyncWireGuard::dispatch($i->id, !$i->public_key);
         return response()->json(['data'=>$i,'message'=>'سرویس WireGuard ذخیره شد.']);
     }
     public function destroy(int $instance) {
@@ -75,19 +91,26 @@ final class WireGuardController extends Controller {
             abort_if(in_array($i->status,['queued','sync_queued','deleting'],true),422,'عملیات این سرویس در صف است؛ کمی صبر کنید.');
             app(WireGuardService::class)->assertUnused($i);
             if($i->status==='draft' && !$i->public_key && !$i->site_keys){$i->delete();return false;}
-            $i->update(['enabled'=>false,'status'=>'deleting','last_error'=>null]);return true;
+            $i->update(['enabled'=>false,'status'=>'deleting','last_error'=>null]);
+            VpnOperation::record('wireguard', $i->id, 'delete');
+            return true;
         });}finally{$lock->release();}
         if($queued)\App\Jobs\DeleteWireGuard::dispatch($instance);
         return response()->json(['queued'=>$queued,'message'=>$queued?'حذف سرویس در صف قرار گرفت.':'سرویس حذف شد.']);
     }
     public function action(Request $r,int $instance) {
         $d=$r->validate(['action'=>'required|in:enable,disable,sync']);$lock=Cache::lock('wireguard:instance:'.$instance,20);abort_unless($lock->get(),422,'عملیات این سرویس در حال اجراست؛ کمی صبر کنید.');
-        try{$i=WireGuardInstance::findOrFail($instance);abort_if(in_array($i->status,['queued','sync_queued','deleting','delete_failed'],true),422,'عملیات این سرویس در جریان است یا حذف آن باید تکمیل شود.');
+        try{$queued=DB::transaction(function () use ($instance, $d) {
+        $i=WireGuardInstance::findOrFail($instance);abort_if(in_array($i->status,['queued','sync_queued','deleting','delete_failed'],true),422,'عملیات این سرویس در جریان است یا حذف آن باید تکمیل شود.');
         if($d['action']==='enable'){abort_unless(extension_loaded('sodium'),422,'افزونه sodium در PHP فعال نیست.');app(WireGuardService::class)->validateTunnel($i->getAttributes());$i->update(['enabled'=>true,'status'=>'queued']);}
-        elseif($d['action']==='disable'){$i->update(['enabled'=>false,'status'=>($i->public_key||$i->site_keys)?'queued':'draft']);if(!$i->public_key&&!$i->site_keys)return response()->json(['queued'=>false,'message'=>'سرویس غیرفعال است.']);}
+        elseif($d['action']==='disable'){$i->update(['enabled'=>false,'status'=>($i->public_key||$i->site_keys)?'queued':'draft']);if(!$i->public_key&&!$i->site_keys)return false;}
         abort_if(!$i->public_key && $d['action']==='sync',422,'ابتدا نصب و فعال‌سازی را اجرا کنید.');
         if($d['action']==='sync')$i->update(['status'=>'sync_queued','last_error'=>null]);
-        }finally{$lock->release();}
-        SyncWireGuard::dispatch($i->id,!$i->public_key);return response()->json(['queued'=>true,'message'=>'عملیات در صف قرار گرفت.']);
+        VpnOperation::record('wireguard', $i->id, $d['action'] === 'enable' && !$i->public_key ? 'install' : $d['action']);
+        return true;
+        });}finally{$lock->release();}
+        if (!$queued) return response()->json(['queued'=>false, 'message'=>'سرویس غیرفعال است.']);
+        $i = WireGuardInstance::findOrFail($instance);
+        SyncWireGuard::dispatch($i->id, !$i->public_key);return response()->json(['queued'=>true,'message'=>'عملیات در صف قرار گرفت.']);
     }
 }

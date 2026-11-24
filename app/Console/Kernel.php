@@ -27,6 +27,10 @@ class Kernel extends ConsoleKernel
             ->everyMinute()->name('nodes:observe-operator-filters');
         $schedule->call(fn () => app(\App\Services\WireGuardService::class)->tick())
             ->everyMinute()->name('wireguard:sync')->withoutOverlapping();
+        $schedule->call(fn () => app(\App\Services\AnyConnectService::class)->tick())
+            ->everyMinute()->name('anyconnect:sync')->withoutOverlapping();
+        $schedule->call(fn () => app(\App\Services\AnyConnectService::class)->pollOnline())
+            ->everyFifteenSeconds()->name('anyconnect:online')->withoutOverlapping();
         $schedule->call(fn () => app(\App\Services\PanelWalletLowBalanceRunner::class)->tick())
             ->everyMinute()->name('panel-wallet:low-balance-warning')->withoutOverlapping();
         $schedule->call(fn () => app(\App\Services\SubscriptionReservationService::class)->tick())

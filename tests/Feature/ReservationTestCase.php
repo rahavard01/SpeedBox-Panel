@@ -66,6 +66,8 @@ abstract class ReservationTestCase extends TestCase
             $table->timestamps();
         });
         (require database_path('migrations/2026_10_29_000001_create_subscription_reservations.php'))->up();
+        (require database_path('migrations/2026_11_16_000001_add_independent_wireguard.php'))->up();
+        (require database_path('migrations/2026_11_16_000002_add_native_wireguard_path.php'))->up();
         DB::table('panel_users')->insert([
             ['id' => 1, 'role' => 2, 'email' => 'rep@example.test', 'code' => 'rep', 'credit' => '10000', 'partner_plan_type' => 'time'],
             ['id' => 2, 'role' => 1, 'email' => 'admin@example.test', 'code' => 'admin', 'credit' => '10000', 'partner_plan_type' => 'both'],

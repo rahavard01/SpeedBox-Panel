@@ -11,6 +11,7 @@ final class DeleteWireGuard implements ShouldQueue,ShouldBeUnique {
     public function uniqueId():string{return (string)$this->instanceId;}
     public function handle(\App\Services\WireGuardService $service):void{$service->remove($this->instanceId);}
     public function failed(\Throwable $error):void{
+        \App\Models\VpnOperation::failUnfinished('wireguard',$this->instanceId,'delete','اجرای عملیات در صف متوقف شد.');
         \App\Models\WireGuardInstance::whereKey($this->instanceId)->where('status','deleting')->update(['status'=>'delete_failed','last_error'=>mb_substr($error->getMessage(),0,1000)]);
     }
 }

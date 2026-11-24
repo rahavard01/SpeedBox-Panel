@@ -726,8 +726,13 @@ class UserBotCryptoOrderVerifier
         }
 
         if ($order->order_type === 'buy_account' && !empty($result['subscribe_url'])) {
-            $bot->sendQrPhotoOrMessage(
+            $account = DB::table('v2_user')->where('email', $result['email'] ?? '')->first();
+            if ($account) {
+                $buyerText = $header . BotAccountMessages::created($account, (string) $result['subscribe_url']);
+            }
+            $bot->sendPurchasedAccount(
                 $session->telegram_chat_id,
+                $account,
                 (string) $result['subscribe_url'],
                 $buyerText,
                 $keyboard

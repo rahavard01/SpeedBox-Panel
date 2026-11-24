@@ -56,7 +56,8 @@ with tempfile.TemporaryDirectory(prefix='speedbox-octane-test-') as directory:
         for letter in ['a','b','a']:
             status,body=request('/s/'+letter*32+'?raw=1')
             assert status==200 and letter*8+'-1234' in body and ('b' if letter=='a' else 'a')*8+'-1234' not in body,(status,body)
-        assert request('/s/'+'a'*32,browser=True)[0]==200
+        status, body = request('/s/'+'a'*32, browser=True)
+        assert status == 200, (status, body)
         subprocess.run([php,'scripts/tests/octane-fixture.php','settings'],cwd=root,env=env,check=True,capture_output=True)
         status,body=request('/custom/'+'a'*32+'?raw=1')
         assert status==200 and 'aaaaaaaa-1234' in body,(status,body)

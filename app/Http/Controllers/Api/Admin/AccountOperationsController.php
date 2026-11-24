@@ -39,7 +39,8 @@ class AccountOperationsController extends Controller
             ->where(function ($query) use ($current) {
                 $query->where('pp.enable', 1);
                 if ($current) $query->orWhere('pp.id', $current->id);
-            })->where('vp.service_type',$user->service_type??'v2ray')->when(($user->service_type??'v2ray')==='wireguard',fn($q)=>$q->where('vp.wireguard_instance_id',$user->wireguard_instance_id))->orderBy('tg.name')->orderBy('pp.id')
+            })->where('vp.service_type',$user->service_type??'v2ray')->when(($user->service_type??'v2ray')==='wireguard',fn($q)=>$q->where('vp.wireguard_instance_id',$user->wireguard_instance_id))
+                ->when(($user->service_type ?? 'v2ray') === 'anyconnect', fn ($q) => $q->where('vp.anyconnect_instance_id', $user->anyconnect_instance_id))->orderBy('tg.name')->orderBy('pp.id')
             ->get(['pp.id', 'pp.plan_key', 'pp.enable', 'pp.v2_plan_id', 'tg.name', 'tg.group_type', 'vp.speed_limit', 'vp.device_limit as default_device_limit', 'pp.device_limit as tariff_device_limit']);
         return response()->json(['data' => AccountIdentityOperations::publicAccount($user), 'panel_plan_id' => $current?->id,
             'plans' => $plans])->header('Cache-Control', 'no-store');
@@ -117,6 +118,7 @@ class AccountOperationsController extends Controller
             $update['updated_at'] = time();
             DB::table('v2_user')->where('id', $id)->update($update);
             if(($user->service_type??'v2ray')==='wireguard')\App\Jobs\SyncWireGuard::dispatch((int)$user->wireguard_instance_id)->afterCommit();
+            \App\Services\AnyConnectService::queue($user);
             $after = $this->account($id);
             $changes = [];
             foreach (self::FIELDS as $field) {
@@ -171,6 +173,7 @@ class AccountOperationsController extends Controller
             ];
             if ((int) ($user->subscription_generation ?? 0) > 0) $update['subscription_generation'] = (int) ($user->subscription_generation ?? 0) + 1;
             DB::table('v2_user')->where('id', $id)->update($update);
+            \App\Services\AnyConnectService::queue($user);
             app(TrafficResetHistory::class)->record($user, $update, 'manual', 'manual', [
                 'reason' => $data['reason'] ?? null, 'admin_id' => $request->user()?->id,
                 'operator_email' => $request->user()?->email,

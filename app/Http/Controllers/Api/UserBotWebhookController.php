@@ -959,7 +959,9 @@ class UserBotWebhookController extends Controller
             $accountInfo = $resolver->accountInfoText($resolved['snapshot'], $subscribeUrl);
             $account=DB::table('v2_user')->where('email',$resolved['email'])->first();
             $keyboard=UserBotKeyboard::user($this->isSnapshotVolumeAccount($resolved['snapshot']??[]),app(\App\Services\UserBot\AccountTrafficResetPolicy::class)->hasPeriodicReset($session->account_snapshot?:[]));
-            if(($account->service_type??'v2ray')==='wireguard') {
+            if (($account->service_type ?? 'v2ray') === 'anyconnect') {
+                $bot->sendMessage($chatId, $accountInfo, $keyboard);
+            } elseif(($account->service_type??'v2ray')==='wireguard') {
                 $bot->sendMessage($chatId, $accountInfo, $keyboard);
                 try {
                     $bot->sendWireGuardProfiles($chatId, $account, $keyboard);
@@ -1118,7 +1120,7 @@ class UserBotWebhookController extends Controller
                     $planId = DB::table('panel_plan')->where('tariff_group_id', $groupId)->where('plan_key', $key)->where('enable', 1)->value('v2_plan_id');
                     if(!$planId)return false;
                     $plan=DB::table('v2_plan')->find($planId);
-                    if(($live->service_type??'v2ray')==='wireguard' && (int)$plan->wireguard_instance_id!==(int)$live->wireguard_instance_id)return false;
+                    if (!$plan || !\App\Services\SubscriptionServiceType::sameServer($live, $plan)) return false;
                     $mode=(int)\App\Services\RuntimeSetting::get('renew_order_event_id',2);
                     return $reserveService->ended($live) || !$reserveService->periodic($live) || in_array($mode,[2,3],true)
                         || $reserveService->periodic((object)['plan_id'=>$planId])===$reserveService->periodic($live);
@@ -1185,8 +1187,8 @@ class UserBotWebhookController extends Controller
             return response()->json(['ok' => true]);
         }
 
-        if($session->state==='buy_select_service' && in_array($text,['🛡 WireGuard','🌐 V2Ray'],true)) {
-            $type=$text==='🛡 WireGuard'?'wireguard':'v2ray';
+        if ($session->state === 'buy_select_service' && in_array($text, \App\Services\SubscriptionServiceType::BOT_LABELS, true)) {
+            $type = array_search($text, \App\Services\SubscriptionServiceType::BOT_LABELS, true);
             $plans=collect($session->state_data['plans']??[])->filter(fn($p)=>$p['service_type']===$type)->values();
             $session->update(['state'=>'buy_select_group','state_data'=>['plans'=>$plans->all()]]);
             $bot->sendMessage($chatId,'طرح مورد نظر را انتخاب کنید:',$this->planGroupKeyboard($session));
@@ -1852,12 +1854,12 @@ class UserBotWebhookController extends Controller
                 return response()->json(['ok' => true]);
             }
 
-            $serviceTypes=$plans->map(fn($p)=>$this->serviceOfBotPlan((string)$p->plan_key))->unique()->sortBy(fn($type)=>$type==='v2ray'?0:1)->values();
+            $serviceTypes=$plans->map(fn($p)=>$this->serviceOfBotPlan((string)$p->plan_key))->unique()->sortBy(fn ($type) => ['v2ray' => 0, 'wireguard' => 1, 'anyconnect' => 2][$type] ?? 3)->values();
             if($serviceTypes->count()>1) {
                 $session->update(['state'=>'buy_select_service','state_data'=>['plans'=>$plans->map(fn($p)=>[
                     'id'=>$p->id,'plan_key'=>$p->plan_key,'group_name'=>$this->groupNameOf($p),'title'=>$p->title,
                     'price'=>(int)$p->price,'description'=>$p->description,'service_type'=>$this->serviceOfBotPlan((string)$p->plan_key)])->values()->all()]]);
-                $bot->sendMessage($chatId,'سرویس مورد نظر را انتخاب کنید:',['keyboard'=>$serviceTypes->map(fn($type)=>[['text'=>$type==='wireguard'?'🛡 WireGuard':'🌐 V2Ray']])->push([['text'=>'⬅️ بازگشت']])->all(),'resize_keyboard'=>true]);
+                $bot->sendMessage($chatId,'سرویس مورد نظر را انتخاب کنید:',['keyboard'=>$serviceTypes->map(fn($type)=>[['text'=>\App\Services\SubscriptionServiceType::BOT_LABELS[$type]]])->push([['text'=>'⬅️ بازگشت']])->all(),'resize_keyboard'=>true]);
                 return response()->json(['ok'=>true]);
             }
 

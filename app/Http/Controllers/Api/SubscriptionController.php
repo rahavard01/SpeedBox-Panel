@@ -33,6 +33,7 @@ class SubscriptionController extends Controller
         if (!is_string($token)) return $this->tokenError('token is error');
         $user = SubscriptionAccount::where('token', $token)->first();
         if (!$user) return $this->tokenError('token is error');
+        if (($user->service_type ?? 'v2ray') === 'anyconnect') return $this->portal($request, $user);
         if(($user->service_type??'v2ray')==='wireguard') return $this->wireGuard($request,$user);
 
         try {
@@ -66,6 +67,7 @@ class SubscriptionController extends Controller
         try {
             return $this->withUser($request, $user, function () use ($request, $user, $servers) {
                 $this->validateInput($request);
+                if (($user->service_type ?? 'v2ray') === 'anyconnect') return $this->portal($request, $user);
                 if(($user->service_type??'v2ray')==='wireguard') return $this->wireGuard($request,$user);
                 if ($servers === null) {
                     $servers = $this->serversFor($user);
@@ -223,6 +225,10 @@ class SubscriptionController extends Controller
         }
         return response()->view('client.subscribe', [
             'service_type'=>$user->service_type??'v2ray','wireguard_profiles'=>$wireguard,
+            'anyconnect_connection' => ($user->service_type ?? 'v2ray') === 'anyconnect'
+                ? app(\App\Services\AnyConnectService::class)->credentials($user) : null,
+            'anyconnect_plan' => ($user->service_type ?? 'v2ray') === 'anyconnect'
+                ? app(\App\Services\AccountTariffResolver::class)->name($user) : null,
             'username' => str_replace(['@', '.com'], ['-', ''], $user->email),
             'reservation' => ($reservation['state'] ?? null) === 'reserved'
                 ? array_intersect_key($reservation, array_flip(['title', 'traffic_label', 'duration_days', 'activation_label'])) : null,
@@ -233,7 +239,7 @@ class SubscriptionController extends Controller
             'remaining_days' => $this->remainingCalendarDays($user),
             'device_limit' => $user->device_limit, 'reset_day' => app(SubscriptionResetDay::class)->forUser($user),
             'online_count' => app(\App\Services\AccountOnlineStatus::class)->counts([(int) $user->id])[$user->id] ?? 0,
-            'subscription_url' => $url, 'qr_code' => ($user->service_type??'v2ray')==='wireguard' ? '' : base64_encode($writer->writeString($url)),
+            'subscription_url' => $url, 'qr_code' => ($user->service_type ?? 'v2ray') !== 'v2ray' ? '' : base64_encode($writer->writeString($url)),
         ])->header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
             ->header('Pragma', 'no-cache')->header('Referrer-Policy','no-referrer')->header('X-Robots-Tag', 'noindex, nofollow, noarchive');
     }

@@ -338,18 +338,13 @@ class UserBotOrderDeliveryService
             $order->order_type === 'buy_account'
             && !empty($result['subscribe_url'])
         ) {
-            $account=DB::table('v2_user')->where('email',$result['email']??'')->first();
-            if(($account->service_type??'v2ray')==='wireguard') {
-                $bot->sendMessage($buyerSession->telegram_chat_id, $buyerText, $buyerKeyboard);
-                $response = $bot->sendWireGuardProfiles($buyerSession->telegram_chat_id, $account, $buyerKeyboard);
-            } else {
-            $response = $bot->sendQrPhotoOrMessage(
+            $response = $bot->sendPurchasedAccount(
                 $buyerSession->telegram_chat_id,
+                $resultAccount,
                 (string) $result['subscribe_url'],
                 $buyerText,
                 $buyerKeyboard
             );
-            }
         } else {
             $response = $bot->sendMessage(
                 $buyerSession->telegram_chat_id,

@@ -113,6 +113,10 @@ class InfrastructureController extends Controller
         $request->validate(['panel_only' => ['sometimes', 'boolean']]);
         $deployment = DB::transaction(function () use ($managedServer, $request) {
             $server = ManagedServer::whereKey($managedServer->id)->lockForUpdate()->firstOrFail();
+            if (\Illuminate\Support\Facades\Schema::hasTable('speedbox_anyconnect_instances')) {
+                abort_if(\App\Models\AnyConnectInstance::where('managed_server_id', $server->id)
+                    ->orWhere('ingress_server_id', $server->id)->exists(), 422, 'ابتدا سرویس AnyConnect وابسته به این سرور را حذف کنید.');
+            }
             \App\Services\TunnelManager::protectServer($server->id, true);
             abort_if($server->machine?->managedServers()->where('id', '!=', $server->id)->exists(), 422, 'این ماشین با سرور دیگری مشترک است؛ ابتدا ارتباط مشترک را اصلاح کنید.');
             abort_if($server->deployments()->whereIn('status', ['queued', 'running'])->exists(), 409, 'عملیات قبلی این سرور هنوز تمام نشده است.');
@@ -302,10 +306,11 @@ class InfrastructureController extends Controller
     {
         $request->merge(['service_type'=>$request->input('service_type','v2ray')]);
         $data = $request->validate([
-            'service_type'=>'required|in:v2ray,wireguard',
+            'service_type'=>'required|in:v2ray,wireguard,anyconnect',
+            'anyconnect_instance_id'=>'nullable|required_if:service_type,anyconnect|integer|exists:speedbox_anyconnect_instances,id',
             'wireguard_instance_id'=>'nullable|required_if:service_type,wireguard|integer|exists:speedbox_wireguard_instances,id',
             'name' => ['required', 'string', 'max:100'],
-            'group_id' => ['exclude_if:service_type,wireguard','required','integer','exists:v2_server_group,id'],
+            'group_id' => ['exclude_unless:service_type,v2ray','required','integer','exists:v2_server_group,id'],
             'transfer_enable' => ['required', 'integer', 'min:0'],
             'speed_limit' => ['nullable', 'integer', 'min:0'],
             'device_limit' => ['nullable', 'integer', 'min:0'],
@@ -331,6 +336,13 @@ class InfrastructureController extends Controller
             abort_if((int)($data['device_limit']??1)>16,422,'حداکثر ۱۶ پروفایل برای هر حساب مجاز است.');
             if(empty($data['device_limit']))$data['device_limit']=1;
         } else $data['wireguard_instance_id']=null;
+        if ($data['service_type'] === 'anyconnect') {
+            $data['group_id'] = 0;
+        } elseif (\Illuminate\Support\Facades\Schema::hasColumn('v2_plan', 'anyconnect_instance_id')) {
+            $data['anyconnect_instance_id'] = null;
+        } else {
+            unset($data['anyconnect_instance_id']);
+        }
         $forceUpdate = $request->boolean('force_update');
         unset($data['force_update']);
         foreach (['group_id', 'transfer_enable', 'speed_limit', 'device_limit', 'capacity_limit', 'reset_traffic_method'] as $key) {
@@ -344,10 +356,14 @@ class InfrastructureController extends Controller
                 abort_unless($instance,422,'سرویس WireGuard یافت نشد.');
                 abort_if(in_array($instance->status,['deleting','delete_failed'],true),422,'سرویس WireGuard در حال حذف است.');
             }
+            if ($data['service_type'] === 'anyconnect') {
+                $instance = \App\Models\AnyConnectInstance::whereKey($data['anyconnect_instance_id'])->lockForUpdate()->first();
+                abort_unless($instance && $instance->status !== 'deleting', 422, 'سرور AnyConnect قابل استفاده نیست.');
+            }
             if (!$plan) return DB::table('v2_plan')->insertGetId([...$data, 'created_at' => time()]);
             $existing = DB::table('v2_plan')->where('id', $plan)->lockForUpdate()->first();
             abort_unless($existing, 404, 'پلن یافت نشد.');
-            abort_if(($existing->service_type??'v2ray')!==$data['service_type'] || (int)($existing->wireguard_instance_id??0)!==(int)($data['wireguard_instance_id']??0),422,'نوع سرویس و سرور پلن قابل تغییر نیست؛ پلن جدید بسازید.');
+            abort_if(($existing->service_type??'v2ray')!==$data['service_type'] || (int)($existing->wireguard_instance_id??0)!==(int)($data['wireguard_instance_id']??0) || (int) ($existing->anyconnect_instance_id ?? 0) !== (int) ($data['anyconnect_instance_id'] ?? 0),422,'نوع سرویس و سرور پلن قابل تغییر نیست؛ پلن جدید بسازید.');
             $changed = [];
             foreach (['group_id', 'transfer_enable', 'speed_limit', 'device_limit'] as $field) {
                 if (!array_key_exists($field, $data)) continue;

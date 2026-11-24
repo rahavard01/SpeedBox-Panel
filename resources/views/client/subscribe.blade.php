@@ -1029,6 +1029,10 @@
 
         .wireguard-profile-grid{--wireguard-profile-gap:clamp(28px,4vw,48px);display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--wireguard-profile-gap);width:100%;max-width:none;margin:24px auto 0}
         .wireguard-profile-grid--single{grid-template-columns:minmax(0,1fr);max-width:340px}
+        .anyconnect-fields{display:grid;gap:16px}
+        .anyconnect-field{display:grid;gap:8px;min-width:0;padding:14px;border:1px dashed rgba(255,255,255,.18);border-radius:10px}
+        .anyconnect-field .link-box{margin:0}
+        .anyconnect-field .copy-button{width:100%;margin:0}
         .wireguard-profile-block{display:grid;justify-items:center;align-content:start;gap:16px;width:100%;min-width:0;padding:18px 16px;box-sizing:border-box;text-align:center;border:1px dashed rgba(255,255,255,.14);border-radius:10px;background:rgba(0,0,0,.38)}
         .wireguard-profile-grid:not(.wireguard-profile-grid--single)>.wireguard-profile-block:last-child:nth-child(odd){grid-column:1/-1;width:calc((100% - var(--wireguard-profile-gap))/2);justify-self:center}
         .wireguard-profile-config{display:grid;gap:14px;width:min(100%,280px);min-width:0}
@@ -1137,7 +1141,30 @@
             </div>
         </section>
 
-        @if(($service_type ?? 'v2ray') === 'wireguard')
+        @if(!empty($anyconnect_connection))
+        <section class="card">
+            <div class="card-header"><span class="card-header-title" dir="rtl">مشخصات اتصال <bdi dir="ltr">AnyConnect</bdi></span></div>
+            <div class="card-body">
+                <p class="subscription-note" dir="rtl">برای اتصال از <bdi dir="ltr">Cisco Secure Client</bdi> یا <bdi dir="ltr">OpenConnect</bdi> استفاده کنید.</p>
+                <div class="anyconnect-fields">
+                    @foreach(['address' => 'آدرس سرور', 'username' => 'نام کاربری', 'password' => 'رمز عبور', 'link' => 'لینک اطلاعات اشتراک'] as $field => $label)
+                        @php($value = $field === 'link' ? $subscription_url : $anyconnect_connection[$field])
+                        <div class="anyconnect-field">
+                            <b>{{ $label }}</b>
+                            <div class="link-box"><code dir="ltr">{{ $value }}</code></div>
+                            <button type="button" class="copy-button" data-copy-value="{{ $value }}" data-copy-success="{{ $label }} کپی شد" onclick="copySubscription(this)">
+                                <svg class="copy-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                    <rect x="9" y="9" width="11" height="11" rx="2"></rect>
+                                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                                </svg>
+                                <span class="copy-text">کپی {{ $label }}</span>
+                            </button>
+                        </div>
+                    @endforeach
+                </div>
+            </div>
+        </section>
+        @elseif(($service_type ?? 'v2ray') === 'wireguard')
         <section class="card">
             <div class="card-header"><span class="card-header-title">پروفایل‌های WireGuard</span></div>
             <div class="card-body">
@@ -1365,13 +1392,14 @@
     async function copySubscription(button) {
         const textElement = button ? button.querySelector('.copy-text') : null;
         const originalText = textElement ? textElement.textContent : '';
+        const copyValue = button?.dataset.copyValue ?? subscriptionUrl;
 
         try {
             if (navigator.clipboard && window.isSecureContext) {
-                await navigator.clipboard.writeText(subscriptionUrl);
+                await navigator.clipboard.writeText(copyValue);
             } else {
                 const textarea = document.createElement('textarea');
-                textarea.value = subscriptionUrl;
+                textarea.value = copyValue;
                 textarea.style.position = 'fixed';
                 textarea.style.opacity = '0';
                 document.body.appendChild(textarea);
@@ -1382,7 +1410,7 @@
             }
 
             if (button) button.classList.add('success');
-            if (textElement) textElement.textContent = 'لینک کپی شد';
+            if (textElement) textElement.textContent = button?.dataset.copySuccess ?? (button?.dataset.copyValue ? 'کپی شد' : 'لینک کپی شد');
 
             setTimeout(() => {
                 if (button) button.classList.remove('success');

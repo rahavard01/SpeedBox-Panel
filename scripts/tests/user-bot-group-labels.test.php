@@ -29,7 +29,10 @@ namespace App\Models {
     }
 }
 namespace App\Services {
-    class SubscriptionServiceType { public static function botPlanReady($key) { return true; } }
+    class SubscriptionServiceType {
+        public const BOT_LABELS = ['v2ray' => '🌐 V2Ray', 'wireguard' => '🛡 WireGuard', 'anyconnect' => '🛡 AnyConnect'];
+        public static function botPlanReady($key) { return true; }
+    }
     class PartnerTariffAccessService { public function canSeeTariffGroup($owner, $id) { return true; } }
     class VolumeTrafficPolicy {
         public static function minimumForPlanKey($key) { return 1; }

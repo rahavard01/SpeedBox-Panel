@@ -24,7 +24,7 @@ final class TransactionServiceSnapshot
             if(!$ids && ($row->reference_type??null)==='v2_user')$ids=[$row->reference_id??0];
             $types=collect($ids)->map(fn($id)=>$users->get((int)$id)?->service_type)->filter()->unique()->values();
             $type=$meta['service_type']??($types->count()===1?$types->first():($group->service_type??null));
-            $row->service_type=in_array($type,['v2ray','wireguard'],true)?$type:null;
+            $row->service_type=in_array($type,['v2ray','wireguard','anyconnect'],true)?$type:null;
             $row->account_count=count($ids)?:max(1,(int)($meta['account_count']??1));
             $meta['tariff_group_name']=$meta['tariff_group_name']??($group->name??null);
             $row->meta=json_encode($meta,JSON_UNESCAPED_UNICODE);

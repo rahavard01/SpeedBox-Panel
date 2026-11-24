@@ -37,7 +37,7 @@ final class UserBotPlanGroups
         foreach ($groups as $key => $plan) {
             $label = $names[$key];
             if ($counts[$label] > 1) {
-                $service = match ($plan['service_type'] ?? '') { 'v2ray' => 'V2Ray، ', 'wireguard' => 'WireGuard، ', default => '' };
+                $service = match ($plan['service_type'] ?? '') { 'v2ray' => 'V2Ray، ', 'wireguard' => 'WireGuard، ', 'anyconnect' => 'AnyConnect، ', default => '' };
                 $volume = str_ends_with((string) ($plan['plan_key'] ?? ''), 'volume_gig');
                 $label .= ' — ' . $service . ($volume ? 'حجمی' : 'زمانی');
             }

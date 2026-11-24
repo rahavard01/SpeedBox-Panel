@@ -1,0 +1,41 @@
+name: AnyConnect integration
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/anyconnect-integration.yml'
+      - 'scripts/anyconnect/**'
+      - 'scripts/tests/anyconnect-*'
+      - 'app/**/AnyConnect*.php'
+      - 'tests/Feature/AnyConnectSubscriptionsTest.php'
+  workflow_dispatch:
+
+jobs:
+  host:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Accounting and tunnel rule tests
+        run: python3 scripts/tests/anyconnect-host.test.py
+      - name: Local ocserv and FreeRADIUS connection
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y openconnect ocserv freeradius freeradius-utils
+          sudo python3 scripts/tests/anyconnect-live.test.py
+  panel:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mbstring, bcmath, pdo_sqlite, gd, zip, dom
+          coverage: none
+      - run: composer install --prefer-dist --no-interaction --no-progress
+      - run: cp .env.example .env
+      - run: php artisan test --filter='AnyConnectSubscriptionsTest|SubscriptionReservationTest'
+      - name: Show local CI error details
+        if: failure()
+        run: tail -n 100 storage/logs/laravel.log || true

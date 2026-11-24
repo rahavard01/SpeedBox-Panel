@@ -70,6 +70,9 @@ namespace App\Services {
         public function config($account, $peer) { return '[Interface] private-test-data ' . $peer->id; }
         public function filename($account, $peer) { return 'account-' . $peer->id . '.conf'; }
     }
+    class AnyConnectService {
+        public function credentials($account) { return ['username'=>'ali-SB', 'password'=>'1234', 'address'=>'vpn.example.test:2053']; }
+    }
     class PartnerTariffAccessService {
         public function canCreateType(...$args) { return true; }
         public function canSeeTariffGroup(...$args) { return true; }
@@ -108,6 +111,16 @@ namespace App\Services {
 namespace {
     function e($value) { return htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8'); }
     function app($name) { return new $name; }
+    function collect(array $items) {
+        return new class($items) {
+            public function __construct(private array $items) {}
+            public function only(array $keys) { return new self(array_intersect_key($this->items, array_flip($keys))); }
+            public function map(callable $map) { return new self(array_map($map, $this->items)); }
+            public function values() { return new self(array_values($this->items)); }
+            public function push($value) { $this->items[] = $value; return $this; }
+            public function all() { return $this->items; }
+        };
+    }
     function now() { return new class { public function subMinutes($n) { return $this; } }; }
     function check($condition, $message) { if (!$condition) throw new \RuntimeException($message); }
     class BotQuery {
@@ -150,8 +163,7 @@ namespace {
     $success = \App\Services\BotAccountMessages::created($account, 'https://example.invalid/sub');
     check(substr_count($success, 'برنامه رسمی') === 1 && !str_contains($success, 'دستگاه'), 'single purchase instruction');
     $bot = new \App\Services\UserBot\UserBotTelegram('fake-token');
-    $bot->sendMessage('1', $success);
-    $bot->sendWireGuardProfiles('1', $account);
+    $bot->sendPurchasedAccount('1', $account, 'https://example.invalid/sub', 'پرداخت تأیید شد. ' . $success, null);
     $calls = \Illuminate\Support\Facades\Http::$calls;
     check(array_column($calls, 0) === ['sendMessage','sendMessage','sendPhoto','sendDocument','sendMessage','sendPhoto','sendDocument'], 'two-device message sequence');
     check($calls[1][1]['text'] === 'دستگاه ۱' && $calls[4][1]['text'] === 'دستگاه ۲', 'device headings');
@@ -162,6 +174,20 @@ namespace {
     try { $bot->sendWireGuardProfiles('1', $account); } catch (\RuntimeException $e) { $failed = true; }
     check($failed, 'QR failure must not be reported as successful delivery');
     \Illuminate\Support\Facades\Http::$fail = null;
+    $url = 'https://example.invalid/sub';
+    foreach (['anyconnect'=>'sendMessage', 'v2ray'=>'sendPhoto'] as $service => $method) {
+        $otherAccount = (object) ['id'=>2, 'email'=>'test@owner.com', 'service_type'=>$service];
+        $text = 'پرداخت تأیید شد. ' . \App\Services\BotAccountMessages::created($otherAccount, $url);
+        \Illuminate\Support\Facades\Http::$calls = [];
+        $bot->sendPurchasedAccount('1', $otherAccount, $url, $text, null);
+        $calls = \Illuminate\Support\Facades\Http::$calls;
+        check(array_column($calls, 0) === [$method], "$service purchase delivery type");
+        if ($service === 'anyconnect') {
+            foreach (['ali-SB', '1234', 'vpn.example.test:2053'] as $detail) {
+                check(str_contains($calls[0][1]['text'], $detail), 'AnyConnect credentials included');
+            }
+        }
+    }
 
     $snapshot = ['email'=>$account->email,'account_plan_name'=>'VIP','transfer_enable'=>10737418240,'u'=>0,'d'=>0,'expired_at'=>null,'service_type'=>'wireguard'];
     $info = (new \App\Services\UserBot\UserBotAccountResolver)->accountInfoText($snapshot, 'https://example.invalid/sub');
